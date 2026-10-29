@@ -1,6 +1,6 @@
 # Operations
 
-Status: data services only (milestone M0). Application services are added in later milestones.
+Status: data services and the identity provider (milestones M0 and M1.1). Application services are added in later milestones.
 
 ## Local development
 
@@ -19,6 +19,10 @@ bash scripts/db-migrate.sh up
 ```
 
 ```bash
+bash scripts/db-seed.sh
+```
+
+```bash
 bash scripts/db-test.sh
 ```
 
@@ -26,10 +30,49 @@ bash scripts/db-test.sh
 bash scripts/redis-test.sh
 ```
 
+```bash
+bash scripts/identity-test.sh
+```
+
 | Service | Host address | Notes |
 | --- | --- | --- |
-| PostgreSQL 18.6 | `127.0.0.1:55432`, database `pythagoras` | Override with `POSTGRES_HOST_PORT`. Superuser only via `docker compose exec -u postgres postgres psql` |
+| PostgreSQL 18.6 | `127.0.0.1:55432`, databases `pythagoras` and `keycloak` | Override with `POSTGRES_HOST_PORT`. Superuser only via `docker compose exec -u postgres postgres psql` |
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
+| Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
+
+If you add a role or a secret to an existing installation, apply it with `bash scripts/db-bootstrap.sh` (idempotent; the first-start hook only runs on an empty volume).
+
+## Development data and accounts
+
+`scripts/db-seed.sh` loads `db/seeds/development.sql`: synthetic data only, idempotent, and refused for any database other than the local `pythagoras`. It contains one company, **Testing Company** (placeholder name), billing **School A**, **School B** and **School C**; their websites under `*.pythagoras.localhost`; lunch, chess, robotics and tuition offerings with per-school prices; the next 20 school days of lunch and eight weeks of club sessions.
+
+All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in at `http://localhost:58080/realms/pythagoras/account`, or through the web app once it exists.
+
+| Account | Role | Sees |
+| --- | --- | --- |
+| `ceo@pythagoras.test` | CEO | All schools; no health data |
+| `admin@pythagoras.test` | Group administrator | All schools; configuration |
+| `finance@pythagoras.test` | Group finance | Finance across schools |
+| `schoollife@pythagoras.test` | School Life coordinator | Services, bookings and dietary needs across schools |
+| `dpo@pythagoras.test` | Data protection officer | Privacy records, audit log |
+| `principal.a@pythagoras.test`, `principal.b@…`, `principal.c@…` | Principal | Their own school |
+| `kitchen.a@pythagoras.test` | Kitchen, School A | Bookings and dietary needs at School A |
+| `teacher.b@pythagoras.test` | Teacher, School B | School B enrolments and bookings |
+| `anna.ivanova@pythagoras.test` | Parent | Mila (School A, peanut allergy) and Boris (School C) |
+| `hristo.georgiev@pythagoras.test` | Parent | Kalina (School B) |
+| `teodora.marinova@pythagoras.test` | Parent, request pending | Nothing until a principal verifies the relationship |
+| `unlinked@pythagoras.test` | None | Signs in to Keycloak, but has no person record: the platform must refuse it |
+
+The realm file `infra/keycloak/realm/pythagoras-realm.json` is a development realm: it contains these users and the `pythagoras-dev-tests` password-grant client. It is imported only when the realm does not exist yet; to reload it after editing, remove the realm in the admin console (or reset the `keycloak` database) and restart Keycloak.
+
+## Identity provider in production (to do in M8)
+
+- `start --optimized` with a pre-built image, behind the gateway with `KC_PROXY_HEADERS=xforwarded`, on its own host name (for example `auth.<domain>`), TLS terminated at the gateway.
+- A user-free realm export: no development users, no `pythagoras-dev-tests` client, production redirect URIs only.
+- Multi-factor sign-in required for staff through the realm's authentication flow.
+- SMTP configured so that e-mail verification and password reset work.
+- Login events are kept 30 days (`eventsExpiration`); admin events without request details, so no personal data is copied into them.
+- Back up the `keycloak` database together with `pythagoras` (same cluster, same backup job).
 
 Passwords are in `secrets/` (git-ignored), one file per role. For an administrative session as the superuser (local socket only):
 

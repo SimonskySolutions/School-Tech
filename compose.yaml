@@ -42,6 +42,7 @@ services:
       - pg_worker_password
       - pg_reporting_password
       - pg_backup_password
+      - pg_keycloak_password
     volumes:
       - pg_data:/var/lib/postgresql
       - pg_backups:/backups:ro
@@ -87,6 +88,49 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+  # Identity provider (ADR 0009). Development mode imports the development realm
+  # with synthetic users on first start; production uses `start --optimized`
+  # behind the gateway with a user-free realm (see docs/operations.md).
+  keycloak:
+    <<: *hardening
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    entrypoint: ["/bin/bash", "/opt/pythagoras/keycloak-entrypoint.sh"]
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: pyth_keycloak
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_HOST_PORT:-58080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_CACHE: local
+      KC_LOG_LEVEL: info
+      # Social login brokers the platform does not use.
+      KC_FEATURES_DISABLED: twitter-broker
+    secrets:
+      - pg_keycloak_password
+      - keycloak_admin_password
+      - keycloak_web_client_secret
+      - keycloak_dev_user_password
+    volumes:
+      - ./infra/keycloak/entrypoint.sh:/opt/pythagoras/keycloak-entrypoint.sh:ro
+      - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
+    ports:
+      - "127.0.0.1:${KEYCLOAK_HOST_PORT:-58080}:8080"
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   # One-off migration job (also used by releases). Run through scripts/db-migrate.sh.
   db-migrate:
@@ -150,6 +194,14 @@ secrets:
     file: ./secrets/redis_health_password
   redis_admin_password:
     file: ./secrets/redis_admin_password
+  pg_keycloak_password:
+    file: ./secrets/pg_keycloak_password
+  keycloak_admin_password:
+    file: ./secrets/keycloak_admin_password
+  keycloak_web_client_secret:
+    file: ./secrets/keycloak_web_client_secret
+  keycloak_dev_user_password:
+    file: ./secrets/keycloak_dev_user_password
 
 volumes:
   pg_data:

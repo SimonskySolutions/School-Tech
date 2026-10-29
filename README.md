@@ -2,7 +2,7 @@
 
 Central management platform for the Pythagoras school group: one system for every school, website, family and payment.
 
-**Current state:** the PostgreSQL and Redis foundation is built and tested (milestone M0). Application services come next. See [docs/implementation-plan.md](docs/implementation-plan.md).
+**Current state:** the PostgreSQL and Redis foundation (M0) and the Keycloak identity service with development data (M1.1) are built and tested. The API, worker and web app come next. See [docs/implementation-plan.md](docs/implementation-plan.md).
 
 ## Start
 
@@ -20,6 +20,12 @@ docker compose up -d
 bash scripts/db-migrate.sh up
 ```
 
+```bash
+bash scripts/db-seed.sh
+```
+
+Development accounts and where their password lives: [docs/operations.md](docs/operations.md#development-data-and-accounts).
+
 ## Test
 
 ```bash
@@ -28,6 +34,10 @@ bash scripts/db-test.sh
 
 ```bash
 bash scripts/redis-test.sh
+```
+
+```bash
+bash scripts/identity-test.sh
 ```
 
 ## Documentation

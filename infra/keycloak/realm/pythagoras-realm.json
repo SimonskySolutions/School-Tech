@@ -1,0 +1,137 @@
+{
+  "realm": "pythagoras",
+  "displayName": "Pythagoras",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "verifyEmail": true,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 43200,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "passwordPolicy": "length(12) and maxLength(128) and notUsername and notEmail and passwordHistory(3)",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["bg", "en"],
+  "defaultLocale": "bg",
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "attributes": {
+    "_development_only": "This file contains synthetic users and a password-grant test client. Never import it in production."
+  },
+  "clients": [
+    {
+      "clientId": "pythagoras-web",
+      "name": "Pythagoras web application",
+      "description": "Websites, family portal and staff workspaces. Server-side authorization code flow with PKCE.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_WEB_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "http://localhost:53000/*",
+        "http://portal.pythagoras.localhost:53000/*",
+        "http://portal.pythagoras.localhost/*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:53000/*##http://portal.pythagoras.localhost:53000/*##http://portal.pythagoras.localhost/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience: pythagoras-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "pythagoras-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "pythagoras-api",
+      "name": "Pythagoras API",
+      "description": "Audience for access tokens. No login flows.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "pythagoras-dev-tests",
+      "name": "DEVELOPMENT ONLY - automated tests",
+      "description": "Password grant for automated tests against synthetic users. Must not exist in production.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "audience: pythagoras-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "pythagoras-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    { "id": "f1000000-0000-7000-8000-000000000001", "username": "ceo@pythagoras.test", "email": "ceo@pythagoras.test", "firstName": "Elena", "lastName": "Petrova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000002", "username": "admin@pythagoras.test", "email": "admin@pythagoras.test", "firstName": "Georgi", "lastName": "Dimitrov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000003", "username": "finance@pythagoras.test", "email": "finance@pythagoras.test", "firstName": "Maria", "lastName": "Koleva", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000004", "username": "schoollife@pythagoras.test", "email": "schoollife@pythagoras.test", "firstName": "Iva", "lastName": "Stoyanova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000005", "username": "dpo@pythagoras.test", "email": "dpo@pythagoras.test", "firstName": "Nikolay", "lastName": "Vasilev", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000006", "username": "principal.a@pythagoras.test", "email": "principal.a@pythagoras.test", "firstName": "Petar", "lastName": "Nikolov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000007", "username": "principal.b@pythagoras.test", "email": "principal.b@pythagoras.test", "firstName": "Desislava", "lastName": "Todorova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000008", "username": "principal.c@pythagoras.test", "email": "principal.c@pythagoras.test", "firstName": "Stefan", "lastName": "Angelov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000009", "username": "kitchen.a@pythagoras.test", "email": "kitchen.a@pythagoras.test", "firstName": "Radka", "lastName": "Mineva", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000010", "username": "teacher.b@pythagoras.test", "email": "teacher.b@pythagoras.test", "firstName": "Viktor", "lastName": "Popov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000020", "username": "anna.ivanova@pythagoras.test", "email": "anna.ivanova@pythagoras.test", "firstName": "Anna", "lastName": "Ivanova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000021", "username": "hristo.georgiev@pythagoras.test", "email": "hristo.georgiev@pythagoras.test", "firstName": "Hristo", "lastName": "Georgiev", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000022", "username": "teodora.marinova@pythagoras.test", "email": "teodora.marinova@pythagoras.test", "firstName": "Teodora", "lastName": "Marinova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000023", "username": "unlinked@pythagoras.test", "email": "unlinked@pythagoras.test", "firstName": "Unlinked", "lastName": "Account", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] }
+  ]
+}

@@ -12,3 +12,6 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0006](0006-personal-data-in-the-database.md) | Personal data protection in the data layer | Accepted |
 | [0007](0007-money-time-identifiers.md) | Money, time and identifiers | Accepted |
 | [0008](0008-one-order-per-billing-entity.md) | One order and one checkout per billing entity | Accepted |
+| [0009](0009-keycloak-identity.md) | Keycloak as the identity provider | Accepted |
+| [0010](0010-payments-before-stripe.md) | Payments built for Stripe, run on a development provider until it is set up | Accepted |
+| [0011](0011-development-domains.md) | Development domains under .localhost | Accepted |

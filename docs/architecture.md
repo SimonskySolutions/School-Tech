@@ -13,7 +13,7 @@ One modular monolith, organised by business capability, deployed as a small set 
 | api | NestJS modular backend; authorization; sets the person context for PostgreSQL RLS | Planned |
 | worker | Same image as the API; BullMQ jobs: payment confirmation, expiry, notifications, synchronisation, retention | Planned |
 | cms | Payload CMS for school content, one tenant per website | Planned |
-| identity | Keycloak (or the network's existing identity provider) | Planned; decision pending |
+| identity | Keycloak 26.8.1, own database and role, realm `pythagoras` (ADR 0009) | **Built** (development realm) |
 | postgres | System of record, RLS, outbox | **Built** |
 | redis | BullMQ queues only | **Built** |
 | object storage | Private documents and files (S3-compatible) | Planned |
