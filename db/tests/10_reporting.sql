@@ -45,6 +45,8 @@ SELECT test.ok((SELECT outstanding_minor FROM reporting.outstanding_balance WHER
   'the CEO sees School A''s outstanding and overdue tuition');
 SELECT test.ok(NOT EXISTS (SELECT 1 FROM reporting.outstanding_balance WHERE school_id = :C AND outstanding_minor > 0),
   'Kindergarten C has nothing outstanding');
+SELECT test.ok((SELECT array_agg(DISTINCT payment_mode) FROM reporting.school_revenue_daily) = ARRAY['test'],
+  'money from test-mode payments is reported as test, not as live revenue');
 
 RESET ROLE; SELECT test.as_person(:PRA);
 SELECT test.ok((SELECT array_agg(DISTINCT school_id) FROM reporting.school_revenue_daily) = ARRAY[:A]::uuid[],

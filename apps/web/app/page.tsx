@@ -120,6 +120,17 @@ function Home({ view }: { view: HomeView }) {
         </section>
       ) : null}
 
+      {view.showsReports ? (
+        <section aria-labelledby="reports" data-testid="reports">
+          <h2 id="reports">Reports</h2>
+          <p>
+            <a href="/reports/revenue" data-testid="revenue-link">
+              Revenue and balances per school
+            </a>
+          </p>
+        </section>
+      ) : null}
+
       {view.hasNothing ? (
         <p data-testid="nothing-yet">
           Your account has no children or roles linked yet. If you expected to see your children, please

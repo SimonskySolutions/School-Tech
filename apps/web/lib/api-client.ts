@@ -4,6 +4,7 @@ import {
   type CheckoutRequestBody,
   type CheckoutResponse,
   type KitchenCounts,
+  type RevenueReport,
   type MeResponse,
   type SchoolSummary,
   type StudentOfferings,
@@ -81,3 +82,14 @@ export const fetchRegisters = (
   from: string | null,
   days: number | null,
 ) => get<ActivityRegisters>(apiUrl, `/school-life/registers${range(from, days)}`, accessToken);
+
+export const fetchRevenueReport = (
+  apiUrl: string,
+  accessToken: string,
+  period: { from: string; to: string } | null,
+) =>
+  get<RevenueReport>(
+    apiUrl,
+    `/reports/revenue${period ? `?${new URLSearchParams(period)}` : ''}`,
+    accessToken,
+  );

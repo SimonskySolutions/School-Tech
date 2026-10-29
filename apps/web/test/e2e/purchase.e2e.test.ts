@@ -175,3 +175,45 @@ describe('School Life after the purchase', () => {
     expect(kitchen.html).not.toContain('Peanuts');
   });
 });
+
+// Runs after the purchase above: the CEO sees it as test money, never as revenue.
+describe('CEO reporting after the purchase', () => {
+  const page = async (user: string, path: string) => {
+    const { browser } = await signIn(`${user}@pythagoras.test`, PASSWORD);
+    const result = await browser.follow(`${APP}${path}`);
+    return { status: result.response.status, html: await result.response.text() };
+  };
+  const cellOf = (html: string, school: string, testId: string) => {
+    const row = html.slice(html.indexOf(`data-testid="revenue-${school}"`));
+    return /data-testid="([a-z-]+)"[^>]*>([^<]*)</.exec(
+      row.slice(row.indexOf(`data-testid="${testId}"`)),
+    )?.[2];
+  };
+
+  it("shows the CEO School A's development payment as test money, with no live revenue", async () => {
+    const home = await page('ceo', '/');
+    expect(home.html).toContain('href="/reports/revenue"');
+    const report = await page('ceo', '/reports/revenue');
+    expect(report.status).toBe(200);
+    expect(report.html).toContain(BANNER);
+    expect(report.html).toContain('Test payments come from the development payment provider');
+    for (const school of ['School A', 'School B', 'School C']) {
+      expect(report.html).toContain(`data-testid="revenue-${school}"`);
+    }
+    expect(cellOf(report.html, 'School A', 'test-net')).toMatch(/\d/);
+    expect(cellOf(report.html, 'School A', 'live-net')).toBe('–');
+  });
+
+  it('shows a principal only their school, and keeps teachers out', async () => {
+    const principal = await page('principal.a', '/reports/revenue');
+    expect(principal.html).toContain('data-testid="revenue-School A"');
+    expect(principal.html).not.toContain('data-testid="revenue-School C"');
+    const teacher = await page('teacher.b', '/reports/revenue');
+    expect(teacher.html).toContain('data-testid="not-permitted"');
+  });
+
+  it('explains a period it cannot use', async () => {
+    const report = await page('ceo', '/reports/revenue?from=2026-10-31&to=2026-10-01');
+    expect(report.html).toContain('data-testid="period-invalid"');
+  });
+});

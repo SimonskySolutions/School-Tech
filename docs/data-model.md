@@ -58,7 +58,7 @@ Not yet modelled (later milestones): admissions and CRM, academics and timetable
 | `privacy` | Processing purposes, retention policies, consent records, data subject requests |
 | `sensitive` | Dietary and health requirements (special-category data) |
 | `audit` | Change log (monthly partitions), access log |
-| `reporting` | Read models: `school_revenue_daily`, `outstanding_balance` |
+| `reporting` | Read models: `school_revenue_daily` (per school, local day and `payment_mode`: test-mode money is never live revenue), `outstanding_balance` |
 | `app`, `meta`, `extensions` | Request context helpers, state machines and migration history, extensions |
 
 ## Who can read what

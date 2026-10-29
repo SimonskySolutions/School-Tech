@@ -21,6 +21,7 @@ The network will use Stripe hosted checkout later, but no Stripe account exists 
 - Both providers sign webhooks with the scheme Stripe documents (`t=<time>,v1=<HMAC-SHA256 of "time.body">`, five minutes of tolerance), so one verification path is tested by both. The development provider derives separate keys for checkout tokens and webhooks from `DEV_PAYMENTS_SECRET`; its checkout token is stateless and signed, so it cannot be altered to pay a different amount.
 - The browser's return from the provider changes nothing. Only the worker, after a verified and stored event, marks a payment succeeded. Events are applied in PostgreSQL, not through Redis, because provider payloads can contain personal data (ADR 0002, 0006).
 - A failed payment releases the seats at once (the parent books again). An expired reservation releases them too, but a late success is still accepted: the line is confirmed if a seat is free, and otherwise the amount becomes credit with the same billing entity.
+- Reports split money by payment mode (`reporting.school_revenue_daily.payment_mode`): an allocation is "test" when its order was paid in test mode. The revenue page shows test payments in their own column, labelled as not revenue.
 - The provider's checkout URL is kept on the payment (`checkout_url`) so the order page can offer "Pay now" again while the order holds its seats.
 
 ## Consequences

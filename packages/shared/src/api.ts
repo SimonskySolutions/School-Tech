@@ -158,3 +158,37 @@ export interface ActivityRegisters {
     attendees: { studentName: string | null; classLabel: string | null; status: string }[];
   }[];
 }
+
+/** Money allocated to a school in a period, in minor units. net = received + paid by credit - refunded - credited. */
+export interface RevenueFigures {
+  receivedMinor: number;
+  paidByCreditMinor: number;
+  refundedMinor: number;
+  creditedMinor: number;
+  netMinor: number;
+}
+
+/**
+ * Revenue per school for a period, and what is open today. Money from
+ * test-mode payments (the development provider, Stripe test mode) is always
+ * reported apart from live money and is never real revenue (ADR 0010).
+ */
+export interface RevenueReport {
+  from: string;
+  to: string;
+  schools: {
+    school: { id: SchoolId; name: string };
+    currency: string;
+    live: RevenueFigures;
+    test: RevenueFigures;
+    /** Staff invoices still unpaid, and the part of it past its due date. */
+    openInvoices: number;
+    outstandingMinor: number;
+    overdueMinor: number;
+    /** Family checkouts placed but not paid yet (seats held). */
+    checkoutInProgressMinor: number;
+    /** Credit families hold from this school's cancelled or unplaceable lines. */
+    creditOwed: { liveMinor: number; testMinor: number };
+  }[];
+  totals: { currency: string; live: RevenueFigures; test: RevenueFigures }[];
+}

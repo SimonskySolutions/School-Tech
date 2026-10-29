@@ -106,6 +106,16 @@ describe('buildHome', () => {
     );
   });
 
+  it('offers reports to management roles but not to teachers or the kitchen', () => {
+    const roles = (code: string) => [{ code, name: code, scope: 'group' as const, school: null }];
+    const reports = (code: string) =>
+      buildHome({ person: person('X'), roles: roles(code), children: [] }, schools).showsReports;
+    expect(reports('group_ceo')).toBe(true);
+    expect(reports('principal')).toBe(true);
+    expect(reports('teacher')).toBe(false);
+    expect(reports('kitchen')).toBe(false);
+  });
+
   it('says so when nothing is linked yet', () => {
     expect(buildHome({ person: person('Teodora'), roles: [], children: [] }, schools).hasNothing).toBe(true);
   });
