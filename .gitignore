@@ -1,0 +1,17 @@
+# Secrets and local environment
+/secrets/*
+!/secrets/README.md
+.env
+.env.*
+!.env.example
+
+# Backups contain personal data and never belong in the repository
+/backups/
+*.dump
+
+# Tooling
+node_modules/
+dist/
+coverage/
+.DS_Store
+Thumbs.db

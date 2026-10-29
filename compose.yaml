@@ -1,0 +1,157 @@
+# Pythagoras local development stack: data services.
+# Application services (gateway, web, api, worker, cms, identity) are added in
+# later milestones. Images are pinned by version and digest.
+#
+#   scripts/dev-secrets.sh          # once: generate local secrets
+#   docker compose up -d            # start PostgreSQL and Redis
+#   scripts/db-migrate.sh up        # apply migrations
+#   scripts/db-test.sh              # run database and Redis tests
+
+name: pythagoras
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:18.6-trixie@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --data-checksums --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --auth-local=peer --auth-host=scram-sha-256
+      TZ: UTC
+    secrets:
+      - pg_superuser_password
+      - pg_migrator_password
+      - pg_api_password
+      - pg_worker_password
+      - pg_reporting_password
+      - pg_backup_password
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - pg_backups:/backups:ro
+      - ./infra/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./infra/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./infra/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./db:/opt/pythagoras/db:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    shm_size: 256mb
+    stop_grace_period: 60s
+    healthcheck:
+      # Healthy only on the real server (the init-time server has no TCP listener)
+      # and only once the application database exists.
+      test: ["CMD-SHELL", "gosu postgres psql -XtAq -d pythagoras -c \"SELECT 1 WHERE current_setting('listen_addresses') <> ''\" | grep -q 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  redis:
+    <<: *hardening
+    image: redis:8.10.2-trixie@sha256:97ec88159e6d7cfb5ddef9015386087d58a912de80112f06ebdfa78fa5989901
+    entrypoint: ["/bin/sh", "/opt/pythagoras/redis-entrypoint.sh"]
+    secrets:
+      - redis_queue_password
+      - redis_health_password
+      - redis_admin_password
+    volumes:
+      - redis_data:/data
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/entrypoint.sh:/opt/pythagoras/redis-entrypoint.sh:ro
+    tmpfs:
+      - /run/redis-acl:size=1m
+      # Hide the bundled modules (search, JSON, time series): the queue needs none of them.
+      - /usr/local/lib/redis/modules:size=1m
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-56379}:6379"
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_health_password)\" redis-cli --no-auth-warning --user pyth_health ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # One-off migration job (also used by releases). Run through scripts/db-migrate.sh.
+  db-migrate:
+    image: ghcr.io/amacneil/dbmate:2.34.1@sha256:3298bdfcb651af608e06d2e13ae12398c4056e5326d38ef31885973d83248d9c
+    profiles: ["tools"]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    secrets:
+      - pg_migrator_password
+    environment:
+      DB_NAME: ${DB_NAME:-pythagoras}
+    volumes:
+      - ./db/migrations:/db/migrations:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        export DATABASE_URL="postgres://pyth_migrator:$$(cat /run/secrets/pg_migrator_password)@postgres:5432/$${DB_NAME}?sslmode=disable";
+        exec dbmate --migrations-dir /db/migrations --migrations-table meta.schema_migrations --no-dump-schema --wait --wait-timeout 60s "$$@"
+      - dbmate
+    command: ["up"]
+
+  # One-off logical backup job. Run through scripts/db-backup.sh.
+  db-backup:
+    image: postgres:18.6-trixie@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
+    profiles: ["tools"]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    secrets:
+      - pg_backup_password
+    environment:
+      DB_NAME: ${DB_NAME:-pythagoras}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - pg_backups:/backups
+      - ./scripts/container/backup.sh:/opt/pythagoras/backup.sh:ro
+    entrypoint: ["/bin/bash", "/opt/pythagoras/backup.sh"]
+
+secrets:
+  pg_superuser_password:
+    file: ./secrets/pg_superuser_password
+  pg_migrator_password:
+    file: ./secrets/pg_migrator_password
+  pg_api_password:
+    file: ./secrets/pg_api_password
+  pg_worker_password:
+    file: ./secrets/pg_worker_password
+  pg_reporting_password:
+    file: ./secrets/pg_reporting_password
+  pg_backup_password:
+    file: ./secrets/pg_backup_password
+  redis_queue_password:
+    file: ./secrets/redis_queue_password
+  redis_health_password:
+    file: ./secrets/redis_health_password
+  redis_admin_password:
+    file: ./secrets/redis_admin_password
+
+volumes:
+  pg_data:
+  pg_backups:
+  redis_data:
