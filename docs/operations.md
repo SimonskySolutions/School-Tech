@@ -40,6 +40,20 @@ bash scripts/identity-test.sh
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
 | Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
 
+### Code toolchain
+
+Node.js and pnpm run inside the `workspace` container (ADR 0012); nothing needs installing on the host.
+
+```bash
+bash scripts/pnpm.sh install
+```
+
+```bash
+bash scripts/check.sh
+```
+
+`scripts/pnpm.sh` passes any pnpm command through, for example `bash scripts/pnpm.sh --filter @pythagoras/api test`. Dependencies and build output live in the `ws_*` volumes; `docker compose down -v` removes them together with the databases, so prefer removing only those volumes when you want a clean reinstall.
+
 If you add a role or a secret to an existing installation, apply it with `bash scripts/db-bootstrap.sh` (idempotent; the first-start hook only runs on an empty volume).
 
 ## Development data and accounts

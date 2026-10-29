@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-29. Current milestone: **M1 in progress** (M1.1 done; M1.2 next).
+Last updated: 2026-10-29. Current milestone: **M1 in progress** (M1.1 and M1.2 done; M1.3 next).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -52,7 +52,7 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 | Step | Depends on | Delivers | Status |
 | --- | --- | --- | --- |
 | M1.1 Identity service and development data | M0 | Keycloak in Compose with its own database and role; `pythagoras` realm (no self-registration, brute-force protection, password policy, PKCE web client, API audience); development users linked to seeded people; seed with Testing Company and three schools; identity tests | **Done** (2026-10-29): `scripts/identity-test.sh` 25 checks; clean start on empty volumes verified |
-| M1.2 Monorepo and toolchain | M0 | pnpm workspace: `apps/api` (NestJS), `apps/web` (Next.js), `packages/shared`; Node 24 LTS pinned; development containers with dependencies in Docker volumes (not in the OneDrive folder); lint, type check, unit tests | Not started |
+| M1.2 Monorepo and toolchain | M0 | pnpm workspace: `apps/api` (NestJS), `apps/web` (Next.js), `packages/shared`; Node 24 LTS pinned; development containers with dependencies in Docker volumes (not in the OneDrive folder); lint, type check, unit tests | **Done** (2026-10-29): `scripts/check.sh` passes (install from lockfile, type check, lint, format, 33 unit tests, builds of all three packages); built API and web app start; versions and trade-offs in ADR 0012 |
 | M1.3 API authentication and request context | M1.1, M1.2 | Token verification (issuer, audience, expiry, signature via JWKS); person resolved through `access.resolve_login`; one transaction per request with `SET LOCAL app.person_id`; `GET /me` (person, roles, authorised children) and `GET /schools` | Not started |
 | M1.4 Web sign-in | M1.3 | Server-side OpenID Connect sign-in and sign-out with PKCE; session cookie, no tokens in the browser; role-aware home page for parent, staff and CEO | Not started |
 | M1.5 Worker skeleton | M1.2 | Worker from the API image; BullMQ on the `pyth_queue` user; outbox relay; monthly audit-partition job | Not started |

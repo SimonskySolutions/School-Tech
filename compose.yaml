@@ -156,6 +156,28 @@ services:
       - dbmate
     command: ["up"]
 
+  # Development toolchain (ADR 0012). Run through scripts/pnpm.sh and scripts/check.sh.
+  workspace:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    profiles: ["tools"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      npm_config_store_dir: /workspace/node_modules/.pnpm-store
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - .:/workspace
+      - ws_node_modules:/workspace/node_modules
+      - ws_api_node_modules:/workspace/apps/api/node_modules
+      - ws_api_dist:/workspace/apps/api/dist
+      - ws_web_node_modules:/workspace/apps/web/node_modules
+      - ws_web_next:/workspace/apps/web/.next
+      - ws_shared_node_modules:/workspace/packages/shared/node_modules
+      - ws_shared_dist:/workspace/packages/shared/dist
+
   # One-off logical backup job. Run through scripts/db-backup.sh.
   db-backup:
     image: postgres:18.6-trixie@sha256:979bccfde35445db618c65107d27d08c6c21339d8dc3ad4c830c6633947be0e4
@@ -207,3 +229,10 @@ volumes:
   pg_data:
   pg_backups:
   redis_data:
+  ws_node_modules:
+  ws_api_node_modules:
+  ws_api_dist:
+  ws_web_node_modules:
+  ws_web_next:
+  ws_shared_node_modules:
+  ws_shared_dist:
