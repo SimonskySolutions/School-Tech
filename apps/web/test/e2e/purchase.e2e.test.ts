@@ -123,3 +123,55 @@ describe('buying through the family portal', () => {
     expect(page.response.status).toBe(404);
   });
 });
+
+// Runs after the purchase above (tests in a file run in order): staff see it.
+describe('School Life after the purchase', () => {
+  const page = async (user: string, path: string) => {
+    const { browser } = await signIn(`${user}@pythagoras.test`, PASSWORD);
+    const result = await browser.follow(`${APP}${path}`);
+    return { status: result.response.status, html: await result.response.text() };
+  };
+  const MILA_ALLERGY = 'Mila Ivanova (3A): Allergy (Life-threatening), Peanuts (synthetic example)';
+  // The kitchen role may not read enrolments, so it sees the name without the class.
+  const MILA_ALLERGY_FOR_KITCHEN = 'Mila Ivanova: Allergy (Life-threatening), Peanuts (synthetic example)';
+
+  it("shows the coordinator every school's lunches, with Mila's allergy as an alert", async () => {
+    const home = await page('schoollife', '/');
+    expect(home.html).toContain('href="/school-life/kitchen"');
+    const kitchen = await page('schoollife', '/school-life/kitchen?days=10');
+    expect(kitchen.status).toBe(200);
+    expect(kitchen.html).toContain(BANNER);
+    for (const school of ['School A', 'School B', 'School C']) {
+      expect(kitchen.html).toContain(`data-testid="kitchen-${school}"`);
+    }
+    const at = kitchen.html.indexOf(MILA_ALLERGY);
+    expect(at).toBeGreaterThan(0);
+    // Shown as an alert: the list item carrying the text has role="alert".
+    expect(kitchen.html.slice(kitchen.html.lastIndexOf('<li', at), at)).toContain('role="alert"');
+  });
+
+  it('shows the School A kitchen only School A', async () => {
+    const kitchen = await page('kitchen.a', '/school-life/kitchen?days=10');
+    expect(kitchen.html).toContain('data-testid="kitchen-School A"');
+    expect(kitchen.html).not.toContain('data-testid="kitchen-School C"');
+    expect(kitchen.html).toContain(MILA_ALLERGY_FOR_KITCHEN);
+  });
+
+  it('shows the CEO the counts without health data', async () => {
+    const kitchen = await page('ceo', '/school-life/kitchen?days=10');
+    expect(kitchen.html).toContain('Dietary needs are not shown for your role.');
+    expect(kitchen.html).not.toContain('Peanuts');
+  });
+
+  it('lists Mila on the chess club register', async () => {
+    const registers = await page('schoollife', '/school-life/registers');
+    expect(registers.html).toContain('Chess club, School A');
+    expect(registers.html).toContain('Mila Ivanova, 3A: Booked');
+  });
+
+  it('keeps parents out', async () => {
+    const kitchen = await page('anna.ivanova', '/school-life/kitchen');
+    expect(kitchen.html).toContain('data-testid="not-permitted"');
+    expect(kitchen.html).not.toContain('Peanuts');
+  });
+});

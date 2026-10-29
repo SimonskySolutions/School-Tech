@@ -1,7 +1,9 @@
 import {
+  type ActivityRegisters,
   type CheckoutGroupView,
   type CheckoutRequestBody,
   type CheckoutResponse,
+  type KitchenCounts,
   type MeResponse,
   type SchoolSummary,
   type StudentOfferings,
@@ -58,3 +60,24 @@ export async function postCheckout(
   if (!response.ok) return { kind: 'refused', status: response.status };
   return { kind: 'ok', value: (await response.json()) as CheckoutResponse };
 }
+
+const range = (from: string | null, days: number | null) => {
+  const query = new URLSearchParams();
+  if (from) query.set('from', from);
+  if (days) query.set('days', String(days));
+  return query.size ? `?${query}` : '';
+};
+
+export const fetchKitchenCounts = (
+  apiUrl: string,
+  accessToken: string,
+  from: string | null,
+  days: number | null,
+) => get<KitchenCounts>(apiUrl, `/school-life/kitchen${range(from, days)}`, accessToken);
+
+export const fetchRegisters = (
+  apiUrl: string,
+  accessToken: string,
+  from: string | null,
+  days: number | null,
+) => get<ActivityRegisters>(apiUrl, `/school-life/registers${range(from, days)}`, accessToken);

@@ -102,6 +102,24 @@ function Home({ view }: { view: HomeView }) {
         </section>
       ) : null}
 
+      {view.showsSchoolLife ? (
+        <section aria-labelledby="school-life" data-testid="school-life">
+          <h2 id="school-life">School Life</h2>
+          <ul>
+            <li>
+              <a href="/school-life/kitchen" data-testid="kitchen-link">
+                Kitchen: lunches per day
+              </a>
+            </li>
+            <li>
+              <a href="/school-life/registers" data-testid="registers-link">
+                Club registers
+              </a>
+            </li>
+          </ul>
+        </section>
+      ) : null}
+
       {view.hasNothing ? (
         <p data-testid="nothing-yet">
           Your account has no children or roles linked yet. If you expected to see your children, please

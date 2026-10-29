@@ -75,6 +75,7 @@ describe('buildHome', () => {
     );
     expect(view.schoolRoles).toEqual([{ role: 'Principal', school: 'School A' }]);
     expect(view.groupSchools).toEqual([]);
+    expect(view.showsSchoolLife).toBe(true);
   });
 
   it('shows group roles every school', () => {
@@ -88,6 +89,21 @@ describe('buildHome', () => {
     );
     expect(view.groupRoles).toEqual(['CEO']);
     expect(view.groupSchools).toEqual(['School A', 'School B', 'School C']);
+  });
+
+  it('offers School Life pages only to roles that can read bookings', () => {
+    const roles = (code: string) => [{ code, name: code, scope: 'group' as const, school: null }];
+    expect(
+      buildHome({ person: person('Iva'), roles: roles('school_life_coordinator'), children: [] }, schools)
+        .showsSchoolLife,
+    ).toBe(true);
+    expect(
+      buildHome({ person: person('Nikolay'), roles: roles('privacy_officer'), children: [] }, schools)
+        .showsSchoolLife,
+    ).toBe(false);
+    expect(buildHome({ person: person('Teodora'), roles: [], children: [] }, schools).showsSchoolLife).toBe(
+      false,
+    );
   });
 
   it('says so when nothing is linked yet', () => {

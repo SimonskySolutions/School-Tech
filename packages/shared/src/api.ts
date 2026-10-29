@@ -113,3 +113,48 @@ export interface SchoolSummary {
   timeZone: string;
   status: string;
 }
+
+/**
+ * Lunch to prepare per school and day (School Life, kitchen). Counts include
+ * paid bookings only; unpaid reservations are shown apart. Dietary needs are
+ * listed only where the viewer may see them (never for the CEO).
+ */
+export interface KitchenCounts {
+  from: string;
+  days: number;
+  schools: {
+    school: { id: SchoolId; name: string; timeZone: string };
+    showsDietary: boolean;
+    days: {
+      date: string;
+      meals: number;
+      awaitingPayment: number;
+      capacity: number | null;
+      dietary: {
+        studentName: string | null;
+        classLabel: string | null;
+        kind: string;
+        severity: string | null;
+        description: string;
+      }[];
+    }[];
+  }[];
+}
+
+/** Club and activity sessions with the children booked on them. */
+export interface ActivityRegisters {
+  from: string;
+  days: number;
+  sessions: {
+    id: string;
+    offering: { id: string; name: string };
+    school: { id: SchoolId; name: string; timeZone: string };
+    startsAt: string;
+    endsAt: string | null;
+    location: string | null;
+    capacity: number | null;
+    booked: number;
+    awaitingPayment: number;
+    attendees: { studentName: string | null; classLabel: string | null; status: string }[];
+  }[];
+}

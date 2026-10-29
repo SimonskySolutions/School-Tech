@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-29. Current milestone: **M2 in progress**: buying and paying (M2.1–M2.5) is done; School Life views, CEO reporting and cancellation (M2.6–M2.8) are next.
+Last updated: 2026-10-29. Current milestone: **M2 in progress**: buying and paying (M2.1–M2.5) and the School Life views (M2.6) are done; CEO reporting and cancellation (M2.7–M2.8) are next.
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -76,11 +76,13 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 | M2.3 Payment provider port | M2.2 | Port with the `development` adapter (signed events, succeed/fail/abandon) and the `stripe` adapter (built, disabled without keys) | **Done**: both adapters; the Stripe adapter is unit-tested against Stripe's documented formats only (no account) |
 | M2.4 Webhook and confirmation | M2.3, M1.5 | Signature check, duplicate-safe storage, worker confirmation in one transaction, out-of-order handling, reservation expiry, late-payment recovery | **Done**: `POST /webhooks/:provider` stores verified events only; the worker applies them oldest first, each in its own savepoint; reservation expiry every minute; a late payment confirms if a seat is free, otherwise becomes credit with the same company |
 | M2.5 Parent confirmation | M2.4 | Order status page driven by the server state (never by the browser redirect); confirmation message through the outbox | **Done, except the message**: `/services`, `/checkout` and `/orders/[group]` in the web app; the page refreshes itself until the worker has confirmed; `commerce.order.paid` is written to the outbox, but no e-mail is sent yet (no handler subscribes; notifications come with M7) |
-| M2.6 School Life views | M2.4 | Kitchen counts per school and day, with dietary flags; activity registers | Next |
-| M2.7 CEO reporting | M2.4 | Revenue and outstanding balances per school from the `reporting` views | Planned |
+| M2.6 School Life views | M2.4 | Kitchen counts per school and day, with dietary flags; activity registers | **Done** (2026-10-29): `GET /school-life/kitchen` and `/school-life/registers`, pages under `/school-life/` linked from staff home pages. Meals count paid bookings only (unpaid reservations shown apart); dietary needs listed most dangerous first, as alerts, only where the viewer holds `sensitive.dietary.read`; the CEO sees counts without health data, the School A kitchen sees School A only and no class names. Registers are read-only: marking attendance is not built yet (M4) |
+| M2.7 CEO reporting | M2.4 | Revenue and outstanding balances per school from the `reporting` views | Next |
 | M2.8 Authorised cancellation | M2.4 | Staff cancel a lunch day; credit issued to the payer; enrolment and other services untouched | Planned |
 
 Tests added for M2.1–M2.5: 22 API unit tests (signatures, both adapters, basket rules, error mapping, expiry schedule), 11 API integration tests against the running stack (purchase and confirmation, idempotency, another family's child, duplicate and out-of-order webhooks, forged signature, failed payment, expiry, late payment with a free seat and with a full session), 8 web unit tests, 3 end-to-end tests through the web app and the real Keycloak login (Anna's purchase, cross-site form refusal, another family's order) and 2 gateway checks. `scripts/db-reset-commerce.sh` clears earlier test orders so the suites can run repeatedly.
+
+Tests added for M2.6: 1 API unit test (dietary order), 7 API integration tests (counts per role after a real purchase, unpaid reservations kept apart, parents refused, parameter checks, registers per school), 6 web unit tests and 5 end-to-end tests (coordinator, School A kitchen, CEO, register, parent). API integration files now run one after another, since they share the development database.
 
 **Acceptance criteria**
 1. Parent Ivanova, with children at School A and School C, buys lunch for both and an activity for one, pays on the development provider, and sees the confirmation only after the worker has confirmed it.

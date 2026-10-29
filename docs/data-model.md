@@ -74,6 +74,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 | Published offerings, sessions, prices; active schools; live websites | Yes | Yes | Yes | Yes |
 | Audit log | No | No | With `audit.read` (CEO, privacy officer) | No |
 
+The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
+
 Writes the API can never make, whoever is signed in: confirm a payment, mark an order paid, confirm a reservation, rewrite a price, edit a placed order's lines, alter the audit log or financial ledger, verify a real domain, grant a role outside its own scope or to oneself, approve a refund it requested.
 
 The worker (`pyth_worker`) acts as the system on the tables its jobs need. It cannot read health data or the audit log, and cannot change prices, lines or the ledger.

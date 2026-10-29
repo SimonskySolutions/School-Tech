@@ -9,8 +9,23 @@ export interface HomeView {
   schoolRoles: { role: string; school: string }[];
   groupRoles: string[];
   groupSchools: string[];
+  /** Kitchen counts and club registers; the API decides what each role sees there. */
+  showsSchoolLife: boolean;
   hasNothing: boolean;
 }
+
+// Roles that hold bookings.read in the database (access.role_permission). Only
+// a hint for which links to show: the API enforces the permission itself.
+const SCHOOL_LIFE_ROLES = new Set([
+  'group_ceo',
+  'group_admin',
+  'group_finance',
+  'school_life_coordinator',
+  'principal',
+  'school_admin',
+  'teacher',
+  'kitchen',
+]);
 
 export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): HomeView {
   const groupRoles = me.roles.filter((role) => role.scope === 'group').map((role) => role.name);
@@ -33,6 +48,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     schoolRoles,
     groupRoles,
     groupSchools: groupRoles.length > 0 ? schools.map((school) => school.name) : [],
+    showsSchoolLife: me.roles.some((role) => SCHOOL_LIFE_ROLES.has(role.code)),
     hasNothing: children.length === 0 && schoolRoles.length === 0 && groupRoles.length === 0,
   };
 }
