@@ -16,3 +16,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0010](0010-payments-before-stripe.md) | Payments built for Stripe, run on a development provider until it is set up | Accepted |
 | [0011](0011-development-domains.md) | Development domains under .localhost | Accepted |
 | [0012](0012-toolchain.md) | Toolchain and workspace | Accepted |
+| [0013](0013-api-data-access-and-auth.md) | API data access and authentication | Accepted |

@@ -34,11 +34,26 @@ bash scripts/redis-test.sh
 bash scripts/identity-test.sh
 ```
 
+```bash
+bash scripts/api-integration-test.sh
+```
+
+To call the API by hand as a seeded person, get a token from the development test client and pass it as a bearer token:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:58080/realms/pythagoras/protocol/openid-connect/token -d grant_type=password -d client_id=pythagoras-dev-tests -d username=anna.ivanova@pythagoras.test --data-urlencode "password=$(cat secrets/keycloak_dev_user_password)" | python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+```
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:53001/me
+```
+
 | Service | Host address | Notes |
 | --- | --- | --- |
 | PostgreSQL 18.6 | `127.0.0.1:55432`, databases `pythagoras` and `keycloak` | Override with `POSTGRES_HOST_PORT`. Superuser only via `docker compose exec -u postgres postgres psql` |
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
 | Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
+| API (watch mode) | `http://localhost:53001` | Override with `API_HOST_PORT`. `/health/live`, `/health/ready` are public; every other route needs a Keycloak access token. Starts after the one-off `deps` service has installed dependencies |
 
 ### Code toolchain
 

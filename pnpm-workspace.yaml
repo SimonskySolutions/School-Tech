@@ -6,3 +6,6 @@ packages:
 allowBuilds:
   '@swc/core': true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - jose@6.2.14

@@ -1,6 +1,8 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { Public } from '../auth/principal';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
+import { Database } from '../database/database';
 
 export interface LiveStatus {
   status: 'ok';
@@ -8,14 +10,29 @@ export interface LiveStatus {
   paymentProvider: Env['PAYMENT_PROVIDER'];
 }
 
-// Liveness only: the process is up and configured. Readiness (database and
-// Redis reachable) arrives with the data access layer in M1.3.
+@Public()
 @Controller('health')
 export class HealthController {
-  constructor(@Inject(ENV) private readonly env: Env) {}
+  constructor(
+    @Inject(ENV) private readonly env: Env,
+    @Inject(Database) private readonly database: Database,
+  ) {}
 
+  /** The process is up and configured. */
   @Get('live')
   live(): LiveStatus {
     return { status: 'ok', service: 'api', paymentProvider: this.env.PAYMENT_PROVIDER };
+  }
+
+  /** The API can serve requests: PostgreSQL answers. */
+  @Get('ready')
+  @HttpCode(200)
+  async ready(): Promise<{ status: 'ready' }> {
+    try {
+      await this.database.ping();
+    } catch {
+      throw new ServiceUnavailableException('database unavailable');
+    }
+    return { status: 'ready' };
   }
 }

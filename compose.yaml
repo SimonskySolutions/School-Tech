@@ -9,6 +9,24 @@
 
 name: pythagoras
 
+x-workspace-volumes: &workspace-volumes
+  - .:/workspace
+  - ws_node_modules:/workspace/node_modules
+  - ws_api_node_modules:/workspace/apps/api/node_modules
+  - ws_api_dist:/workspace/apps/api/dist
+  - ws_web_node_modules:/workspace/apps/web/node_modules
+  - ws_web_next:/workspace/apps/web/.next
+  - ws_shared_node_modules:/workspace/packages/shared/node_modules
+  - ws_shared_dist:/workspace/packages/shared/dist
+
+x-workspace-env: &workspace-env
+  npm_config_store_dir: /workspace/node_modules/.pnpm-store
+  # File events do not cross from Windows into containers; poll instead.
+  CHOKIDAR_USEPOLLING: "true"
+  WATCHPACK_POLLING: "true"
+  TSC_WATCHFILE: PriorityPollingInterval
+  TSC_WATCHDIRECTORY: DynamicPriorityPolling
+
 x-hardening: &hardening
   restart: unless-stopped
   security_opt:
@@ -164,19 +182,48 @@ services:
     profiles: ["tools"]
     security_opt:
       - no-new-privileges:true
+    environment: *workspace-env
+    volumes: *workspace-volumes
+
+  # Installs dependencies from the lockfile and builds the shared package, once,
+  # before the application services start.
+  deps:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    security_opt:
+      - no-new-privileges:true
+    environment: *workspace-env
+    volumes: *workspace-volumes
+    command: ["sh", "-c", "pnpm install --frozen-lockfile --reporter=silent && pnpm --filter @pythagoras/shared build"]
+
+  # Business API in watch mode (ADR 0013). Production uses a built image (M1.6).
+  api:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/api", "start:dev"]
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
     environment:
-      npm_config_store_dir: /workspace/node_modules/.pnpm-store
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
-    volumes:
-      - .:/workspace
-      - ws_node_modules:/workspace/node_modules
-      - ws_api_node_modules:/workspace/apps/api/node_modules
-      - ws_api_dist:/workspace/apps/api/dist
-      - ws_web_node_modules:/workspace/apps/web/node_modules
-      - ws_web_next:/workspace/apps/web/.next
-      - ws_shared_node_modules:/workspace/packages/shared/node_modules
-      - ws_shared_dist:/workspace/packages/shared/dist
+      <<: *workspace-env
+      NODE_ENV: development
+      DB_PASSWORD_FILE: /run/secrets/pg_api_password
+    secrets:
+      - pg_api_password
+    volumes: *workspace-volumes
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-53001}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
 
   # One-off logical backup job. Run through scripts/db-backup.sh.
   db-backup:

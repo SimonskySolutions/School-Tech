@@ -59,6 +59,44 @@ describe('API configuration', () => {
     }
   });
 
+  it('uses the Compose services by default in development', () => {
+    const env = load({});
+    expect(env.DB_HOST).toBe('postgres');
+    expect(env.DB_USER).toBe('pyth_api');
+    expect(env.OIDC_ISSUER).toBe('http://localhost:58080/realms/pythagoras');
+    expect(env.OIDC_ALLOWED_CLIENTS).toEqual(['pythagoras-web', 'pythagoras-dev-tests']);
+  });
+
+  it('reads the database password from a Docker secret file', () => {
+    const env = load(
+      { DB_PASSWORD_FILE: '/run/secrets/pg_api_password' },
+      { '/run/secrets/pg_api_password': 'abc\n' },
+    );
+    expect(env.DB_PASSWORD).toBe('abc');
+  });
+
+  it('requires every connection value in production', () => {
+    expect(() => load({ NODE_ENV: 'production', PAYMENT_PROVIDER: 'stripe' })).toThrow(
+      /DB_HOST: required in production[\s\S]*DB_PASSWORD: required[\s\S]*OIDC_ISSUER: required/,
+    );
+  });
+
+  it('refuses the development test client in production', () => {
+    expect(() =>
+      load({
+        NODE_ENV: 'production',
+        DB_HOST: 'db',
+        DB_PASSWORD: 'x',
+        OIDC_ISSUER: 'https://auth.example.test/realms/pythagoras',
+        OIDC_JWKS_URL: 'https://auth.example.test/realms/pythagoras/protocol/openid-connect/certs',
+        OIDC_ALLOWED_CLIENTS: 'pythagoras-web, pythagoras-dev-tests',
+        PAYMENT_PROVIDER: 'stripe',
+        STRIPE_SECRET_KEY: 'sk_live_x',
+        STRIPE_WEBHOOK_SECRET: 'whsec_x',
+      }),
+    ).toThrow(/pythagoras-dev-tests is a development-only client/);
+  });
+
   it('rejects an invalid port', () => {
     expect(() => load({ PORT: '70000' })).toThrow(/PORT/);
   });
