@@ -82,13 +82,13 @@ bash scripts/check.sh
 
 `scripts/pnpm.sh` passes any pnpm command through, for example `bash scripts/pnpm.sh --filter @pythagoras/api test`. Dependencies and build output live in the `ws_*` volumes; `docker compose down -v` removes them together with the databases, so prefer removing only those volumes when you want a clean reinstall.
 
-**Known development gotcha:** the API's watch compiler notices changed files but not a newly created folder under `apps/api/src`. After adding a folder, run `docker compose restart api` (the worker picks up the new output by itself).
+**Known development gotcha:** the API's watch compiler notices changed files but not a newly created folder under `apps/api/src`. After adding a folder, run `docker compose restart api` (the worker picks up the new output by itself). The same restart helps when the API log shows `EADDRINUSE` after a change: the watcher's new process could not take the port, and the old code keeps answering.
 
 ### Background jobs
 
 | Queue | Job | When | What it does |
 | --- | --- | --- | --- |
-| `events` | one per outbox event | as soon as it is committed (relay polls every second) | Runs the handlers registered for the event type. At-least-once delivery, 8 attempts with exponential backoff; kept 7 days when done, 30 days when failed |
+| `events` | one per outbox event | as soon as it is committed (relay polls every second) | Runs the handlers registered for the event type. At-least-once delivery, 8 attempts with exponential backoff; kept 7 days when done, 30 days when failed. Handlers today: `commerce.order_line.cancelled` issues the family's credit for a cancelled lunch day |
 | `maintenance` | `audit.ensure-partitions` | 03:00 UTC on the 1st of each month, and at worker start | Creates audit-log partitions three months ahead |
 | `maintenance` | `integration.purge-inbound-payloads` | 03:30 UTC daily | Reduces processed provider webhook payloads older than 90 days to identifiers |
 | `maintenance` | `commerce.expire-reservations` | every minute | Expires unpaid orders past their reservation time and releases their seats |

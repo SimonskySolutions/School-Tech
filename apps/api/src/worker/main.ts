@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 import { SystemDatabase } from '../database/system-database';
+import { cancellationCreditHandler } from './cancellation-credit';
 import { EventDispatcher } from './event-dispatcher';
 import { MAINTENANCE_SCHEDULES, runMaintenance } from './maintenance';
 import { type OutboxJobData, OutboxRelay } from './outbox-relay';
@@ -74,7 +75,10 @@ async function main(): Promise<void> {
   const { affected } = await runMaintenance(database, 'audit.ensure-partitions');
   logger.log(`audit partitions checked (${affected} created)`);
 
-  const dispatcher = new EventDispatcher();
+  const dispatcher = new EventDispatcher().on(
+    'commerce.order_line.cancelled',
+    cancellationCreditHandler(database),
+  );
   const eventWorker = new Worker<OutboxJobData>('events', (job) => dispatcher.dispatch(job.data), {
     connection: connect(),
     prefix,

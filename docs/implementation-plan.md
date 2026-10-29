@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-29. Current milestone: **M2 in progress**: buying and paying (M2.1–M2.5), the School Life views (M2.6) and CEO reporting (M2.7) are done; authorised cancellation (M2.8) is next.
+Last updated: 2026-10-29. Current milestone: **M2 built** (M2.1–M2.8) and passing every suite locally; marked complete once CI on GitHub is green for it. M3 (school onboarding and websites) is next.
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -65,7 +65,7 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 4. No API code path queries PostgreSQL without a person context, except named system endpoints (health, webhooks, hostname resolution).
 5. CI runs type check, lint, unit tests, the database and Redis suites, and image builds on every push.
 
-## M2 · First vertical slice — in progress
+## M2 · First vertical slice — built, awaiting CI
 
 **Goal:** the journey from the requirements, end to end, on the development payment provider (ADR 0010).
 
@@ -78,13 +78,17 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 | M2.5 Parent confirmation | M2.4 | Order status page driven by the server state (never by the browser redirect); confirmation message through the outbox | **Done, except the message**: `/services`, `/checkout` and `/orders/[group]` in the web app; the page refreshes itself until the worker has confirmed; `commerce.order.paid` is written to the outbox, but no e-mail is sent yet (no handler subscribes; notifications come with M7) |
 | M2.6 School Life views | M2.4 | Kitchen counts per school and day, with dietary flags; activity registers | **Done** (2026-10-29): `GET /school-life/kitchen` and `/school-life/registers`, pages under `/school-life/` linked from staff home pages. Meals count paid bookings only (unpaid reservations shown apart); dietary needs listed most dangerous first, as alerts, only where the viewer holds `sensitive.dietary.read`; the CEO sees counts without health data, the School A kitchen sees School A only and no class names. Registers are read-only: marking attendance is not built yet (M4) |
 | M2.7 CEO reporting | M2.4 | Revenue and outstanding balances per school from the `reporting` views | **Done** (2026-10-29): `GET /reports/revenue` (period in school-local dates, default this month, at most a year) and `/reports/revenue` in the web app, linked for roles with `reports.read`. Per school: received, paid by credit, refunded, credited, net; unpaid staff invoices and overdue; checkouts in progress; credit owed to families. Migration `20261031090000` splits `reporting.school_revenue_daily` by `payment_mode`, so test-mode money (the development provider) has its own column and is never shown as revenue. The CEO sees all schools, a principal their own, teachers, the kitchen and parents nothing |
-| M2.8 Authorised cancellation | M2.4 | Staff cancel a lunch day; credit issued to the payer; enrolment and other services untouched | Next |
+| M2.8 Authorised cancellation | M2.4 | Staff cancel a lunch day; credit issued to the payer; enrolment and other services untouched | **Done** (2026-10-29): `GET /school-life/lunch` (children booked at one school on one day) and `POST /school-life/bookings/:id/cancel` with a required reason, for staff with `bookings.manage` at the school (not the kitchen or teachers), for paid lunch days that have not passed. The API cancels the booking and its line and writes `commerce.order_line.cancelled`; the worker then issues credit for exactly what was paid for that line, with the same billing entity, and the balancing `credit_issued` allocation. A unique index allows one credit per line (migration `20261101090000`). Web: each day on the kitchen page opens its lunch list with a cancel form. Club bookings, other lines and enrolments are untouched |
 
 Tests added for M2.1–M2.5: 22 API unit tests (signatures, both adapters, basket rules, error mapping, expiry schedule), 11 API integration tests against the running stack (purchase and confirmation, idempotency, another family's child, duplicate and out-of-order webhooks, forged signature, failed payment, expiry, late payment with a free seat and with a full session), 8 web unit tests, 3 end-to-end tests through the web app and the real Keycloak login (Anna's purchase, cross-site form refusal, another family's order) and 2 gateway checks. `scripts/db-reset-commerce.sh` clears earlier test orders so the suites can run repeatedly.
 
 Tests added for M2.6: 1 API unit test (dietary order), 7 API integration tests (counts per role after a real purchase, unpaid reservations kept apart, parents refused, parameter checks, registers per school), 6 web unit tests and 5 end-to-end tests (coordinator, School A kitchen, CEO, register, parent). API integration files now run one after another, since they share the development database.
 
 Tests added for M2.7: 1 database check (test money reported as test), 4 API unit tests (report assembly, test money kept apart, schools without money, precision), 5 API integration tests (CEO sees the purchase as test money at the right schools, default period, principal's own school, refused roles, period checks), 5 web unit tests and 3 end-to-end tests (CEO view, principal and teacher, unusable period).
+
+Tests added for M2.8: 1 database check (one credit per line), 4 API unit tests (who may cancel what, and when), 8 API integration tests (refused roles, reason required, exact credit with the same company, nothing else changed, kitchen count, CEO figures, no second cancellation or credit), 2 web unit tests and 2 end-to-end tests (School Life cancels from the lunch list and Anna sees it; cross-site form refused).
+
+**Acceptance criteria status (local runs):** 1, 2, 4 and 6 are met and covered by the end-to-end and integration suites. 3: revenue per school is correct, and credited, net and credit owed update after a cancellation; staff invoices ("outstanding") cannot be created in the app yet. 5: the end-to-end journey and the payment edge cases run in the CI workflow, but CI has not yet been checked for these commits.
 
 **Acceptance criteria**
 1. Parent Ivanova, with children at School A and School C, buys lunch for both and an activity for one, pays on the development provider, and sees the confirmation only after the worker has confirmed it.

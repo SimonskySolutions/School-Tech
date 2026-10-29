@@ -74,3 +74,30 @@ export function attendanceLabel(status: string): string {
   if (status === 'absent') return 'Absent';
   return 'Booked';
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The school and day a lunch list is for, or null if the address does not name both. */
+export function readLunchQuery(
+  params: Record<string, string | string[] | undefined>,
+): { schoolId: string; date: string } | null {
+  const { schoolId, date } = params;
+  return typeof schoolId === 'string' && UUID.test(schoolId) && typeof date === 'string' && DAY.test(date)
+    ? { schoolId, date }
+    : null;
+}
+
+export const CANCEL_NOTICES: Record<string, string> = {
+  cancelled: 'Lunch cancelled. The family receives credit for that day within a minute.',
+  'no-reason': 'Give a reason of at least 3 characters.',
+  refused:
+    'This lunch could not be cancelled: it may already be cancelled, the day may have passed, or your role may not change bookings.',
+  failed: 'The cancellation did not go through. Please try again.',
+};
+
+/** Maps the API's answer to one of CANCEL_NOTICES. */
+export function cancelNotice(status: number): keyof typeof CANCEL_NOTICES {
+  if (status === 400) return 'no-reason';
+  if (status === 403 || status === 404 || status === 409 || status === 422) return 'refused';
+  return 'failed';
+}

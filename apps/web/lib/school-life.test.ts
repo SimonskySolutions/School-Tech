@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dietaryLabel, formatDay, formatSessionTime, isUrgent, readRange, shiftRange } from './school-life';
+import {
+  cancelNotice,
+  dietaryLabel,
+  formatDay,
+  formatSessionTime,
+  isUrgent,
+  readLunchQuery,
+  readRange,
+  shiftRange,
+} from './school-life';
 
 describe('readRange', () => {
   it('accepts a date and a day count, and drops anything else', () => {
@@ -36,5 +45,24 @@ describe('dietary needs', () => {
     expect(isUrgent('life_threatening')).toBe(true);
     expect(isUrgent('severe')).toBe(true);
     expect(isUrgent('moderate')).toBe(false);
+  });
+});
+
+describe('lunch list and cancellation', () => {
+  it('needs both a school id and a date', () => {
+    const school = 'b1000000-0000-7000-8000-00000000000a';
+    expect(readLunchQuery({ schoolId: school, date: '2026-11-02' })).toEqual({
+      schoolId: school,
+      date: '2026-11-02',
+    });
+    expect(readLunchQuery({ schoolId: 'school-a', date: '2026-11-02' })).toBeNull();
+    expect(readLunchQuery({ schoolId: school })).toBeNull();
+  });
+
+  it('explains what happened to a cancellation', () => {
+    expect(cancelNotice(400)).toBe('no-reason');
+    expect(cancelNotice(409)).toBe('refused');
+    expect(cancelNotice(403)).toBe('refused');
+    expect(cancelNotice(500)).toBe('failed');
   });
 });

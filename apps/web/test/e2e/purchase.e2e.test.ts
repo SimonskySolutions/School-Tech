@@ -8,6 +8,8 @@ import { APP, type Browser, signIn } from './browser';
 
 const PASSWORD = readFileSync('/workspace/secrets/keycloak_dev_user_password', 'utf8').trim();
 const BANNER = 'Payments use the development payment provider: no money moves';
+/** Anna's order from the first test, for the cancellation at the end. */
+let annasOrder = '';
 
 const decode = (value: string) => value.replaceAll('&amp;', '&').replaceAll('&#x27;', "'");
 
@@ -77,6 +79,7 @@ describe('buying through the family portal', () => {
     const paid = await browser.request(new URL(payAction, checkoutUrl).toString(), { method: 'POST' });
     expect(paid.status).toBe(303);
     const orderUrl = paid.headers.get('location')!;
+    annasOrder = orderUrl.split('?')[0]!;
     expect(orderUrl).toMatch(/\/orders\/[0-9a-f-]{36}\?returned=1$/);
 
     // Straight after the redirect the payment is not confirmed yet.
@@ -215,5 +218,58 @@ describe('CEO reporting after the purchase', () => {
   it('explains a period it cannot use', async () => {
     const report = await page('ceo', '/reports/revenue?from=2026-10-31&to=2026-10-01');
     expect(report.html).toContain('data-testid="period-invalid"');
+  });
+});
+
+// Runs last: School Life cancels Mila's lunch; Anna sees it and gets credit.
+describe('cancelling a lunch day after the purchase', () => {
+  it("School Life cancels Mila's lunch from the lunch list; Anna sees it on her order", async () => {
+    const { browser } = await signIn('schoollife@pythagoras.test', PASSWORD);
+    const kitchen = await (await browser.follow(`${APP}/school-life/kitchen?days=10`)).response.text();
+    // The day Mila is booked is the row carrying her allergy alert.
+    const at = kitchen.indexOf('Mila Ivanova (3A): Allergy');
+    expect(at).toBeGreaterThan(0);
+    const href = decode(
+      /href="(\/school-life\/lunch\?[^"]+)"/.exec(kitchen.slice(kitchen.lastIndexOf('<tr', at)))![1]!,
+    );
+    const listUrl = `${APP}${href}`;
+
+    const list = await (await browser.follow(listUrl)).response.text();
+    expect(list).toContain(BANNER);
+    const row = list.slice(list.indexOf('Mila Ivanova, 3A'));
+    const bookingId = /name="booking_id" value="([^"]+)"/.exec(row)![1]!;
+    const hidden = (name: string) => decode(new RegExp(`name="${name}" value="([^"]+)"`).exec(row)![1]!);
+
+    const response = await browser.request(`${APP}/school-life/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: APP },
+      body: new URLSearchParams({
+        booking_id: bookingId,
+        school_id: hidden('school_id'),
+        date: hidden('date'),
+        reason: 'Absent: school trip',
+      }),
+    });
+    expect(response.status).toBe(303);
+    const back = await (
+      await browser.follow(new URL(response.headers.get('location')!, APP).toString())
+    ).response.text();
+    expect(back).toContain('Lunch cancelled. The family receives credit for that day');
+    expect(back.slice(back.indexOf('data-testid="cancelled-list"'))).toContain('Mila Ivanova, 3A');
+
+    const anna = (await signIn('anna.ivanova@pythagoras.test', PASSWORD)).browser;
+    const order = await (await anna.follow(annasOrder)).response.text();
+    expect(order).toContain('their amount is kept as credit');
+    expect(order).toContain('Not booked');
+  });
+
+  it('refuses a cancellation sent from another site', async () => {
+    const { browser } = await signIn('schoollife@pythagoras.test', PASSWORD);
+    const response = await browser.request(`${APP}/school-life/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://evil.test' },
+      body: new URLSearchParams({ booking_id: crypto.randomUUID(), reason: 'x' }),
+    });
+    expect(response.status).toBe(403);
   });
 });

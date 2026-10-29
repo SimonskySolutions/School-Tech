@@ -59,7 +59,11 @@ export default async function KitchenPage({ searchParams }: { searchParams: Sear
             <tbody>
               {entry.days.map((day) => (
                 <tr key={day.date} data-testid={`day-${day.date}`} style={{ verticalAlign: 'top' }}>
-                  <td style={{ paddingRight: '1rem' }}>{formatDay(day.date)}</td>
+                  <td style={{ paddingRight: '1rem' }}>
+                    <Link href={`/school-life/lunch?schoolId=${entry.school.id}&date=${day.date}`}>
+                      {formatDay(day.date)}
+                    </Link>
+                  </td>
                   <td style={{ textAlign: 'right', paddingRight: '1rem' }} data-testid="meals">
                     {day.meals}
                   </td>

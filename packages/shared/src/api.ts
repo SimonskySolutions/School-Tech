@@ -192,3 +192,29 @@ export interface RevenueReport {
   }[];
   totals: { currency: string; live: RevenueFigures; test: RevenueFigures }[];
 }
+
+/** Children booked for lunch at one school on one day, for staff who may cancel a day. */
+export interface LunchList {
+  school: { id: SchoolId; name: string };
+  date: string;
+  /** The viewer holds bookings.manage at this school and the day has not passed. */
+  canCancel: boolean;
+  bookings: {
+    bookingId: string;
+    studentName: string | null;
+    classLabel: string | null;
+    status: 'confirmed' | 'cancelled' | 'attended' | 'absent';
+  }[];
+}
+
+export interface CancelBookingRequest {
+  reason: string;
+}
+
+/** The booking is cancelled now; the worker issues the credit moments later. */
+export interface CancelBookingResponse {
+  bookingId: string;
+  status: 'cancelled';
+  creditAmountMinor: number;
+  currency: string;
+}

@@ -71,7 +71,7 @@ export function orderStatus(order: Order): { label: string; detail: string; sett
         ? {
             label: 'Paid',
             detail:
-              'Payment confirmed. Some places filled up before the payment arrived; their amount is kept as credit for your next booking.',
+              'Payment confirmed. Some items are not booked (cancelled by the school, or full before the payment arrived); their amount is kept as credit for your next booking.',
             settled: true,
           }
         : { label: 'Paid', detail: 'Payment confirmed. Your places are booked.', settled: true };

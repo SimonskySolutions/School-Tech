@@ -1,9 +1,11 @@
 import {
   type ActivityRegisters,
+  type CancelBookingResponse,
   type CheckoutGroupView,
   type CheckoutRequestBody,
   type CheckoutResponse,
   type KitchenCounts,
+  type LunchList,
   type RevenueReport,
   type MeResponse,
   type SchoolSummary,
@@ -93,3 +95,28 @@ export const fetchRevenueReport = (
     `/reports/revenue${period ? `?${new URLSearchParams(period)}` : ''}`,
     accessToken,
   );
+
+export const fetchLunchList = (apiUrl: string, accessToken: string, schoolId: string, date: string) =>
+  get<LunchList>(apiUrl, `/school-life/lunch?${new URLSearchParams({ schoolId, date })}`, accessToken);
+
+export type CancelResult = { kind: 'ok'; value: CancelBookingResponse } | { kind: 'refused'; status: number };
+
+/** Cancels one paid lunch day as the signed-in member of staff. */
+export async function postCancelBooking(
+  apiUrl: string,
+  accessToken: string,
+  bookingId: string,
+  reason: string,
+): Promise<CancelResult> {
+  const response = await fetch(
+    new URL(`/school-life/bookings/${encodeURIComponent(bookingId)}/cancel`, apiUrl),
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ reason }),
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) return { kind: 'refused', status: response.status };
+  return { kind: 'ok', value: (await response.json()) as CancelBookingResponse };
+}
