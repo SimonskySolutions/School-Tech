@@ -1,0 +1,18 @@
+# Build context for the production images (infra/images). Nothing secret,
+# generated or unrelated to the build goes in.
+.git
+secrets
+backups
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/next-env.d.ts
+db
+docs
+infra
+scripts
+tests
+**/test
+**/*.test.ts

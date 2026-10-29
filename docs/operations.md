@@ -42,7 +42,11 @@ bash scripts/api-integration-test.sh
 bash scripts/web-e2e-test.sh
 ```
 
-To try it in a browser: open `http://localhost:53000`, choose **Sign in**, and use one of the accounts below with the password in `secrets/keycloak_dev_user_password`.
+```bash
+bash scripts/gateway-test.sh
+```
+
+To try it in a browser: open `http://portal.pythagoras.localhost:53000`, choose **Sign in**, and use one of the accounts below with the password in `secrets/keycloak_dev_user_password`.
 
 To call the API by hand as a seeded person, get a token from the development test client and pass it as a bearer token:
 
@@ -59,7 +63,8 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:53001/me
 | PostgreSQL 18.6 | `127.0.0.1:55432`, databases `pythagoras` and `keycloak` | Override with `POSTGRES_HOST_PORT`. Superuser only via `docker compose exec -u postgres postgres psql` |
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
 | Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
-| Web app (development mode) | `http://localhost:53000` | Override with `WEB_HOST_PORT`. Sign in with any seeded account below. Reloads within about 2 seconds of a file change |
+| Gateway (Caddy) | `http://portal.pythagoras.localhost:53000` | Override with `GATEWAY_HOST_PORT`. The front door: the portal, school sites (`school-a.pythagoras.localhost:53000` …) and `api.pythagoras.localhost:53000` (health checks only). `localhost:53000` redirects to the portal. Browsers resolve `*.localhost` without any setup |
+| Web app (development mode) | through the gateway only | Sign in with any seeded account below. Reloads within about 2 seconds of a file change |
 | Worker | no port | Runs the API service's compiled output as `pyth_worker` / `pyth_queue`; healthy while its heartbeat file is fresh. Logs: `docker compose logs -f worker` |
 | API (watch mode) | `http://localhost:53001` | Override with `API_HOST_PORT`. `/health/live`, `/health/ready` are public; every other route needs a Keycloak access token. Starts after the one-off `deps` service has installed dependencies |
 
@@ -95,7 +100,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 
 `scripts/db-seed.sh` loads `db/seeds/development.sql`: synthetic data only, idempotent, and refused for any database other than the local `pythagoras`. It contains one company, **Testing Company** (placeholder name), billing **School A**, **School B** and **School C**; their websites under `*.pythagoras.localhost`; lunch, chess, robotics and tuition offerings with per-school prices; the next 20 school days of lunch and eight weeks of club sessions.
 
-All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in through the web app at `http://localhost:53000`.
+All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in through the web app at `http://portal.pythagoras.localhost:53000`.
 
 | Account | Role | Sees |
 | --- | --- | --- |
@@ -113,6 +118,24 @@ All accounts share one generated password, stored in `secrets/keycloak_dev_user_
 | `unlinked@pythagoras.test` | None | Signs in to Keycloak, but has no person record: the platform must refuse it |
 
 The realm file `infra/keycloak/realm/pythagoras-realm.json` is a development realm: it contains these users and the `pythagoras-dev-tests` password-grant client. It is imported only when the realm does not exist yet; to reload it after editing, remove the realm in the admin console (or reset the `keycloak` database) and restart Keycloak.
+
+## Production images and CI
+
+```bash
+docker build -f infra/images/api.Dockerfile -t pythagoras-api .
+```
+
+```bash
+docker build -f infra/images/web.Dockerfile -t pythagoras-web .
+```
+
+The API image also runs the worker: `docker run pythagoras-api node dist/worker/main.js`. Both images run as the unprivileged `node` user and refuse unsafe production settings at start-up (for example, the web app requires HTTPS addresses when `NODE_ENV=production`).
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the code checks, builds both images, and runs every suite against the full stack on each push and on pull requests into `Dev` and `main` (ADR 0015).
+
+### Production gateway
+
+`infra/gateway/Caddyfile.production` serves HTTPS. It needs `ACME_EMAIL`, `AUTH_HOST` and `API_HOST`, and DNS records pointing the identity, API and every school domain at the gateway host, with ports 80 and 443 open for certificate issuance. School domains get certificates only once the platform lists them as verified domains of a live website.
 
 ## Identity provider in production (to do in M8)
 

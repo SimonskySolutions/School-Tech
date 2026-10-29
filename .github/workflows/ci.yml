@@ -1,0 +1,82 @@
+# Continuous integration (ADR 0015). Every push and every pull request into Dev
+# or main runs the same checks as the local scripts. Third-party actions are
+# pinned to full commit hashes.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [Dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code:
+    name: Type check, lint, unit tests, builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 (version from packageManager)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pythagoras/shared build
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run lint
+      - run: pnpm format:check
+      - run: pnpm -r run test
+      - run: pnpm -r run build
+
+  images:
+    name: Production images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -f infra/images/api.Dockerfile -t pythagoras-api:${{ github.sha }} .
+      - run: docker build -f infra/images/web.Dockerfile -t pythagoras-web:${{ github.sha }} .
+      - name: Images run as an unprivileged user
+        run: |
+          for image in api web; do
+            user=$(docker run --rm --entrypoint id pythagoras-$image:${{ github.sha }} -un)
+            echo "$image runs as $user"
+            test "$user" = node
+          done
+
+  stack:
+    name: Database, identity, API, worker, gateway and sign-in suites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Generate throwaway secrets
+        run: |
+          bash scripts/dev-secrets.sh
+          # Containers run as their own users (postgres, node, keycloak) and read
+          # bind-mounted files; CI is ephemeral, so make them readable.
+          chmod a+r secrets/*
+          chmod -R a+rwX apps packages
+      - name: Start data services
+        run: docker compose up -d --wait postgres redis
+      - run: bash scripts/db-migrate.sh up
+      - run: bash scripts/db-test.sh
+      - run: bash scripts/redis-test.sh
+      - name: Start the whole stack
+        run: docker compose up -d --wait postgres redis keycloak api worker web gateway
+      - run: bash scripts/db-seed.sh
+      - run: bash scripts/identity-test.sh
+      - run: bash scripts/api-integration-test.sh
+      - run: bash scripts/web-e2e-test.sh
+      - run: bash scripts/gateway-test.sh
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200

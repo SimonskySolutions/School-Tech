@@ -1,0 +1,60 @@
+# Production gateway (ADR 0015). Not used in development.
+#
+# Environment:
+#   ACME_EMAIL   contact address for the certificate authority
+#   AUTH_HOST    identity provider host name, e.g. auth.example.bg
+#   API_HOST     public API host name, e.g. api.example.bg (health and webhooks only)
+#
+# Every other host name gets a certificate on demand, but only after the API
+# confirms it is a verified domain of a live website. A new school website goes
+# live by adding and verifying its domain in the platform; no gateway change.
+{
+	admin off
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://api:3000/internal/tls/allowed
+	}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(no_banner) {
+	header -Server
+	header -X-Powered-By
+}
+
+(proxy_defaults) {
+	import no_banner
+	header Strict-Transport-Security "max-age=31536000"
+	request_header X-Request-Id {http.request.uuid}
+}
+
+{$AUTH_HOST} {
+	import proxy_defaults
+	# The administration console is not public; administer through an SSH tunnel.
+	@admin path /admin /admin/*
+	respond @admin "Not found" 404
+	reverse_proxy keycloak:8080
+}
+
+{$API_HOST} {
+	import proxy_defaults
+	@public path /health/live /health/ready /webhooks/*
+	handle @public {
+		reverse_proxy api:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}
+
+https:// {
+	import proxy_defaults
+	tls {
+		on_demand
+	}
+	@internal path /internal /internal/*
+	respond @internal "Not found" 404
+	reverse_proxy web:3000
+}

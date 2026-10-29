@@ -8,7 +8,7 @@ One modular monolith, organised by business capability, deployed as a small set 
 
 | Service | Role | Status |
 | --- | --- | --- |
-| gateway | HTTPS, verified domains, routing per website | Planned |
+| gateway | Caddy: routing per host; production HTTPS only for verified domains (ADR 0015) | **Built** (development routing; production configuration validated, not yet deployed) |
 | web | Next.js: school websites, family portal, staff and CEO workspaces; server-side Keycloak sign-in (ADR 0014) | **Built**: sign-in, sign-out, role-aware home page; workspaces follow |
 | api | NestJS modular backend; verifies Keycloak tokens; runs each request in a person-context transaction for PostgreSQL RLS (ADR 0013) | **Built**: sign-in, `/me`, `/schools`, health; business modules follow |
 | worker | Same package as the API, own database role; BullMQ jobs: outbox relay, event handlers, scheduled maintenance; later payment confirmation, expiry, notifications, synchronisation | **Built**: relay, dispatcher, maintenance schedules; business handlers follow |

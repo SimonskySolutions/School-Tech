@@ -267,7 +267,8 @@ services:
     environment:
       <<: *workspace-env
       NODE_ENV: development
-      APP_URL: http://localhost:${WEB_HOST_PORT:-53000}
+      # Reached through the gateway; the portal has one canonical address.
+      APP_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_web_client_secret
       SESSION_SECRET_FILE: /run/secrets/web_session_secret
       NEXT_TELEMETRY_DISABLED: "1"
@@ -275,14 +276,38 @@ services:
       - keycloak_web_client_secret
       - web_session_secret
     volumes: *workspace-volumes
-    ports:
-      - "127.0.0.1:${WEB_HOST_PORT:-53000}:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 10s
       timeout: 10s
       retries: 30
       start_period: 90s
+
+  # Front door (ADR 0015): routes each host name to its service.
+  gateway:
+    <<: *hardening
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      PORTAL_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
+    volumes:
+      - ./infra/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+    ports:
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-53000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header", "Host: api.pythagoras.localhost", "http://127.0.0.1/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # One-off logical backup job. Run through scripts/db-backup.sh.
   db-backup:

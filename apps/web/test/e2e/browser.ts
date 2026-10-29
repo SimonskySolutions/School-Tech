@@ -3,11 +3,11 @@
 // addresses (localhost ports) to the service names they correspond to.
 
 const HOST_MAP: Record<string, string> = {
-  'localhost:53000': 'web:3000',
+  'portal.pythagoras.localhost:53000': 'web:3000',
   'localhost:58080': 'keycloak:8080',
 };
 
-export const APP = 'http://localhost:53000';
+export const APP = 'http://portal.pythagoras.localhost:53000';
 
 export interface CookieRecord {
   value: string;

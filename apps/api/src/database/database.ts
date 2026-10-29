@@ -59,6 +59,16 @@ export class Database {
     return result.rows[0]?.person_id ?? null;
   }
 
+  /** System operation: the live website a verified host name belongs to, or null. */
+  async resolveHostname(hostname: string): Promise<{ websiteId: string; purpose: string } | null> {
+    const result = await this.pool.query<{ website_id: string; website_purpose: string }>(
+      'SELECT website_id, website_purpose FROM org.resolve_hostname($1)',
+      [hostname],
+    );
+    const row = result.rows[0];
+    return row ? { websiteId: row.website_id, purpose: row.website_purpose } : null;
+  }
+
   /** System operation: readiness check. */
   async ping(): Promise<void> {
     await this.pool.query('SELECT 1');
