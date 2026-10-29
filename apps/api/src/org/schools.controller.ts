@@ -1,16 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
-import { type SchoolId } from '@pythagoras/shared';
+import { type SchoolId, type SchoolSummary } from '@pythagoras/shared';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
-
-export interface SchoolSummary {
-  id: SchoolId;
-  code: string;
-  name: string;
-  kind: string;
-  timeZone: string;
-  status: string;
-}
 
 interface SchoolRow {
   id: SchoolId;

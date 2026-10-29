@@ -1,0 +1,96 @@
+import { type MeResponse, type PersonId, type SchoolId, type SchoolSummary } from '@pythagoras/shared';
+import { describe, expect, it } from 'vitest';
+import { buildHome } from './home';
+
+const id = <T extends string>(value: string) => value as T;
+const school = (code: string, name: string) => ({ id: id<SchoolId>(code), code, name });
+const schools: SchoolSummary[] = ['School A', 'School B', 'School C'].map((name, index) => ({
+  id: id<SchoolId>(`s${index}`),
+  code: `s${index}`,
+  name,
+  kind: 'school',
+  timeZone: 'Europe/Sofia',
+  status: 'active',
+}));
+
+const person = (givenName: string): MeResponse['person'] => ({
+  id: id<PersonId>(givenName),
+  givenName,
+  familyName: 'Test',
+  preferredName: null,
+  email: null,
+});
+
+const capabilities = { view: true, pay: true, manageBookings: true, consent: false };
+
+describe('buildHome', () => {
+  it('shows a parent their children and where they study', () => {
+    const view = buildHome(
+      {
+        person: person('Anna'),
+        roles: [],
+        children: [
+          {
+            id: id<PersonId>('mila'),
+            givenName: 'Mila',
+            familyName: 'Ivanova',
+            relationship: 'parent',
+            capabilities,
+            enrolments: [
+              {
+                school: school('a', 'School A'),
+                academicYear: '2026/2027',
+                gradeLevel: '3',
+                classLabel: '3A',
+                status: 'active',
+              },
+            ],
+          },
+        ],
+      },
+      schools,
+    );
+    expect(view.greeting).toBe('Hello, Anna');
+    expect(view.children).toEqual([{ id: 'mila', name: 'Mila Ivanova', places: ['School A, class 3A'] }]);
+    expect(view.groupRoles).toEqual([]);
+    expect(view.groupSchools).toEqual([]);
+    expect(view.hasNothing).toBe(false);
+  });
+
+  it('shows school staff their school and role', () => {
+    const view = buildHome(
+      {
+        person: person('Petar'),
+        roles: [
+          {
+            code: 'principal',
+            name: 'Principal',
+            scope: 'school',
+            school: { id: id<SchoolId>('a'), name: 'School A' },
+          },
+        ],
+        children: [],
+      },
+      schools,
+    );
+    expect(view.schoolRoles).toEqual([{ role: 'Principal', school: 'School A' }]);
+    expect(view.groupSchools).toEqual([]);
+  });
+
+  it('shows group roles every school', () => {
+    const view = buildHome(
+      {
+        person: person('Elena'),
+        roles: [{ code: 'group_ceo', name: 'CEO', scope: 'group', school: null }],
+        children: [],
+      },
+      schools,
+    );
+    expect(view.groupRoles).toEqual(['CEO']);
+    expect(view.groupSchools).toEqual(['School A', 'School B', 'School C']);
+  });
+
+  it('says so when nothing is linked yet', () => {
+    expect(buildHome({ person: person('Teodora'), roles: [], children: [] }, schools).hasNothing).toBe(true);
+  });
+});

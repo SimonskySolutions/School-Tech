@@ -38,6 +38,12 @@ bash scripts/identity-test.sh
 bash scripts/api-integration-test.sh
 ```
 
+```bash
+bash scripts/web-e2e-test.sh
+```
+
+To try it in a browser: open `http://localhost:53000`, choose **Sign in**, and use one of the accounts below with the password in `secrets/keycloak_dev_user_password`.
+
 To call the API by hand as a seeded person, get a token from the development test client and pass it as a bearer token:
 
 ```bash
@@ -53,6 +59,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:53001/me
 | PostgreSQL 18.6 | `127.0.0.1:55432`, databases `pythagoras` and `keycloak` | Override with `POSTGRES_HOST_PORT`. Superuser only via `docker compose exec -u postgres postgres psql` |
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
 | Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
+| Web app (development mode) | `http://localhost:53000` | Override with `WEB_HOST_PORT`. Sign in with any seeded account below. Reloads within about 2 seconds of a file change |
 | API (watch mode) | `http://localhost:53001` | Override with `API_HOST_PORT`. `/health/live`, `/health/ready` are public; every other route needs a Keycloak access token. Starts after the one-off `deps` service has installed dependencies |
 
 ### Code toolchain
@@ -75,7 +82,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 
 `scripts/db-seed.sh` loads `db/seeds/development.sql`: synthetic data only, idempotent, and refused for any database other than the local `pythagoras`. It contains one company, **Testing Company** (placeholder name), billing **School A**, **School B** and **School C**; their websites under `*.pythagoras.localhost`; lunch, chess, robotics and tuition offerings with per-school prices; the next 20 school days of lunch and eight weeks of club sessions.
 
-All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in at `http://localhost:58080/realms/pythagoras/account`, or through the web app once it exists.
+All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in through the web app at `http://localhost:53000`.
 
 | Account | Role | Sees |
 | --- | --- | --- |

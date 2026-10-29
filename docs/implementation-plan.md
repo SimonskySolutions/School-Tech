@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-29. Current milestone: **M1 in progress** (M1.1–M1.3 done; M1.4 next).
+Last updated: 2026-10-29. Current milestone: **M1 in progress** (M1.1–M1.4 done; M1.5 next).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -54,7 +54,7 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 | M1.1 Identity service and development data | M0 | Keycloak in Compose with its own database and role; `pythagoras` realm (no self-registration, brute-force protection, password policy, PKCE web client, API audience); development users linked to seeded people; seed with Testing Company and three schools; identity tests | **Done** (2026-10-29): `scripts/identity-test.sh` 25 checks; clean start on empty volumes verified |
 | M1.2 Monorepo and toolchain | M0 | pnpm workspace: `apps/api` (NestJS), `apps/web` (Next.js), `packages/shared`; Node 24 LTS pinned; development containers with dependencies in Docker volumes (not in the OneDrive folder); lint, type check, unit tests | **Done** (2026-10-29): `scripts/check.sh` passes (install from lockfile, type check, lint, format, 33 unit tests, builds of all three packages); built API and web app start; versions and trade-offs in ADR 0012 |
 | M1.3 API authentication and request context | M1.1, M1.2 | Token verification (issuer, audience, expiry, signature via JWKS); person resolved through `access.resolve_login`; one transaction per request with `SET LOCAL app.person_id`; `GET /me` (person, roles, authorised children) and `GET /schools` | **Done** (2026-10-29): ADR 0013; API runs in Compose (`http://localhost:53001`); 36 unit tests (every token failure mode, guard 401/403, structural rules) and 10 integration tests with real Keycloak tokens (`scripts/api-integration-test.sh`) |
-| M1.4 Web sign-in | M1.3 | Server-side OpenID Connect sign-in and sign-out with PKCE; session cookie, no tokens in the browser; role-aware home page for parent, staff and CEO | Not started |
+| M1.4 Web sign-in | M1.3 | Server-side OpenID Connect sign-in and sign-out with PKCE; session cookie, no tokens in the browser; role-aware home page for parent, staff and CEO | **Done** (2026-10-29): ADR 0014; web app in Compose (`http://localhost:53000`); 23 unit tests; 12 end-to-end tests through the real Keycloak login form (`scripts/web-e2e-test.sh`), covering PKCE and state, encrypted HttpOnly cookies, role views, unlinked accounts, open-redirect refusal, token refresh, and sign-out that ends the Keycloak session |
 | M1.5 Worker skeleton | M1.2 | Worker from the API image; BullMQ on the `pyth_queue` user; outbox relay; monthly audit-partition job | Not started |
 | M1.6 Gateway and CI | M1.3, M1.4 | Gateway routing `*.pythagoras.localhost`; GitHub Actions: type check, lint, unit tests, database and Redis suites, image builds | Not started |
 

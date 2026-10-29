@@ -2,7 +2,7 @@
 
 Central management platform for the Pythagoras school group: one system for every school, website, family and payment.
 
-**Current state:** the PostgreSQL and Redis foundation (M0), the Keycloak identity service with development data (M1.1), and the code workspace (M1.2), and API sign-in with per-person database access (M1.3) are built and tested. Web sign-in comes next.
+**Current state:** the PostgreSQL and Redis foundation (M0), the Keycloak identity service with development data (M1.1), and the code workspace (M1.2), API sign-in with per-person database access (M1.3), and web sign-in with a role-aware home page (M1.4) are built and tested. Open `http://localhost:53000` after starting the stack. The background worker comes next.
 
 Layout: `apps/api` (NestJS), `apps/web` (Next.js), `packages/shared` (shared types and money helpers), `db/` (migrations, seed, tests), `infra/` (service configuration), `docs/`. See [docs/implementation-plan.md](docs/implementation-plan.md).
 
@@ -48,6 +48,10 @@ bash scripts/identity-test.sh
 
 ```bash
 bash scripts/api-integration-test.sh
+```
+
+```bash
+bash scripts/web-e2e-test.sh
 ```
 
 ## Documentation

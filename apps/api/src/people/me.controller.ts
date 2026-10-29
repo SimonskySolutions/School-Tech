@@ -1,38 +1,8 @@
 import { Controller, Get, Inject, NotFoundException } from '@nestjs/common';
-import { type PersonId, type SchoolId } from '@pythagoras/shared';
+import { type MeResponse } from '@pythagoras/shared';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import { findCurrentEnrolments, findMe, findMyChildren, findMyRoles } from './me.repository';
-
-export interface MeResponse {
-  person: {
-    id: PersonId;
-    givenName: string;
-    familyName: string;
-    preferredName: string | null;
-    email: string | null;
-  };
-  roles: {
-    code: string;
-    name: string;
-    scope: 'group' | 'school';
-    school: { id: SchoolId; name: string } | null;
-  }[];
-  children: {
-    id: PersonId;
-    givenName: string;
-    familyName: string;
-    relationship: string;
-    capabilities: { view: boolean; pay: boolean; manageBookings: boolean; consent: boolean };
-    enrolments: {
-      school: { id: SchoolId; code: string; name: string };
-      academicYear: string;
-      gradeLevel: string | null;
-      classLabel: string | null;
-      status: string;
-    }[];
-  }[];
-}
 
 @Controller('me')
 export class MeController {
