@@ -69,6 +69,28 @@ export class Database {
     return row ? { websiteId: row.website_id, purpose: row.website_purpose } : null;
   }
 
+  /**
+   * System operation: stores a provider event whose signature has been verified.
+   * Duplicate deliveries hit the unique key and are reported, not stored twice.
+   */
+  async storeVerifiedEvent(event: {
+    provider: string;
+    mode: string;
+    eventId: string;
+    type: string;
+    createdAt: Date;
+    payload: unknown;
+  }): Promise<'stored' | 'duplicate'> {
+    const result = await this.pool.query(
+      `INSERT INTO integration.inbound_event
+         (provider, provider_mode, provider_event_id, event_type, provider_created_at, signature_verified, payload)
+       VALUES ($1, $2, $3, $4, $5, true, $6)
+       ON CONFLICT DO NOTHING`,
+      [event.provider, event.mode, event.eventId, event.type, event.createdAt, JSON.stringify(event.payload)],
+    );
+    return result.rowCount === 1 ? 'stored' : 'duplicate';
+  }
+
   /** System operation: readiness check. */
   async ping(): Promise<void> {
     await this.pool.query('SELECT 1');

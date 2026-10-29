@@ -1,4 +1,5 @@
 import { type SystemDatabase } from '../database/system-database';
+import { expireReservations } from './reservations';
 
 // Scheduled housekeeping, run by the "maintenance" queue. Each job calls one
 // security-definer function in the database that does exactly one thing.
@@ -15,6 +16,12 @@ export const MAINTENANCE_SCHEDULES = [
     id: 'inbound-payload-purge',
     jobName: 'integration.purge-inbound-payloads',
     pattern: '30 3 * * *',
+  },
+  {
+    // Unpaid orders give their seats back when the reservation time runs out (ADR 0010).
+    id: 'reservation-expiry',
+    jobName: 'commerce.expire-reservations',
+    pattern: '* * * * *',
   },
 ] as const;
 
@@ -36,6 +43,8 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
       );
       return { affected: row?.purged ?? 0 };
     }
+    case 'commerce.expire-reservations':
+      return { affected: await expireReservations(database) };
     default:
       throw new Error(`unknown maintenance job: ${job}`);
   }

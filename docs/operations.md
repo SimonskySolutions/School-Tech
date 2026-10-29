@@ -91,6 +91,8 @@ bash scripts/check.sh
 | `events` | one per outbox event | as soon as it is committed (relay polls every second) | Runs the handlers registered for the event type. At-least-once delivery, 8 attempts with exponential backoff; kept 7 days when done, 30 days when failed |
 | `maintenance` | `audit.ensure-partitions` | 03:00 UTC on the 1st of each month, and at worker start | Creates audit-log partitions three months ahead |
 | `maintenance` | `integration.purge-inbound-payloads` | 03:30 UTC daily | Reduces processed provider webhook payloads older than 90 days to identifiers |
+| `maintenance` | `commerce.expire-reservations` | every minute | Expires unpaid orders past their reservation time and releases their seats |
+| (no queue) | payment events | polls every second | Applies verified provider webhooks stored in `integration.inbound_event`, oldest first. They stay in PostgreSQL because provider payloads can contain personal data |
 
 An outbox event whose payload looks like personal data is never sent to Redis: it stays unpublished with `last_error` explaining why. Find such events with `SELECT event_type, last_error FROM integration.outbox_event WHERE published_at IS NULL AND last_error IS NOT NULL` (as the superuser); they indicate a programming error to fix. Retention jobs that delete personal data are not scheduled until the data protection officer approves retention policies.
 
@@ -118,6 +120,22 @@ All accounts share one generated password, stored in `secrets/keycloak_dev_user_
 | `unlinked@pythagoras.test` | None | Signs in to Keycloak, but has no person record: the platform must refuse it |
 
 The realm file `infra/keycloak/realm/pythagoras-realm.json` is a development realm: it contains these users and the `pythagoras-dev-tests` password-grant client. It is imported only when the realm does not exist yet; to reload it after editing, remove the realm in the admin console (or reset the `keycloak` database) and restart Keycloak.
+
+## Payments
+
+Development uses the **development payment provider** (ADR 0010): no money moves, and every page that shows such a payment says so. A purchase goes: `/services` in the portal → the provider's page at `http://api.pythagoras.localhost:53000/dev-payments/checkout/…` (pay or decline) → back to `/orders/<id>`, which shows "Paid" only after the worker has applied the signed webhook (a second or two).
+
+Useful checks, as the superuser (`docker compose exec -u postgres postgres psql -d pythagoras`):
+
+- Events not applied: `SELECT provider, event_type, processing_status, attempts, last_error FROM integration.inbound_event WHERE processing_status IN ('received', 'failed') ORDER BY received_at;`. A `failed` event (for example an amount mismatch) needs a person: check it with the provider, then fix the payment by hand.
+- Remove all test orders and bookings, keeping the catalogue and people: `bash scripts/db-reset-commerce.sh` (refuses unless every person is synthetic). The API integration and end-to-end scripts run it first.
+
+**Switching to Stripe (test mode)**, when the account exists:
+
+1. In the Stripe dashboard (test mode), create a webhook endpoint for `https://<API_HOST>/webhooks/stripe` with the events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and `checkout.session.expired`.
+2. Put the secret key and the endpoint's signing secret in the secret store as files, and give the API `STRIPE_SECRET_KEY_FILE` and `STRIPE_WEBHOOK_SECRET_FILE`, plus `PAYMENT_PROVIDER=stripe`. The API refuses to start with `stripe` and no keys; the development checkout pages then answer 404.
+3. Locally, forward events with the Stripe CLI (`stripe listen --forward-to localhost:53001/webhooks/stripe`) and use its signing secret.
+4. Run one payment with a Stripe test card, then resend the same event from the dashboard: the second delivery must be stored as a duplicate and change nothing. Only then mark Stripe "validated" in the integration register.
 
 ## Production images and CI
 

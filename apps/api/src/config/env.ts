@@ -41,10 +41,19 @@ const schema = z
     OIDC_AUDIENCE: z.string().min(1).default('pythagoras-api'),
     OIDC_ALLOWED_CLIENTS: list.optional(),
 
+    // Where parents return after checkout. Payment providers redirect only here.
+    PORTAL_URL: z.url().default('http://portal.pythagoras.localhost:53000'),
+    // How long a reservation is held while the parent pays.
+    CHECKOUT_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
+
     // ADR 0010: payments run on the labelled development provider until Stripe keys exist.
     PAYMENT_PROVIDER: z.enum(['development', 'stripe']).default('development'),
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // Development provider only: signs checkout tokens and webhooks. A random
+    // one is generated per process when unset.
+    DEV_PAYMENTS_SECRET: z.string().min(32).optional(),
+    DEV_PAYMENTS_PUBLIC_URL: z.url().default('http://api.pythagoras.localhost:53000'),
   })
   .superRefine((env, ctx) => {
     const production = env.NODE_ENV === 'production';
@@ -59,6 +68,9 @@ const schema = z
         if (env[key] === undefined) {
           ctx.addIssue({ code: 'custom', path: [key], message: 'required in production' });
         }
+      }
+      if (!env.PORTAL_URL.startsWith('https://')) {
+        ctx.addIssue({ code: 'custom', path: ['PORTAL_URL'], message: 'must use https in production' });
       }
       if (env.OIDC_ALLOWED_CLIENTS?.includes(DEV_TEST_CLIENT)) {
         ctx.addIssue({
@@ -107,7 +119,12 @@ export interface EnvSource {
   readonly readFile: (path: string) => string;
 }
 
-const FILE_BACKED = ['DB_PASSWORD', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] as const;
+const FILE_BACKED = [
+  'DB_PASSWORD',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'DEV_PAYMENTS_SECRET',
+] as const;
 
 /** Resolves NAME_FILE variables (Docker secrets) into NAME, then validates. */
 export function loadEnv({ env, readFile }: EnvSource): Env {

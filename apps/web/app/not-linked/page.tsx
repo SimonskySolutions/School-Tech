@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { DevelopmentBanner } from '../development-banner';
 
 export default function NotLinkedPage() {
   return (
     <main data-testid="not-linked">
+      <DevelopmentBanner />
       <h1>This sign-in is not linked to a Pythagoras account</h1>
       <p>
         You signed in successfully, but no parent or staff record is connected to this account yet, so there

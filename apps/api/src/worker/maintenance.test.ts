@@ -31,6 +31,14 @@ describe('maintenance jobs', () => {
     expect(calls[0]!.sql).toContain("interval '90 days'");
   });
 
+  it('expires unpaid orders past their reservation time', async () => {
+    const { database, calls } = fakeDatabase({});
+    expect(await runMaintenance(database, 'commerce.expire-reservations')).toEqual({ affected: 1 });
+    expect(calls[0]).toMatchObject({ actor: 'worker:reservation-expiry' });
+    expect(calls[0]!.sql).toContain("status = 'pending_payment' AND expires_at <= now()");
+    expect(calls.some((call) => call.sql.includes("'commerce.order.expired'"))).toBe(true);
+  });
+
   it('refuses unknown jobs', async () => {
     await expect(runMaintenance(fakeDatabase({}).database, 'privacy.delete-everything')).rejects.toThrow(
       'unknown',
@@ -42,6 +50,7 @@ describe('maintenance jobs', () => {
     expect(MAINTENANCE_SCHEDULES.map((schedule) => schedule.id)).toEqual([
       'audit-partitions',
       'inbound-payload-purge',
+      'reservation-expiry',
     ]);
   });
 });

@@ -35,6 +35,76 @@ export interface MeResponse {
   }[];
 }
 
+/** What a guardian can book for one child: offerings of the child's school with current prices. */
+export interface StudentOfferings {
+  student: { id: PersonId; givenName: string; familyName: string };
+  offerings: BookableOffering[];
+}
+
+export interface BookableOffering {
+  id: string;
+  kind: 'lunch' | 'activity';
+  name: string;
+  school: { id: SchoolId; name: string };
+  billingEntity: { id: string; name: string };
+  price: { unitAmountMinor: number; currency: string; unit: string; vatRateBp: number };
+  /** Lunch: pick days. Activity: the whole set of sessions is booked together. */
+  pickSessions: boolean;
+  sessions: {
+    id: string;
+    serviceDate: string | null;
+    startsAt: string | null;
+    endsAt: string | null;
+    location: string | null;
+    available: number | null;
+    bookingCutoffAt: string | null;
+    alreadyBooked: boolean;
+  }[];
+}
+
+export interface CheckoutRequestBody {
+  items: { studentId: string; offeringId: string; sessionIds?: string[] }[];
+}
+
+export interface CheckoutResponse {
+  checkoutGroupId: string;
+  /** One order and one payment per billing entity (ADR 0008). */
+  orders: {
+    orderId: string;
+    orderNumber: string;
+    billingEntityName: string;
+    totalMinor: number;
+    currency: string;
+    paymentId: string;
+    /** Null when the order already existed (repeated request) or the provider was unavailable. */
+    checkoutUrl: string | null;
+  }[];
+}
+
+export interface CheckoutGroupView {
+  checkoutGroupId: string;
+  orders: {
+    orderId: string;
+    orderNumber: string;
+    status: string;
+    billingEntityName: string;
+    totalMinor: number;
+    currency: string;
+    expiresAt: string | null;
+    paidAt: string | null;
+    /** The provider's checkout page, while the order can still be paid. */
+    checkoutUrl: string | null;
+    payment: { id: string; status: string; provider: string; mode: string } | null;
+    lines: {
+      description: string;
+      studentName: string | null;
+      serviceDate: string | null;
+      totalMinor: number;
+      status: string;
+    }[];
+  }[];
+}
+
 export interface SchoolSummary {
   id: SchoolId;
   code: string;

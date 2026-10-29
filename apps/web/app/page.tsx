@@ -1,6 +1,7 @@
 import { fetchMe, fetchSchools } from '../lib/api-client';
 import { buildHome, type HomeView, NOTICES } from '../lib/home';
 import { currentSession, runtime } from '../lib/server';
+import { DevelopmentBanner } from './development-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,14 +30,6 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     return <SignedOut message={NOTICES['sign-in-failed'] ?? null} />;
   }
   return <Home view={buildHome(me.value, schools.kind === 'ok' ? schools.value : [])} />;
-}
-
-function DevelopmentBanner() {
-  return (
-    <p style={{ background: '#fff4ce', padding: '0.5rem 0.75rem', borderRadius: 4 }}>
-      Development build with synthetic data. Payments are not connected.
-    </p>
-  );
 }
 
 function SignedOut({ message }: { message: string | null }) {
@@ -78,6 +71,11 @@ function Home({ view }: { view: HomeView }) {
               </li>
             ))}
           </ul>
+          <p>
+            <a href="/services" data-testid="book-services">
+              Book lunch and clubs
+            </a>
+          </p>
         </section>
       ) : null}
 

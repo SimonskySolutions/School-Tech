@@ -32,10 +32,11 @@ http://portal.pythagoras.localhost {
 }
 
 # The API is reached only by the web server internally; its public face is
-# limited to health checks (and, later, provider webhooks).
+# limited to health checks, provider webhooks and the development payment
+# provider's checkout page (ADR 0010; it answers 404 in production).
 http://api.pythagoras.localhost {
 	import proxy_defaults
-	@public path /health/live /health/ready
+	@public path /health/live /health/ready /webhooks/* /dev-payments/*
 	handle @public {
 		reverse_proxy api:3000
 	}

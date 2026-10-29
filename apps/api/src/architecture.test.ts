@@ -40,11 +40,16 @@ describe('architecture', () => {
     expect(importers).toEqual([]);
   });
 
-  it('only health checks and the gateway certificate check are public routes', () => {
+  it('only health checks, the certificate check, webhooks and the development checkout are public', () => {
     const publicFiles = files
       .filter((file) => file.text.includes('@Public()') && !file.path.startsWith('auth/'))
       .map((file) => file.path);
-    expect(publicFiles.sort()).toEqual(['health/health.controller.ts', 'org/tls.controller.ts']);
+    expect(publicFiles.sort()).toEqual([
+      'health/health.controller.ts',
+      'org/tls.controller.ts',
+      'payments/dev-checkout.controller.ts',
+      'payments/webhook.controller.ts',
+    ]);
   });
 
   it('test helpers are never imported by application code', () => {

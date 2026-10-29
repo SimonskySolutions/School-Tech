@@ -118,6 +118,7 @@ describe('worker', () => {
     expect(Object.fromEntries(schedulers.map((s) => [s.key, s.pattern]))).toEqual({
       'audit-partitions': '0 3 1 * *',
       'inbound-payload-purge': '30 3 * * *',
+      'reservation-expiry': '* * * * *',
     });
   });
 

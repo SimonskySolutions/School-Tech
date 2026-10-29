@@ -4,6 +4,8 @@
 
 const HOST_MAP: Record<string, string> = {
   'portal.pythagoras.localhost:53000': 'web:3000',
+  // The development payment provider's checkout page is served by the API.
+  'api.pythagoras.localhost:53000': 'api:3000',
   'localhost:58080': 'keycloak:8080',
 };
 

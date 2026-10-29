@@ -6,6 +6,7 @@ import { SystemDatabase } from '../database/system-database';
 import { EventDispatcher } from './event-dispatcher';
 import { MAINTENANCE_SCHEDULES, runMaintenance } from './maintenance';
 import { type OutboxJobData, OutboxRelay } from './outbox-relay';
+import { PaymentEventProcessor } from './payment-confirmation';
 import { loadWorkerEnv } from './worker-env';
 
 // Background worker (ADR 0002, 0004). Same package and image as the API, its
@@ -97,6 +98,11 @@ async function main(): Promise<void> {
   });
   relay.start();
 
+  // Verified provider webhooks wait in PostgreSQL (they can hold personal data)
+  // and are applied from there, never through Redis.
+  const payments = new PaymentEventProcessor(database, logger);
+  payments.start();
+
   // Liveness for Docker: a file touched while the event loop is healthy.
   const beat = () => writeFileSync(env.HEARTBEAT_FILE, new Date().toISOString());
   beat();
@@ -110,7 +116,7 @@ async function main(): Promise<void> {
     stopping = true;
     logger.log(`${signal} received, finishing current jobs`);
     clearInterval(heartbeat);
-    await relay.stop();
+    await Promise.all([relay.stop(), payments.stop()]);
     await Promise.all([eventWorker.close(), maintenanceWorker.close()]);
     await Promise.all([events.close(), maintenance.close()]);
     await Promise.all(connections.map((client) => client.quit().catch(() => client.disconnect())));

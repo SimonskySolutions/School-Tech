@@ -97,9 +97,13 @@ Standard codes the API should also map: `42501` (not permitted), `23505` (duplic
 
 ## Payment flow in the database
 
-1. **Validate and reserve.** The API, as the parent, inserts a draft order for one billing entity, its lines at the current price, and `reserved` bookings in one transaction. Capacity is enforced by the session row lock and a check constraint, so two parents cannot take the last seat.
-2. **Place.** The order moves to `pending_payment` only if its total equals its lines. Lines are then frozen.
-3. **Checkout.** The API records a `created` payment and the provider checkout id.
-4. **Verify.** The webhook endpoint stores the provider event only if its signature was verified; the unique key makes duplicates harmless.
-5. **Confirm.** The worker, in one transaction, marks the payment `succeeded`, the order `paid`, the lines and bookings `confirmed`, writes allocations per line and an outbox event. Out-of-order events cannot move states backwards.
-6. **Exceptions.** Unpaid reservations expire and release seats. A late payment can complete an expired order if a seat is still free; otherwise the booking cannot be confirmed and the money becomes a refund or credit. Cancelling a lunch changes only that line and booking, never the enrolment or other services.
+1. **Validate and reserve.** The API, as the parent, inserts a draft order for one billing entity, its lines at the current price, and `reserved` bookings (`reserved_until` = now + 30 minutes) in one transaction. Capacity is enforced by the session row lock and a check constraint, so two parents cannot take the last seat.
+2. **Place.** The order moves to `pending_payment` only if its total equals its lines. Lines are then frozen. The order's `idempotency_key` is the request key plus the billing entity, so a repeated request finds the same orders.
+3. **Checkout.** The API records a `created` payment, then (after the transaction, so no lock is held during the provider call) the provider checkout id and `checkout_url`, and moves the payment to `pending`. `provider` is `development` or `stripe`; a development payment is always `provider_mode = 'test'` (constraint `payment_development_is_test`).
+4. **Verify.** The webhook endpoint stores the provider event only if its signature was verified; the unique key `(provider, provider_mode, provider_event_id)` makes duplicates harmless.
+5. **Confirm.** The worker reads stored events oldest first (`FOR UPDATE SKIP LOCKED`), locks the order and then the payment, and in one savepoint per event marks the payment `succeeded`, the order `paid`, the lines and bookings `confirmed`, writes one `payment` allocation per line and the outbox event `commerce.order.paid`. An event older than `payment.provider_status_at` is marked `ignored`. An amount or currency that differs from the payment is never applied: the event is retried and then marked `failed` for a person to check.
+6. **Exceptions.**
+   - *Failed payment*: the payment becomes `failed`, the order `cancelled`, its lines and reserved bookings `cancelled`; the seats are free again.
+   - *Expiry*: every minute the worker expires `pending_payment` orders past `expires_at` (unless a payment is `processing`): order and open payment `expired`, reserved bookings `expired`; lines stay `pending`.
+   - *Late payment*: a success for an expired order confirms each line whose bookings can still be confirmed (`expired → confirmed`). If a session filled up meanwhile, that line is `cancelled`, an `account_credit` for its amount is issued to the payer with the same billing entity, and a `credit_issued` allocation balances the `payment` allocation.
+   - Cancelling a lunch changes only that line and booking, never the enrolment or other services (M2.8).

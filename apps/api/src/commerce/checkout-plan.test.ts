@@ -1,0 +1,129 @@
+import { describe, expect, it } from 'vitest';
+import { type OfferingRow, type SessionRow } from '../catalog/catalog.repository';
+import { CheckoutRejected, planCheckout } from './checkout-plan';
+
+const offering = (id: string, overrides: Partial<OfferingRow> = {}): OfferingRow => ({
+  id,
+  kind: 'lunch',
+  name: `Offering ${id}`,
+  school_id: 'school-a',
+  school_name: 'School A',
+  billing_entity_id: 'company-1',
+  billing_entity_name: 'Testing Company',
+  price_version_id: `price-${id}`,
+  unit_amount_minor: '450',
+  currency: 'EUR',
+  price_unit: 'per_day',
+  vat_rate_bp: 0,
+  ...overrides,
+});
+
+const session = (id: string, offeringId: string, date: string | null = '2026-11-02'): SessionRow => ({
+  id,
+  offering_id: offeringId,
+  service_date: date,
+  starts_at: date ? null : new Date('2026-11-04T12:00:00Z'),
+  ends_at: null,
+  location_label: null,
+  available: 10,
+  booking_cutoff_at: null,
+});
+
+const lunchA = offering('lunch-a');
+const lunchC = offering('lunch-c', { school_id: 'school-c', unit_amount_minor: '500' });
+const chess = offering('chess', { kind: 'activity', price_unit: 'per_term', unit_amount_minor: '6000' });
+const otherCompany = offering('other', {
+  billing_entity_id: 'company-2',
+  billing_entity_name: 'Second Company',
+});
+
+const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
+  planCheckout({
+    items,
+    offeringsByStudent: new Map([
+      ['mila', new Map([lunchA, chess, otherCompany].map((o) => [o.id, o]))],
+      ['boris', new Map([[lunchC.id, lunchC]])],
+    ]),
+    openSessionsByOffering: new Map([
+      ['lunch-a', [session('a1', 'lunch-a'), session('a2', 'lunch-a', '2026-11-03')]],
+      ['lunch-c', [session('c1', 'lunch-c')]],
+      ['chess', [session('k1', 'chess', null), session('k2', 'chess', null)]],
+      ['other', [session('o1', 'other')]],
+    ]),
+  });
+
+const rejection = (run: () => unknown) => {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof CheckoutRejected) return error.status;
+    throw error;
+  }
+  throw new Error('expected a rejection');
+};
+
+describe('planCheckout', () => {
+  it('makes one line per lunch day and one line for a whole club, in one order per company', () => {
+    const orders = input([
+      { studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['a1', 'a2'] },
+      { studentId: 'boris', offeringId: 'lunch-c', sessionIds: ['c1'] },
+      { studentId: 'mila', offeringId: 'chess' },
+    ]);
+    expect(orders).toHaveLength(1);
+    const [order] = orders;
+    expect(order).toMatchObject({
+      billingEntityName: 'Testing Company',
+      currency: 'EUR',
+      totalMinor: 450 * 2 + 500 + 6000,
+    });
+    expect(order!.lines.map((line) => [line.studentId, line.description, line.bookingSessionIds])).toEqual([
+      ['mila', 'Offering lunch-a, 2026-11-02', ['a1']],
+      ['mila', 'Offering lunch-a, 2026-11-03', ['a2']],
+      ['boris', 'Offering lunch-c, 2026-11-02', ['c1']],
+      ['mila', 'Offering chess (2 sessions)', ['k1', 'k2']],
+    ]);
+    // Each line carries the school it is revenue for.
+    expect(order!.lines[2]!.schoolId).toBe('school-c');
+  });
+
+  it('splits the basket by billing company', () => {
+    const orders = input([
+      { studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['a1'] },
+      { studentId: 'mila', offeringId: 'other', sessionIds: ['o1'] },
+    ]);
+    expect(orders.map((order) => [order.billingEntityName, order.totalMinor])).toEqual([
+      ['Testing Company', 450],
+      ['Second Company', 450],
+    ]);
+  });
+
+  it("refuses an offering that is not available for the child's school", () => {
+    expect(rejection(() => input([{ studentId: 'boris', offeringId: 'lunch-a', sessionIds: ['a1'] }]))).toBe(
+      422,
+    );
+    expect(rejection(() => input([{ studentId: 'kalina', offeringId: 'lunch-a', sessionIds: ['a1'] }]))).toBe(
+      422,
+    );
+  });
+
+  it('refuses days that are no longer open, a lunch without days, and duplicates', () => {
+    expect(rejection(() => input([{ studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['gone'] }]))).toBe(
+      409,
+    );
+    expect(rejection(() => input([{ studentId: 'mila', offeringId: 'lunch-a', sessionIds: [] }]))).toBe(422);
+    expect(
+      rejection(() =>
+        input([
+          { studentId: 'mila', offeringId: 'chess' },
+          { studentId: 'mila', offeringId: 'chess' },
+        ]),
+      ),
+    ).toBe(422);
+    expect(rejection(() => input([]))).toBe(422);
+  });
+
+  it('counts a repeated day in one item once', () => {
+    const [order] = input([{ studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['a1', 'a1'] }]);
+    expect(order!.lines).toHaveLength(1);
+  });
+});
