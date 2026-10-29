@@ -60,6 +60,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:53001/me
 | Redis 8.10.2 | `127.0.0.1:56379` | Override with `REDIS_HOST_PORT`. Users `pyth_queue`, `pyth_health`, `pyth_admin` |
 | Keycloak 26.8.1 | `http://localhost:58080`, realm `pythagoras` | Override with `KEYCLOAK_HOST_PORT`. Admin console: `/admin`, user `admin`, password in `secrets/keycloak_admin_password` |
 | Web app (development mode) | `http://localhost:53000` | Override with `WEB_HOST_PORT`. Sign in with any seeded account below. Reloads within about 2 seconds of a file change |
+| Worker | no port | Runs the API service's compiled output as `pyth_worker` / `pyth_queue`; healthy while its heartbeat file is fresh. Logs: `docker compose logs -f worker` |
 | API (watch mode) | `http://localhost:53001` | Override with `API_HOST_PORT`. `/health/live`, `/health/ready` are public; every other route needs a Keycloak access token. Starts after the one-off `deps` service has installed dependencies |
 
 ### Code toolchain
@@ -75,6 +76,18 @@ bash scripts/check.sh
 ```
 
 `scripts/pnpm.sh` passes any pnpm command through, for example `bash scripts/pnpm.sh --filter @pythagoras/api test`. Dependencies and build output live in the `ws_*` volumes; `docker compose down -v` removes them together with the databases, so prefer removing only those volumes when you want a clean reinstall.
+
+**Known development gotcha:** the API's watch compiler notices changed files but not a newly created folder under `apps/api/src`. After adding a folder, run `docker compose restart api` (the worker picks up the new output by itself).
+
+### Background jobs
+
+| Queue | Job | When | What it does |
+| --- | --- | --- | --- |
+| `events` | one per outbox event | as soon as it is committed (relay polls every second) | Runs the handlers registered for the event type. At-least-once delivery, 8 attempts with exponential backoff; kept 7 days when done, 30 days when failed |
+| `maintenance` | `audit.ensure-partitions` | 03:00 UTC on the 1st of each month, and at worker start | Creates audit-log partitions three months ahead |
+| `maintenance` | `integration.purge-inbound-payloads` | 03:30 UTC daily | Reduces processed provider webhook payloads older than 90 days to identifiers |
+
+An outbox event whose payload looks like personal data is never sent to Redis: it stays unpublished with `last_error` explaining why. Find such events with `SELECT event_type, last_error FROM integration.outbox_event WHERE published_at IS NULL AND last_error IS NOT NULL` (as the superuser); they indicate a programming error to fix. Retention jobs that delete personal data are not scheduled until the data protection officer approves retention policies.
 
 If you add a role or a secret to an existing installation, apply it with `bash scripts/db-bootstrap.sh` (idempotent; the first-start hook only runs on an empty volume).
 

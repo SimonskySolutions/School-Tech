@@ -225,6 +225,35 @@ services:
       retries: 30
       start_period: 60s
 
+  # Background worker: outbox relay, event handlers, scheduled maintenance. Same
+  # package as the API; in development it runs the API service's compiled output
+  # and restarts when it changes, so the code is compiled once.
+  worker:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/api", "start:worker:dev"]
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *workspace-env
+      NODE_ENV: development
+      DB_PASSWORD_FILE: /run/secrets/pg_worker_password
+      REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
+    secrets:
+      - pg_worker_password
+      - redis_queue_password
+    volumes: *workspace-volumes
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s = require('fs').statSync('/tmp/worker-heartbeat'); process.exit(Date.now() - s.mtimeMs < 30000 ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
   # Web app in development mode (ADR 0014): websites, family portal, staff workspaces.
   web:
     <<: *hardening

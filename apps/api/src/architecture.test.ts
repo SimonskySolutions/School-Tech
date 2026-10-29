@@ -22,7 +22,22 @@ const files = sourceFiles(SRC).map((path) => ({
 describe('architecture', () => {
   it('only the database module talks to PostgreSQL directly', () => {
     const importers = files.filter((file) => /from ['"]pg['"]/.test(file.text)).map((file) => file.path);
-    expect(importers).toEqual(['database/database.ts']);
+    expect(importers.sort()).toEqual(['database/database.ts', 'database/system-database.ts']);
+  });
+
+  it('only the worker uses system database access', () => {
+    const importers = files
+      .filter((file) => file.text.includes('system-database') && !file.path.startsWith('database/'))
+      .map((file) => file.path);
+    expect(importers.every((path) => path.startsWith('worker/'))).toBe(true);
+    expect(importers.length).toBeGreaterThan(0);
+  });
+
+  it('the API never imports worker code', () => {
+    const importers = files
+      .filter((file) => !file.path.startsWith('worker/') && /from ['"]\.\.?\/(.*\/)?worker\//.test(file.text))
+      .map((file) => file.path);
+    expect(importers).toEqual([]);
   });
 
   it('only health checks are public routes', () => {

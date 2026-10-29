@@ -5,6 +5,7 @@ packages:
 # Only these packages may run install scripts (native binaries).
 allowBuilds:
   '@swc/core': true
+  msgpackr-extract: false
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

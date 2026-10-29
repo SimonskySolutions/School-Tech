@@ -11,7 +11,7 @@ One modular monolith, organised by business capability, deployed as a small set 
 | gateway | HTTPS, verified domains, routing per website | Planned |
 | web | Next.js: school websites, family portal, staff and CEO workspaces; server-side Keycloak sign-in (ADR 0014) | **Built**: sign-in, sign-out, role-aware home page; workspaces follow |
 | api | NestJS modular backend; verifies Keycloak tokens; runs each request in a person-context transaction for PostgreSQL RLS (ADR 0013) | **Built**: sign-in, `/me`, `/schools`, health; business modules follow |
-| worker | Same image as the API; BullMQ jobs: payment confirmation, expiry, notifications, synchronisation, retention | Planned |
+| worker | Same package as the API, own database role; BullMQ jobs: outbox relay, event handlers, scheduled maintenance; later payment confirmation, expiry, notifications, synchronisation | **Built**: relay, dispatcher, maintenance schedules; business handlers follow |
 | cms | Payload CMS for school content, one tenant per website | Planned |
 | identity | Keycloak 26.8.1, own database and role, realm `pythagoras` (ADR 0009) | **Built** (development realm) |
 | postgres | System of record, RLS, outbox | **Built** |
