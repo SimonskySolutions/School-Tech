@@ -7,6 +7,7 @@ import {
 } from '@pythagoras/shared';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
+import { dishesBySession } from '../school-life/menus';
 import {
   findBookableOfferings,
   findBookedSessionIds,
@@ -38,6 +39,11 @@ export class CatalogController {
           )
         : [];
       const booked = await findBookedSessionIds(tx, studentId);
+      const lunchIds = new Set(offerings.filter((o) => o.kind === 'lunch').map((o) => o.id));
+      const menus = await dishesBySession(
+        tx,
+        sessions.filter((session) => lunchIds.has(session.offering_id)).map((session) => session.id),
+      );
 
       return {
         student: {
@@ -69,6 +75,7 @@ export class CatalogController {
               available: session.available,
               bookingCutoffAt: session.booking_cutoff_at?.toISOString() ?? null,
               alreadyBooked: booked.has(session.id),
+              menu: menus.get(session.id) ?? [],
             })),
         })),
       };

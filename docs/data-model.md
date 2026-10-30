@@ -69,12 +69,15 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 | --- | --- | --- | --- | --- |
 | Person | Self and children with `can_view` | People connected to their school, with `people.read` | With `people.read`: everyone in the group | None |
 | Enrolment, booking | Their children's | Their school's, with the matching permission | All schools, with the matching permission | None |
-| Dietary and health | Their children's | Their school's students, with `sensitive.dietary.read` (principal, kitchen) | School Life coordinator only; not the CEO or finance | None |
+| Dietary and health | Their children's; record and change them with `can_manage_bookings`, never verify | Their school's students, with `sensitive.dietary.read` (principal, kitchen); verify with `sensitive.dietary.manage` | School Life coordinator only; not the CEO or finance | None |
+| Lunch menus | Of the lunch days they can book | Read where they see the lunch day; publish with `menus.manage` (principal, kitchen) | School Life coordinator publishes everywhere | Published lunch days only |
 | Order, payment, credit | Their own as payer | Orders with a line at their school, with `finance.read` | With `finance.read` | None |
 | Published offerings, sessions, prices; active schools; live websites | Yes | Yes | Yes | Yes |
 | Audit log | No | No | With `audit.read` (CEO, privacy officer) | No |
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
+
+Dietary needs and menus share one list of allergen codes, the 14 of EU Regulation 1169/2011, Annex II (`catalog.allergen_codes()`, ADR 0020). Whether a need is verified is decided by a trigger, never by the caller: staff with `sensitive.dietary.manage` verify as themselves, and any change by a guardian makes the need unverified again. Every read of dietary rows through the API writes one `audit.access_log` row per child (resources `sensitive.dietary_requirement:kitchen`, `:review` and `:family`).
 
 `people.find_person_by_email(email, school)` is the one way to learn about a person outside one's own scope: it returns only the id of the active person with exactly that address, only to staff who manage guardians at that school, and logs every lookup in `audit.access_log`. It exists so a principal links an existing parent to a new child instead of registering the parent twice.
 

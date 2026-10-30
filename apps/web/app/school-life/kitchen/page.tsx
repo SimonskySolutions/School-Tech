@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchKitchenCounts } from '../../../lib/api-client';
+import { allergenNames, dishLine } from '../../../lib/dietary';
 import { dietaryLabel, formatDay, isUrgent, readRange, shiftRange } from '../../../lib/school-life';
 import { currentSession, runtime } from '../../../lib/server';
 import { DevelopmentBanner } from '../../development-banner';
@@ -28,7 +29,9 @@ export default async function KitchenPage({ searchParams }: { searchParams: Sear
     <main>
       <DevelopmentBanner />
       <p>
-        <Link href="/">Home</Link> · <Link href="/school-life/registers">Club registers</Link>
+        <Link href="/">Home</Link> · <Link href="/school-life/registers">Club registers</Link> ·{' '}
+        <Link href="/school-life/menus">Lunch menus</Link> ·{' '}
+        <Link href="/school-life/dietary">Dietary needs</Link>
       </p>
       <h1>Kitchen: lunches per day</h1>
       <p>
@@ -53,6 +56,7 @@ export default async function KitchenPage({ searchParams }: { searchParams: Sear
                 <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Day</th>
                 <th style={{ textAlign: 'right', paddingRight: '1rem' }}>Meals</th>
                 <th style={{ textAlign: 'right', paddingRight: '1rem' }}>Unpaid</th>
+                <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Menu</th>
                 {entry.showsDietary ? <th style={{ textAlign: 'left' }}>Dietary needs</th> : null}
               </tr>
             </thead>
@@ -68,23 +72,47 @@ export default async function KitchenPage({ searchParams }: { searchParams: Sear
                     {day.meals}
                   </td>
                   <td style={{ textAlign: 'right', paddingRight: '1rem' }}>{day.awaitingPayment}</td>
+                  <td style={{ paddingRight: '1rem' }} data-testid="menu">
+                    {day.menu.length === 0 ? (
+                      'Not published'
+                    ) : (
+                      <ul style={{ margin: 0, paddingLeft: '1rem' }}>
+                        {day.menu.map((dish, index) => (
+                          <li key={index}>{dishLine(dish)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   {entry.showsDietary ? (
                     <td>
                       {day.dietary.length === 0 ? (
                         'None'
                       ) : (
                         <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-                          {day.dietary.map((need, index) => (
-                            <li
-                              key={index}
-                              role={isUrgent(need.severity) ? 'alert' : undefined}
-                              style={
-                                isUrgent(need.severity) ? { color: '#9b1c1c', fontWeight: 600 } : undefined
-                              }
-                            >
-                              {`${need.studentName ?? 'A child'}${need.classLabel ? ` (${need.classLabel})` : ''}: ${dietaryLabel(need.kind, need.severity)}, ${need.description}`}
-                            </li>
-                          ))}
+                          {day.dietary.map((need, index) => {
+                            const onMenu = need.menuConflicts.length > 0;
+                            const alert = onMenu || isUrgent(need.severity);
+                            return (
+                              <li
+                                key={index}
+                                role={alert ? 'alert' : undefined}
+                                data-testid={onMenu ? 'menu-conflict' : undefined}
+                                style={alert ? { color: '#9b1c1c', fontWeight: 600 } : undefined}
+                              >
+                                {`${need.studentName ?? 'A child'}${need.classLabel ? ` (${need.classLabel})` : ''}: ${dietaryLabel(need.kind, need.severity)}, ${need.description}${need.verified ? '' : ' (not yet verified)'}`}
+                                {onMenu ? (
+                                  <div>
+                                    {`On this child’s lunch: ${need.menuConflicts
+                                      .map(
+                                        (conflict) =>
+                                          `${conflict.dish} (${allergenNames(conflict.allergens).toLowerCase()})`,
+                                      )
+                                      .join('; ')}`}
+                                  </div>
+                                ) : null}
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
                     </td>

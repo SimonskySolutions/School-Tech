@@ -127,9 +127,12 @@ WHERE NOT EXISTS (
   WHERE g.guardian_person_id = v.guardian::uuid AND g.student_person_id = v.student::uuid AND g.status IN ('pending', 'active')
 );
 
-INSERT INTO sensitive.dietary_requirement (group_id, student_person_id, kind, description, severity, provided_by_person_id)
-SELECT :G, 'c1000000-0000-7000-8000-000000000030', 'allergy', 'Peanuts (synthetic example)', 'life_threatening', 'c1000000-0000-7000-8000-000000000020'
+INSERT INTO sensitive.dietary_requirement (group_id, student_person_id, kind, description, severity, allergens, provided_by_person_id)
+SELECT :G, 'c1000000-0000-7000-8000-000000000030', 'allergy', 'Peanuts (synthetic example)', 'life_threatening', '{peanuts}', 'c1000000-0000-7000-8000-000000000020'
 WHERE NOT EXISTS (SELECT 1 FROM sensitive.dietary_requirement WHERE student_person_id = 'c1000000-0000-7000-8000-000000000030');
+-- Databases seeded before allergens were structured (M4.1).
+UPDATE sensitive.dietary_requirement SET allergens = '{peanuts}'
+WHERE student_person_id = 'c1000000-0000-7000-8000-000000000030' AND description = 'Peanuts (synthetic example)' AND allergens = '{}';
 
 -- Catalog --------------------------------------------------------------------
 INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
@@ -210,6 +213,32 @@ CROSS JOIN LATERAL (
 WHERE NOT EXISTS (
   SELECT 1 FROM scheduling.session x WHERE x.offering_id = o.id AND x.starts_at = (d::date + v.starts) AT TIME ZONE s.time_zone
 );
+
+-- A synthetic weekly lunch menu (M4.1) on every seeded lunch day that has none,
+-- with the allergens a caterer would declare. Thursday's dessert contains
+-- peanuts, so the kitchen list warns about Mila on Thursdays she is booked.
+INSERT INTO scheduling.menu_dish (group_id, school_id, session_id, position, course, name, allergens)
+SELECT :G, x.school_id, x.id, m.position, m.course, m.name, m.allergens::text[]
+FROM scheduling.session x
+JOIN catalog.school_offering o ON o.id = x.offering_id AND o.code = 'lunch'
+JOIN (VALUES
+  (1, 1, 'soup',    'Bean soup',                       '{celery}'),
+  (1, 2, 'main',    'Chicken with rice',               '{}'),
+  (1, 3, 'dessert', 'Yoghurt with honey',              '{milk}'),
+  (2, 1, 'soup',    'Tarator (cold cucumber soup)',    '{milk,nuts}'),
+  (2, 2, 'main',    'Moussaka',                        '{eggs,milk,gluten}'),
+  (3, 1, 'soup',    'Lentil soup',                     '{celery}'),
+  (3, 2, 'main',    'Baked fish with potatoes',        '{fish}'),
+  (3, 3, 'dessert', 'Seasonal fruit',                  '{}'),
+  (4, 1, 'soup',    'Vegetable soup',                  '{celery}'),
+  (4, 2, 'main',    'Spaghetti bolognese',             '{gluten}'),
+  (4, 3, 'dessert', 'Peanut butter cookie',            '{peanuts,gluten,milk}'),
+  (5, 1, 'soup',    'Chicken soup with noodles',       '{celery,gluten,eggs}'),
+  (5, 2, 'main',    'Meatballs with mashed potatoes',  '{eggs,milk,gluten}'),
+  (5, 3, 'dessert', 'Apple',                           '{}')
+) AS m (isodow, position, course, name, allergens) ON m.isodow = extract(isodow FROM x.service_date)
+WHERE x.group_id = :G
+  AND NOT EXISTS (SELECT 1 FROM scheduling.menu_dish md WHERE md.session_id = x.id);
 
 COMMIT;
 

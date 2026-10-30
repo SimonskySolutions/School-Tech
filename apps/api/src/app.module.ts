@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { CatalogController } from './catalog/catalog.controller';
+import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { CheckoutController } from './commerce/checkout.controller';
 import { CheckoutService } from './commerce/checkout.service';
 import { ConfigModule } from './config/config.module';
@@ -31,6 +32,8 @@ import { type Env } from './config/env';
     TlsController,
     SitesController,
     CatalogController,
+    DietaryController,
+    DietaryReviewController,
     CheckoutController,
     WebhookController,
     DevCheckoutController,

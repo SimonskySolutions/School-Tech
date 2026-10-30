@@ -59,6 +59,8 @@ export interface BookableOffering {
     available: number | null;
     bookingCutoffAt: string | null;
     alreadyBooked: boolean;
+    /** Lunch: the day's menu, empty until School Life publishes it. */
+    menu: MenuDish[];
   }[];
 }
 
@@ -130,14 +132,122 @@ export interface KitchenCounts {
       meals: number;
       awaitingPayment: number;
       capacity: number | null;
+      /** Every dish served that day, across the school's lunch offerings. */
+      menu: MenuDish[];
       dietary: {
         studentName: string | null;
         classLabel: string | null;
         kind: string;
         severity: string | null;
         description: string;
+        allergens: Allergen[];
+        verified: boolean;
+        /** Dishes on this child's menu that day containing one of their declared allergens. */
+        menuConflicts: { dish: string; allergens: Allergen[] }[];
       }[];
     }[];
+  }[];
+}
+
+/**
+ * The 14 allergens food businesses must declare (EU Regulation 1169/2011,
+ * Annex II), as the codes the database accepts (`catalog.allergen_codes()`).
+ */
+export const ALLERGENS = {
+  gluten: 'Cereals containing gluten',
+  crustaceans: 'Crustaceans',
+  eggs: 'Eggs',
+  fish: 'Fish',
+  peanuts: 'Peanuts',
+  soybeans: 'Soybeans',
+  milk: 'Milk',
+  nuts: 'Tree nuts',
+  celery: 'Celery',
+  mustard: 'Mustard',
+  sesame: 'Sesame',
+  sulphites: 'Sulphur dioxide and sulphites',
+  lupin: 'Lupin',
+  molluscs: 'Molluscs',
+} as const;
+export type Allergen = keyof typeof ALLERGENS;
+export const ALLERGEN_CODES = Object.keys(ALLERGENS) as Allergen[];
+
+export const MENU_COURSES = ['starter', 'soup', 'main', 'side', 'dessert', 'drink', 'other'] as const;
+export type MenuCourse = (typeof MENU_COURSES)[number];
+
+export interface MenuDish {
+  course: MenuCourse;
+  name: string;
+  allergens: Allergen[];
+}
+
+/** Lunch days and their menus, for staff who publish or read them. */
+export interface LunchMenus {
+  from: string;
+  days: number;
+  schools: {
+    school: { id: SchoolId; name: string };
+    /** The viewer holds menus.manage at this school. */
+    canEdit: boolean;
+    days: { date: string; sessionId: string; offeringName: string; dishes: MenuDish[] }[];
+  }[];
+}
+
+export interface SetMenuRequest {
+  dishes: MenuDish[];
+}
+
+export const DIETARY_KINDS = [
+  'allergy',
+  'intolerance',
+  'medical_diet',
+  'religious_or_cultural',
+  'vegetarian',
+  'vegan',
+  'other',
+] as const;
+export type DietaryKind = (typeof DIETARY_KINDS)[number];
+export const DIETARY_SEVERITIES = ['information', 'moderate', 'severe', 'life_threatening'] as const;
+export type DietarySeverity = (typeof DIETARY_SEVERITIES)[number];
+
+/** A child's dietary or health need, as a guardian or School Life sees it. */
+export interface DietaryNeed {
+  id: string;
+  kind: DietaryKind;
+  description: string;
+  severity: DietarySeverity | null;
+  allergens: Allergen[];
+  validFrom: string;
+  validUntil: string | null;
+  verified: boolean;
+  verifiedAt: string | null;
+}
+
+export interface DietaryNeedRequest {
+  kind: DietaryKind;
+  description: string;
+  severity?: DietarySeverity | null;
+  allergens: Allergen[];
+}
+
+/** A guardian's view of one child's needs. */
+export interface StudentDietary {
+  student: { id: PersonId; givenName: string; familyName: string };
+  /** The guardian may record and change needs (they manage the child's bookings). */
+  canChange: boolean;
+  needs: (DietaryNeed & {
+    /** An unverified need this guardian recorded may be taken back; others are ended. */
+    canWithdraw: boolean;
+  })[];
+}
+
+/** Current needs at the schools the viewer may see them, for School Life to verify. */
+export interface DietaryReview {
+  schools: {
+    school: { id: SchoolId; name: string };
+    /** The viewer holds sensitive.dietary.manage at this school. */
+    canVerify: boolean;
+    needs: (DietaryNeed & { studentName: string; classLabel: string | null })[];
   }[];
 }
 

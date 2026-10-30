@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { formatMoney, type BookableOffering, type StudentOfferings } from '@pythagoras/shared';
+import { type Allergen, formatMoney, type BookableOffering, type StudentOfferings } from '@pythagoras/shared';
 import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
-import { fetchMe, fetchOfferings } from '../../lib/api-client';
+import { fetchMe, fetchOfferings, fetchStudentDietary } from '../../lib/api-client';
+import { allergenNames, dishLine, menuWarnings } from '../../lib/dietary';
 import { currentSession, runtime } from '../../lib/server';
 import { activitySummary, CHECKOUT_ERRORS, formatServiceDate } from '../../lib/services';
 import { DevelopmentBanner } from '../development-banner';
@@ -28,6 +29,24 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
     children.map((child) => fetchOfferings(config.API_INTERNAL_URL, session.accessToken, child.id)),
   );
   const offerings = results.flatMap((result) => (result.kind === 'ok' ? [result.value] : []));
+  // The child's declared allergens, so the menu can point out dishes that contain them.
+  const dietary = await Promise.all(
+    offerings.map((child) =>
+      fetchStudentDietary(config.API_INTERNAL_URL, session.accessToken, child.student.id),
+    ),
+  );
+  const allergensOf = new Map<string, Allergen[]>(
+    dietary.flatMap((result) =>
+      result.kind === 'ok'
+        ? [
+            [
+              result.value.student.id,
+              [...new Set(result.value.needs.flatMap((need) => need.allergens))],
+            ] as const,
+          ]
+        : [],
+    ),
+  );
   const error = typeof params.error === 'string' ? (CHECKOUT_ERRORS[params.error] ?? null) : null;
 
   return (
@@ -49,7 +68,11 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
           {/* One key per page view: a double submit returns the same checkout. */}
           <input type="hidden" name="idempotency_key" value={randomUUID()} />
           {offerings.map((child) => (
-            <ChildOfferings key={child.student.id} child={child} />
+            <ChildOfferings
+              key={child.student.id}
+              child={child}
+              allergens={allergensOf.get(child.student.id) ?? []}
+            />
           ))}
           <p>
             Prices are confirmed on the next page before you pay. Places are held for 30 minutes while you
@@ -64,16 +87,29 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
   );
 }
 
-function ChildOfferings({ child }: { child: StudentOfferings }) {
+function ChildOfferings({ child, allergens }: { child: StudentOfferings; allergens: Allergen[] }) {
   return (
     <section aria-labelledby={`child-${child.student.id}`} data-testid={`child-${child.student.givenName}`}>
       <h2 id={`child-${child.student.id}`}>
         {child.student.givenName} {child.student.familyName}
       </h2>
+      <p>
+        <Link href={`/children/${child.student.id}/dietary`} data-testid="dietary-link">
+          {allergens.length
+            ? `Dietary needs (allergens: ${allergenNames(allergens).toLowerCase()})`
+            : 'Dietary needs and allergies'}
+        </Link>
+      </p>
       {child.offerings.length === 0 ? <p>Nothing to book at this school yet.</p> : null}
       {child.offerings.map((offering) =>
         offering.pickSessions ? (
-          <LunchDays key={offering.id} studentId={child.student.id} offering={offering} />
+          <LunchDays
+            key={offering.id}
+            studentId={child.student.id}
+            givenName={child.student.givenName}
+            offering={offering}
+            allergens={allergens}
+          />
         ) : (
           <Activity key={offering.id} studentId={child.student.id} offering={offering} />
         ),
@@ -87,7 +123,17 @@ function priceText(offering: BookableOffering): string {
   return `${formatMoney(offering.price.unitAmountMinor, offering.price.currency)} ${unit}`;
 }
 
-function LunchDays({ studentId, offering }: { studentId: string; offering: BookableOffering }) {
+function LunchDays({
+  studentId,
+  givenName,
+  offering,
+  allergens,
+}: {
+  studentId: string;
+  givenName: string;
+  offering: BookableOffering;
+  allergens: Allergen[];
+}) {
   const days = offering.sessions.filter((session) => session.serviceDate);
   return (
     <fieldset data-testid={`offering-${offering.kind}`}>
@@ -95,23 +141,38 @@ function LunchDays({ studentId, offering }: { studentId: string; offering: Booka
         {offering.name}: {priceText(offering)}
       </legend>
       {days.length === 0 ? <p>No days open for booking.</p> : null}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem 1rem' }}>
+      <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
         {days.map((day) => {
           const full = day.available === 0;
+          const warnings = menuWarnings(day.menu, allergens);
           return (
-            <label key={day.id} style={{ opacity: day.alreadyBooked || full ? 0.6 : 1 }}>
-              <input
-                type="checkbox"
-                name="lunch"
-                value={`${studentId}|${offering.id}|${day.id}`}
-                disabled={day.alreadyBooked || full}
-              />{' '}
-              {formatServiceDate(day.serviceDate!)}
-              {day.alreadyBooked ? ' (booked)' : full ? ' (full)' : ''}
-            </label>
+            <li key={day.id} data-testid={`lunch-day-${day.serviceDate}`} style={{ marginBottom: '0.25rem' }}>
+              <label style={{ opacity: day.alreadyBooked || full ? 0.6 : 1 }}>
+                <input
+                  type="checkbox"
+                  name="lunch"
+                  value={`${studentId}|${offering.id}|${day.id}`}
+                  disabled={day.alreadyBooked || full}
+                />{' '}
+                {formatServiceDate(day.serviceDate!)}
+                {day.alreadyBooked ? ' (booked)' : full ? ' (full)' : ''}
+              </label>
+              <div style={{ fontSize: '0.9em', marginLeft: '1.5rem' }} data-testid="day-menu">
+                {day.menu.length ? day.menu.map(dishLine).join(' · ') : 'Menu not published yet'}
+              </div>
+              {warnings.length ? (
+                <div
+                  role="alert"
+                  data-testid="allergen-warning"
+                  style={{ marginLeft: '1.5rem', color: '#9b1c1c', fontWeight: 600 }}
+                >
+                  {`Contains ${allergenNames([...new Set(warnings.flatMap((w) => w.allergens))]).toLowerCase()}, declared for ${givenName}: ${warnings.map((w) => w.dish).join(', ')}. The kitchen is warned; please check with School Life before booking this day.`}
+                </div>
+              ) : null}
+            </li>
           );
         })}
-      </div>
+      </ul>
     </fieldset>
   );
 }

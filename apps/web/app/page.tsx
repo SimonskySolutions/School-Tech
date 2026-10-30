@@ -69,6 +69,10 @@ function Home({ view }: { view: HomeView }) {
             {view.children.map((child) => (
               <li key={child.id}>
                 <strong>{child.name}</strong>: {child.places.join('; ') || 'no current enrolment'}
+                {' · '}
+                <Link href={`/children/${child.id}/dietary`} data-testid="child-dietary-link">
+                  Dietary needs
+                </Link>
               </li>
             ))}
           </ul>
@@ -127,6 +131,18 @@ function Home({ view }: { view: HomeView }) {
                 Club registers
               </a>
             </li>
+            <li>
+              <a href="/school-life/menus" data-testid="menus-link">
+                Lunch menus
+              </a>
+            </li>
+            {view.showsDietaryReview ? (
+              <li>
+                <a href="/school-life/dietary" data-testid="dietary-review-link">
+                  Dietary needs to verify
+                </a>
+              </li>
+            ) : null}
           </ul>
         </section>
       ) : null}

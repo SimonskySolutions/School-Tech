@@ -55,13 +55,17 @@ describe('kitchen counts', () => {
       expect.arrayContaining(['School A', 'School B', 'School C']),
     );
     expect(body.schools.every((entry) => entry.showsDietary)).toBe(true);
-    expect(schoolDay(body, 'School A')!.dietary).toContainEqual({
-      studentName: 'Mila Ivanova',
-      classLabel: '3A',
-      kind: 'allergy',
-      severity: 'life_threatening',
-      description: 'Peanuts (synthetic example)',
-    });
+    expect(schoolDay(body, 'School A')!.dietary).toContainEqual(
+      expect.objectContaining({
+        studentName: 'Mila Ivanova',
+        classLabel: '3A',
+        kind: 'allergy',
+        severity: 'life_threatening',
+        description: 'Peanuts (synthetic example)',
+        allergens: ['peanuts'],
+        verified: false,
+      }),
+    );
   });
 
   it("shows the School A kitchen only School A, with its children's dietary needs", async () => {

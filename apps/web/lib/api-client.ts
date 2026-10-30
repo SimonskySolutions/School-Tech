@@ -4,14 +4,17 @@ import {
   type CheckoutGroupView,
   type CheckoutRequestBody,
   type CheckoutResponse,
+  type DietaryReview,
   type KitchenCounts,
   type LunchList,
+  type LunchMenus,
   type RevenueReport,
   type SchoolSetup,
   type StudentList,
   type MeResponse,
   type OnboardingOverview,
   type SchoolSummary,
+  type StudentDietary,
   type StudentOfferings,
 } from '@pythagoras/shared';
 
@@ -133,14 +136,19 @@ export const fetchSchoolSetup = (apiUrl: string, accessToken: string, schoolId: 
 export type AdminResult<T> = { kind: 'ok'; value: T } | { kind: 'refused'; status: number; message: string };
 
 /** A school set-up write as the signed-in administrator; the API's refusal message is kept for the page. */
-export async function postAdmin<T>(
+export const postAdmin = <T>(apiUrl: string, accessToken: string, path: string, body?: unknown) =>
+  writeApi<T>(apiUrl, accessToken, 'POST', path, body);
+
+/** A write as the signed-in person; the API's refusal message is kept for the page. */
+export async function writeApi<T>(
   apiUrl: string,
   accessToken: string,
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<AdminResult<T>> {
   const response = await fetch(new URL(path, apiUrl), {
-    method: 'POST',
+    method,
     headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',
@@ -155,3 +163,16 @@ export async function postAdmin<T>(
 
 export const fetchStudents = (apiUrl: string, accessToken: string, schoolId: string) =>
   get<StudentList>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/students`, accessToken);
+
+export const fetchLunchMenus = (
+  apiUrl: string,
+  accessToken: string,
+  from: string | null,
+  days: number | null,
+) => get<LunchMenus>(apiUrl, `/school-life/menus${range(from, days)}`, accessToken);
+
+export const fetchStudentDietary = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentDietary>(apiUrl, `/students/${encodeURIComponent(studentId)}/dietary`, accessToken);
+
+export const fetchDietaryReview = (apiUrl: string, accessToken: string) =>
+  get<DietaryReview>(apiUrl, '/school-life/dietary', accessToken);

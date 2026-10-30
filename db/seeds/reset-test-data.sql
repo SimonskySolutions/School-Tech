@@ -35,6 +35,8 @@ DELETE FROM access.role_assignment
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM test_person);
 DELETE FROM people.enrolment WHERE school_id IN (SELECT id FROM test_school) OR student_person_id IN (SELECT id FROM test_person);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM test_person);
+-- Needs the integration and end-to-end tests record for seeded children.
+DELETE FROM sensitive.dietary_requirement WHERE description LIKE '%(integration test)' OR description LIKE '%(e2e test)';
 DELETE FROM people.login_identity WHERE person_id IN (SELECT id FROM test_person);
 DELETE FROM people.person WHERE id IN (SELECT id FROM test_person);
 DELETE FROM scheduling.session WHERE school_id IN (SELECT id FROM test_school);

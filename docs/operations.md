@@ -98,6 +98,12 @@ An outbox event whose payload looks like personal data is never sent to Redis: i
 
 If you add a role or a secret to an existing installation, apply it with `bash scripts/db-bootstrap.sh` (idempotent; the first-start hook only runs on an empty volume).
 
+### Lunch menus and dietary needs (ADR 0020)
+
+- Menus: `/school-life/menus` (School Life, principals and kitchens publish; other staff read). Saving a day replaces its menu; tick every allergen a dish contains. The development seed fills each lunch day with a synthetic weekly menu (peanuts on Thursdays).
+- Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
+- Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
+
 ### Websites and the CMS (ADR 0017)
 
 - School and group websites: `http://school-a.pythagoras.localhost:53000` (also `school-b`, `school-c`, and `pythagoras.localhost` for the group). They show the website's published CMS pages, or a start page built from the platform when there is none.

@@ -11,19 +11,25 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  ALLERGEN_CODES,
   type ActivityRegisters,
   type CancelBookingResponse,
   type KitchenCounts,
   type LunchList,
+  type LunchMenus,
+  MENU_COURSES,
+  type MenuDish,
 } from '@pythagoras/shared';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database, type PersonTransaction } from '../database/database';
 import { cancelLunchBooking, CancelRejected, lunchList } from './cancellation';
+import { lunchMenus, MenuRejected, setMenu } from './menus';
 import { activityRegisters, type DateRange, defaultFrom, kitchenCounts } from './school-life.repository';
 
 const rangeSchema = (defaultDays: number) =>
@@ -46,6 +52,21 @@ const lunchQuery = z.object({ schoolId: z.uuid(), date: day });
 // The reason is kept on the booking (audit-redacted: it may say a child is ill).
 const cancelBody = z.object({ reason: z.string().trim().min(3).max(200) });
 
+export const menuBody = z.object({
+  dishes: z
+    .array(
+      z.object({
+        course: z.enum(MENU_COURSES),
+        name: z.string().trim().min(1).max(200),
+        allergens: z
+          .array(z.enum(ALLERGEN_CODES as [string, ...string[]]))
+          .max(ALLERGEN_CODES.length)
+          .transform((codes) => [...new Set(codes)]),
+      }),
+    )
+    .max(12),
+});
+
 @Controller('school-life')
 export class SchoolLifeController {
   constructor(@Inject(Database) private readonly database: Database) {}
@@ -60,6 +81,45 @@ export class SchoolLifeController {
   @Get('registers')
   registers(@CurrentPrincipal() principal: Principal, @Query() query: unknown): Promise<ActivityRegisters> {
     return this.read(principal, rangeSchema(14), query, activityRegisters);
+  }
+
+  /** Lunch days and their menus at the schools the viewer may see or publish them. */
+  @Get('menus')
+  menus(@CurrentPrincipal() principal: Principal, @Query() query: unknown): Promise<LunchMenus> {
+    const parsed = rangeSchema(5).safeParse(query);
+    if (!parsed.success) throw new BadRequestException('from must be YYYY-MM-DD and days 1-31');
+    return this.database.withPerson(principal, async (tx) => {
+      const [allowed] = await tx.query<{ ok: boolean }>(
+        `SELECT access.has_permission_anywhere('menus.manage') OR access.has_permission_anywhere('bookings.read') AS ok`,
+      );
+      if (!allowed?.ok) throw new ForbiddenException('menus are for School Life and kitchen staff');
+      const from = parsed.data.from ?? (await defaultFrom(tx));
+      return lunchMenus(tx, { from, days: parsed.data.days });
+    });
+  }
+
+  /** Publishes (replaces) the menu of one lunch day; an empty list removes it. */
+  @Put('sessions/:sessionId/menu')
+  async setMenu(
+    @CurrentPrincipal() principal: Principal,
+    @Param('sessionId', new ParseUUIDPipe()) sessionId: string,
+    @Body() body: unknown,
+  ): Promise<{ sessionId: string; dishes: MenuDish[] }> {
+    const parsed = menuBody.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException('dishes: up to 12, each with a course, a name and known allergen codes');
+    }
+    try {
+      const dishes = await this.database.withPerson(principal, (tx) =>
+        setMenu(tx, sessionId, parsed.data.dishes as MenuDish[]),
+      );
+      return { sessionId, dishes };
+    } catch (error) {
+      if (!(error instanceof MenuRejected)) throw error;
+      if (error.status === 404) throw new NotFoundException(error.message);
+      if (error.status === 403) throw new ForbiddenException(error.message);
+      throw new UnprocessableEntityException(error.message);
+    }
   }
 
   private read<T>(

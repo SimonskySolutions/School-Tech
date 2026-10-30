@@ -1,10 +1,13 @@
-import { type ActivityRegisters, type KitchenCounts, type SchoolId } from '@pythagoras/shared';
+import { type ActivityRegisters, type Allergen, type KitchenCounts, type SchoolId } from '@pythagoras/shared';
+import { logSensitiveReads, readsPerChild } from '../common/access-log';
 import { type PersonTransaction } from '../database/database';
+import { dishesBySession, menuConflicts } from './menus';
 
 // School Life read models: what the kitchen prepares and who is on each club
 // register. Row-level security decides what each viewer gets: sessions and
 // bookings need bookings.read at the school, names need people.read, classes
 // enrolment.read, and dietary needs sensitive.dietary.read (ADR 0005, 0006).
+// Every dietary row shown is written to the access log.
 // Counts come from the session counters the booking triggers maintain.
 
 /** Bookings that mean "this child is coming" (paid, or already registered). */
@@ -40,12 +43,16 @@ interface KitchenSessionRow {
 
 interface DietaryRow {
   session_id: string;
+  student_person_id: string;
+  school_id: string;
   given_name: string | null;
   family_name: string | null;
   class_label: string | null;
   kind: string;
   severity: string | null;
   description: string;
+  allergens: Allergen[];
+  verified: boolean;
 }
 
 export async function kitchenCounts(tx: PersonTransaction, range: DateRange): Promise<KitchenCounts> {
@@ -66,7 +73,8 @@ export async function kitchenCounts(tx: PersonTransaction, range: DateRange): Pr
   );
   const dietary = sessions.length
     ? await tx.query<DietaryRow>(
-        `SELECT b.session_id, p.given_name, p.family_name, e.class_label, dr.kind, dr.severity, dr.description
+        `SELECT b.session_id, b.student_person_id, b.school_id, p.given_name, p.family_name, e.class_label,
+                dr.kind, dr.severity, dr.description, dr.allergens, dr.verified_at IS NOT NULL AS verified
            FROM scheduling.booking b
            JOIN scheduling.session s ON s.id = b.session_id
            JOIN sensitive.dietary_requirement dr ON dr.student_person_id = b.student_person_id
@@ -79,6 +87,11 @@ export async function kitchenCounts(tx: PersonTransaction, range: DateRange): Pr
         [sessions.map((session) => session.id), BOOKED],
       )
     : [];
+  await logSensitiveReads(tx, 'sensitive.dietary_requirement:kitchen', readsPerChild(dietary));
+  const menus = await dishesBySession(
+    tx,
+    sessions.map((session) => session.id),
+  );
 
   const schools = new Map<string, KitchenCounts['schools'][number]>();
   for (const session of sessions) {
@@ -90,13 +103,15 @@ export async function kitchenCounts(tx: PersonTransaction, range: DateRange): Pr
     // A school may serve more than one lunch offering on a day; the kitchen cooks for all of them.
     let day = school.days.find((entry) => entry.date === session.service_date);
     if (!day) {
-      day = { date: session.service_date, meals: 0, awaitingPayment: 0, capacity: 0, dietary: [] };
+      day = { date: session.service_date, meals: 0, awaitingPayment: 0, capacity: 0, menu: [], dietary: [] };
       school.days.push(day);
     }
     day.meals += session.confirmed_count;
     day.awaitingPayment += session.reserved_count;
     day.capacity =
       day.capacity === null || session.capacity === null ? null : day.capacity + session.capacity;
+    const menu = menus.get(session.id) ?? [];
+    day.menu.push(...menu);
     day.dietary.push(
       ...dietary
         .filter((row) => row.session_id === session.id)
@@ -106,12 +121,16 @@ export async function kitchenCounts(tx: PersonTransaction, range: DateRange): Pr
           kind: row.kind,
           severity: row.severity,
           description: row.description,
+          allergens: row.allergens,
+          verified: row.verified,
+          // Against the menu of the lunch this child is booked on.
+          menuConflicts: menuConflicts(menu, row.allergens),
         })),
     );
     schools.set(session.school_id, school);
   }
   for (const school of schools.values()) {
-    for (const day of school.days) day.dietary.sort(bySeverity);
+    for (const day of school.days) day.dietary.sort(byDanger);
   }
   return { ...range, schools: [...schools.values()] };
 }
@@ -187,6 +206,15 @@ export async function activityRegisters(tx: PersonTransaction, range: DateRange)
 
 function fullName(row: { given_name: string | null; family_name: string | null }): string | null {
   return row.given_name ? [row.given_name, row.family_name].filter(Boolean).join(' ') : null;
+}
+
+/** A child whose allergen is on that day's menu first, then by severity. */
+export function byDanger(
+  a: { severity: string | null; menuConflicts: readonly unknown[] },
+  b: { severity: string | null; menuConflicts: readonly unknown[] },
+): number {
+  const conflict = Number(b.menuConflicts.length > 0) - Number(a.menuConflicts.length > 0);
+  return conflict || bySeverity(a, b);
 }
 
 /** Most dangerous first, so a life-threatening allergy is never at the bottom of the list. */

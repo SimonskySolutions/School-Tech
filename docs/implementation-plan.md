@@ -1,8 +1,8 @@
 # Implementation plan
 
-Last updated: 2026-10-30. Current milestone: **M3 complete** (CI green on GitHub for every M3 commit, runs #13–#30; the fourth-school end-to-end test in runs #29–#30). CMS editors sign in through Keycloak since (ADR 0019). Next: M4 (School Life services).
+Last updated: 2026-10-30. Current milestone: **M4 · School Life services** (planned below; M4.1 done, M4.2 next). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
 
-On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
+On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. Each milestone is planned in detail when it starts; later milestones are outlined.
 
 ## Decisions taken (2026-10-29)
 
@@ -142,11 +142,39 @@ Tests added for M3.6: 5 API unit tests (domain names, the DNS record, split reco
 
 Done after M3: CMS editors sign in with their Pythagoras (Keycloak) account (2026-10-30, ADR 0019): Keycloak client `pythagoras-cms` with the client roles `cms-admin` and `cms-editor`, `/sso/login` and `/sso/callback` in the CMS, a normal Payload session afterwards, password sign-in only in development (`CMS_PASSWORD_LOGIN=true`); 6 end-to-end tests through the real Keycloak form. Also: the students and families page for school staff (2026-10-30): `/schools/[id]/students`, linked from the home page for principals, school administrators and teachers; principals and school administrators enrol students and record guardians (found by e-mail if they already exist), teachers see the list only. The fourth-school end-to-end test now enrols through this page. Also done: verified domains are re-checked daily, with a 3-day grace period before a domain whose record stays missing stops (ADR 0018; 3 integration tests).
 
+## M4 · School Life services — in progress
+
+**Goal:** every service in the brief works through the common order and payment flow, with its own rules: lunch menus and dietary handling; activity eligibility and attendance; individual lessons with teachers, rooms, packages and cancellation rules; trips with consent; transport routes and seats; uniforms with variants and stock; and parent requests to School Life. Staff see the operational result of each purchase. Order follows dependency and risk: lunch and activities build on M2; lessons, transport and uniforms each need a new kind of capacity (people and rooms, seats for a term, stock), so each gets an ADR before it is built.
+
+What exists from M2: offerings of every kind (`catalog.service_definition.kind` already allows lesson, trip, transport and uniform), sessions with capacity and cutoffs, bookings with `attended` and `absent` states, consent records and dietary requirements with row-level security. Not built yet: menus, any check of `catalog.school_offering.eligibility` (stored but never enforced), writing dietary requirements outside the seed, attendance marking, resources, packages, routes, stock and requests.
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M4.1 Lunch menus and dietary handling | M2 | School Life publishes the menu per lunch offering and day, each dish with its allergens (the 14 of EU Regulation 1169/2011, Annex II); parents see it when booking. Parents record their child's dietary needs, with the declared allergens; School Life verifies them, and a parent's later change clears the verification. The kitchen list warns when a child booked that day has declared an allergen that is in that day's menu | **Done** (2026-10-30), ADR 0020: migration `20261104090000` adds `scheduling.menu_dish` (dishes per lunch session, allergens checked against `catalog.allergen_codes()`), permission `menus.manage` (School Life, principals, kitchen), `allergens` and `verified_at` on dietary needs, and a trigger that decides verification (staff verify as themselves; any guardian change is unverified; nobody forges it). API: `GET /school-life/menus`, `PUT /school-life/sessions/:id/menu`, `GET/POST /students/:id/dietary`, `PATCH`, `POST …/end` and `DELETE /students/:id/dietary/:needId`, `GET /school-life/dietary` and `POST /school-life/dietary/:id/verify`; the catalogue gives each lunch day its menu and the kitchen list gives the menu and, per child, the dishes containing their allergens, those children first. Pages: `/school-life/menus`, `/school-life/dietary`, `/children/[id]/dietary`, menus and warnings on `/services`, menu column on the kitchen list. Every read of dietary rows now writes `audit.access_log` (ADR 0006; the M2.6 kitchen list did not). The seed has a synthetic weekly menu, with peanuts on Thursdays for Mila's allergy |
+| M4.2 Activities: eligibility and attendance | M2 | Eligibility (grades, ages) checked when the catalogue is read and again when ordering, with the reason shown; staff with the register mark each child attended or absent, only once the session has started; parents see their child's attendance | Planned |
+| M4.3 Individual lessons | M4.2 | ADR first. Teachers and rooms as resources with weekly availability; lesson slots that can never book a teacher or room twice at the same time (database exclusion constraint); packages of a number of lessons bought once and drawn down per booking; a cancellation before the cutoff returns the lesson to the package, after it the lesson counts as used | Planned |
+| M4.4 Trips and consent | M4.2 | A trip is an offering with one session, a capacity and a consent wording version; booking needs that guardian's consent for that trip (`privacy.consent_record`); the participant list shows consent, emergency contact and dietary alerts to the trip's staff; withdrawing consent before the trip cancels the place with credit | Planned |
+| M4.5 Transport routes and seats | M2 | ADR first. Routes with stops and a seat count per term; one seat per child per route and term, allocated in the same transaction as the order (last-seat concurrency test); the child's stop on the booking; a list per route and day for the driver | Planned |
+| M4.6 Uniforms and stock | M2 | ADR first. Products with variants (size, colour), a price per variant and stock per school; ordering reserves stock with the order and never oversells; expiry releases it; handed-over status; every stock adjustment audited; low-stock view | Planned |
+| M4.7 Parent requests | M1 | A parent sends School Life a request about a child (absence, dietary change, collection, question); states open, in progress, answered, closed; School Life sees the requests for its schools only; replies are shown to the parent | Planned |
+| M4.8 School Life workspace | M4.1–M4.7 | One School Life home page per school and day linking every service, and an end-to-end test of a day's operation | Planned |
+
+Tests added for M4.1: 20 database checks (menus by permission and school, only the 14 codes, lunch only, parents read but never write, verification as oneself only, a parent's change unverifies, taking back only unverified own needs, the kitchen reads but cannot change, the CEO sees none), 4 API unit tests (allergen matching, warning order, menu and need validation), 14 API integration tests (publishing and refusals, the parent sees the menu, the kitchen warning for Mila first, the CEO without health data, recording, verifying, changing, taking back and ending needs, access-log rows per read), 5 web unit tests and 6 end-to-end tests (the kitchen publishes a menu on the page and Anna sees the warning for Mila; Anna records a need, School Life verifies it, Anna ends it; cross-site forms and other parents refused).
+
+**Acceptance criteria**
+1. A parent sees the menu and its allergens before booking; the kitchen list warns when a booked child's declared allergen is in that day's menu.
+2. A child outside an activity's eligibility cannot book it, whatever the request contains; staff mark attendance and parents see it.
+3. Two parents trying to take the last lesson slot, transport seat or uniform item at the same time: exactly one succeeds.
+4. A teacher or room is never booked twice at the same time.
+5. A trip booking without the guardian's consent is refused; withdrawing consent before the trip cancels the place with credit.
+6. Package lessons are drawn down and returned according to the cancellation rules, and the balance always matches its ledger.
+7. Every service uses the common order and payment flow (one order per billing company); staff at another school see none of it.
+8. A parent request reaches School Life for the child's school only.
+
 ## Later milestones (outline)
 
 | Milestone | Depends on | Outcome |
 | --- | --- | --- |
-| M4 · School Life services | M2 | Lunch menus and dietary handling, activities, lessons and packages, trips and consent, transport seats, uniforms and stock, parent requests |
 | M5 · Admissions and CRM | M1 | Inquiries, applications, enrolment hand-off |
 | M6 · Staff, documents, tasks | M1 | Staff records and qualifications, documents and approvals, tasks and projects |
 | M7 · Integrations | Contracts in `docs/integration-register.md` | Shkolo, accounting export, e-signature, notifications: only after each contract is confirmed |
