@@ -293,6 +293,9 @@ export interface CreatedAccountResponse {
 /** Current students of one school with their guardians (M3.3), for staff. */
 export interface StudentList {
   school: { id: SchoolId; name: string };
+  /** What the viewer may do here: enrol students (enrolment.manage), record guardians (guardians.manage). */
+  canEnrol: boolean;
+  canRecordGuardians: boolean;
   students: {
     id: PersonId;
     givenName: string;

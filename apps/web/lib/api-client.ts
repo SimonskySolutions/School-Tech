@@ -8,6 +8,7 @@ import {
   type LunchList,
   type RevenueReport,
   type SchoolSetup,
+  type StudentList,
   type MeResponse,
   type OnboardingOverview,
   type SchoolSummary,
@@ -151,3 +152,6 @@ export async function postAdmin<T>(
   }
   return { kind: 'ok', value: json as T };
 }
+
+export const fetchStudents = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<StudentList>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/students`, accessToken);

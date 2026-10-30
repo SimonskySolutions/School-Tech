@@ -80,6 +80,7 @@ describe("School T's principal enrols a child and records the family", () => {
   it('starts with no students', async () => {
     const { status, body } = await get<StudentList>(`/schools/${schoolId}/students`, tokens.principalT!);
     expect(status).toBe(200);
+    expect(body).toMatchObject({ canEnrol: true, canRecordGuardians: true });
     expect(body.students).toEqual([]);
   });
 

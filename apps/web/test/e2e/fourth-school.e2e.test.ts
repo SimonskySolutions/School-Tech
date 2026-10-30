@@ -11,7 +11,6 @@ import { APP, type Browser, signIn } from './browser';
 
 const PASSWORD = readFileSync('/workspace/secrets/keycloak_dev_user_password', 'utf8').trim();
 const ADMIN_PASSWORD = readFileSync('/workspace/secrets/keycloak_admin_password', 'utf8').trim();
-const API = 'http://api:3000';
 const KEYCLOAK = 'http://keycloak:8080';
 const LUNCH = 'd1000000-0000-7000-8000-000000000001';
 const MILA = 'c1000000-0000-7000-8000-000000000030';
@@ -64,29 +63,6 @@ async function finishFirstSignIn(username: string, password: string): Promise<vo
     method: 'PUT',
     body: JSON.stringify({ type: 'password', value: password, temporary: false }),
   });
-}
-
-async function apiToken(username: string, password: string): Promise<string> {
-  const response = await fetch(`${KEYCLOAK}/realms/pythagoras/protocol/openid-connect/token`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      grant_type: 'password',
-      client_id: 'pythagoras-dev-tests',
-      username,
-      password,
-    }),
-  });
-  return ((await response.json()) as { access_token: string }).access_token;
-}
-
-async function apiPost<T>(token: string, path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
-  return (await response.json()) as T;
 }
 
 describe('a fourth school, from nothing to a working school', () => {
@@ -157,28 +133,44 @@ describe('a fourth school, from nothing to a working school', () => {
     const activated = await act(admin, { action: 'activate', back, school_id: schoolId });
     expect(await page(admin, activated.headers.get('location')!)).toContain('Status: active.');
 
-    // 2. School D's new principal signs in and enrols Anna's third child.
+    // 2. School D's new principal signs in and, on the students page, enrols Anna's third child.
     const principalPassword = `School-D-${run}-Passw0rd`;
     await finishFirstSignIn(principalEmail, principalPassword);
-    const principalToken = await apiToken(principalEmail, principalPassword);
-    const { studentId } = await apiPost<{ studentId: string }>(
-      principalToken,
-      `/schools/${schoolId}/students`,
-      {
-        givenName: 'Daria',
-        familyName: 'Ivanova',
-        academicYear: '2026/2027',
-        gradeLevel: '1',
-        classLabel: '1D',
-        startDate: '2026-09-15',
-      },
-    );
-    const guardian = await apiPost<{ existing: boolean }>(
-      principalToken,
-      `/schools/${schoolId}/students/${studentId}/guardians`,
-      { email: 'anna.ivanova@pythagoras.test', relationship: 'mother' },
-    );
-    expect(guardian.existing).toBe(true);
+    const principal = (await signIn(principalEmail, principalPassword)).browser;
+    const studentsPath = `/schools/${schoolId}/students`;
+    expect(await page(principal, '/')).toContain(`href="${studentsPath}"`);
+    const studentsAction = (fields: Record<string, string>) =>
+      principal.request(`${APP}${studentsPath}/actions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', origin: APP },
+        body: new URLSearchParams(fields),
+      });
+    const enrolled = await studentsAction({
+      action: 'enrol-student',
+      given_name: 'Daria',
+      family_name: 'Ivanova',
+      academic_year: '2026/2027',
+      grade_level: '1',
+      class_label: '1D',
+      start_date: '2026-09-15',
+    });
+    let students = await page(principal, enrolled.headers.get('location')!);
+    expect(students).toContain('Student enrolled.');
+    const studentId = /name="student_id" value="([0-9a-f-]{36})"/.exec(
+      students.slice(students.indexOf('data-testid="student-Daria"')),
+    )![1]!;
+    // Anna already has children at two schools: found by her e-mail, never registered twice.
+    const linked = await studentsAction({
+      action: 'add-guardian',
+      student_id: studentId,
+      email: 'anna.ivanova@pythagoras.test',
+      relationship: 'mother',
+      can_pay: 'on',
+      can_manage_bookings: 'on',
+    });
+    students = await page(principal, linked.headers.get('location')!);
+    expect(students).toContain('Guardian recorded and verified.');
+    expect(students).toContain('Anna Ivanova, Mother: pays, books');
 
     // 3. Anna sees three children and buys lunch for Daria (School D) and Mila (School A).
     const anna = (await signIn('anna.ivanova@pythagoras.test', PASSWORD)).browser;
@@ -224,7 +216,6 @@ describe('a fourth school, from nothing to a working school', () => {
     expect((orders.match(/data-status="paid"/g) ?? []).length).toBe(2);
 
     // 4. School D's principal sees Daria's lunch in the kitchen counts, and only School D.
-    const principal = (await signIn(principalEmail, principalPassword)).browser;
     const kitchen = await page(principal, '/school-life/kitchen?days=10');
     const section = kitchen.slice(kitchen.indexOf(`data-testid="kitchen-${schoolName}"`));
     expect(section.length).toBeGreaterThan(0);
@@ -232,6 +223,14 @@ describe('a fourth school, from nothing to a working school', () => {
     expect(kitchen).not.toContain('data-testid="kitchen-School A"');
     const principalA = (await signIn('principal.a@pythagoras.test', PASSWORD)).browser;
     expect(await page(principalA, '/school-life/kitchen?days=10')).not.toContain(schoolName);
+
+    // A teacher sees their school's students but cannot enrol or record guardians.
+    const teacher = (await signIn('teacher.b@pythagoras.test', PASSWORD)).browser;
+    const teacherList = await page(teacher, '/schools/b1000000-0000-7000-8000-00000000000b/students');
+    expect(teacherList).toContain('data-testid="student-Kalina"');
+    expect(teacherList).not.toContain('data-testid="enrol-student"');
+    expect(teacherList).not.toContain('data-testid="add-guardian-Kalina"');
+    expect(await page(teacher, studentsPath)).toContain('data-testid="not-permitted"');
 
     // 5. The CEO sees School D's (test) money in the revenue report.
     const ceo = (await signIn('ceo@pythagoras.test', PASSWORD)).browser;

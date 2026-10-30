@@ -6,7 +6,8 @@ import { type MeResponse, type SchoolSummary } from '@pythagoras/shared';
 export interface HomeView {
   greeting: string;
   children: { id: string; name: string; places: string[] }[];
-  schoolRoles: { role: string; school: string }[];
+  /** studentsHref: the school's students page, for roles that can read enrolments there. */
+  schoolRoles: { role: string; school: string; studentsHref: string | null }[];
   groupRoles: string[];
   groupSchools: string[];
   /** Kitchen counts and club registers; the API decides what each role sees there. */
@@ -40,6 +41,9 @@ const REPORT_ROLES = new Set([
   'principal',
 ]);
 
+// School roles that hold enrolment.read at their school (access.role_permission); a hint for links only.
+const STUDENT_ROLES = new Set(['principal', 'school_admin', 'teacher']);
+
 // Roles that hold org.manage; adding offerings also needs catalog.manage, which only the administrator has.
 const SETUP_ROLES = new Set(['group_admin', 'group_ceo']);
 
@@ -56,7 +60,11 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
   }));
   const schoolRoles = me.roles
     .filter((role) => role.scope === 'school' && role.school)
-    .map((role) => ({ role: role.name, school: role.school!.name }));
+    .map((role) => ({
+      role: role.name,
+      school: role.school!.name,
+      studentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/students` : null,
+    }));
 
   return {
     greeting: `Hello, ${me.person.preferredName ?? me.person.givenName}`,

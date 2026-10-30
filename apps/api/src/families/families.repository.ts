@@ -35,6 +35,11 @@ async function schoolFor(tx: PersonTransaction, schoolId: string, permission: st
 
 export async function listStudents(tx: PersonTransaction, schoolId: string): Promise<StudentList> {
   const school = await schoolFor(tx, schoolId, 'enrolment.read');
+  const [may] = await tx.query<{ enrol: boolean; guardians: boolean }>(
+    `SELECT access.has_permission('enrolment.manage', $1) AND access.has_permission('people.manage', $1) AS enrol,
+            access.has_permission('guardians.manage', $1) AS guardians`,
+    [school.id],
+  );
   const students = await tx.query<{
     id: PersonId;
     given_name: string;
@@ -71,6 +76,8 @@ export async function listStudents(tx: PersonTransaction, schoolId: string): Pro
     : [];
   return {
     school: { id: school.id, name: school.name },
+    canEnrol: Boolean(may?.enrol),
+    canRecordGuardians: Boolean(may?.guardians),
     students: students.map((student) => ({
       id: student.id,
       givenName: student.given_name,

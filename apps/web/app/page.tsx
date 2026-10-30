@@ -85,7 +85,17 @@ function Home({ view }: { view: HomeView }) {
           <h2 id="school-roles">Your school</h2>
           <ul>
             {view.schoolRoles.map((entry) => (
-              <li key={`${entry.role}-${entry.school}`}>{`${entry.role} at ${entry.school}`}</li>
+              <li key={`${entry.role}-${entry.school}`}>
+                {`${entry.role} at ${entry.school}`}
+                {entry.studentsHref ? (
+                  <>
+                    {' · '}
+                    <Link href={entry.studentsHref} data-testid="students-link">
+                      Students and families
+                    </Link>
+                  </>
+                ) : null}
+              </li>
             ))}
           </ul>
         </section>

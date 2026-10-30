@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-30. Current milestone: **M3 complete** (CI green on GitHub for every M3 commit, runs #13–#30; the fourth-school end-to-end test in runs #29–#30). Next: the open items below, then M4 (School Life services).
+Last updated: 2026-10-30. Current milestone: **M3 complete** (CI green on GitHub for every M3 commit, runs #13–#30; the fourth-school end-to-end test in runs #29–#30). Next: the open items below (CMS sign-in through Keycloak, re-checking verified domains), then M4 (School Life services).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -140,7 +140,7 @@ Tests added for M3.6: 5 API unit tests (domain names, the DNS record, split reco
 4. Met: School D's website is served on its local domain; an unverified real domain is never served or certified (M3.5, M3.6 tests).
 5. Met: the end-to-end test runs in the CI workflow (`scripts/web-e2e-test.sh`) and passed on GitHub (runs #29 and #30).
 
-Open after M3 (see Open items): principals' web pages for students and families, CMS editors signing in through Keycloak, re-checking verified domains.
+Open after M3 (see Open items): CMS editors signing in through Keycloak, re-checking verified domains. Done since: the students and families page for school staff (2026-10-30): `/schools/[id]/students`, linked from the home page for principals, school administrators and teachers; principals and school administrators enrol students and record guardians (found by e-mail if they already exist), teachers see the list only. The fourth-school end-to-end test now enrols through this page.
 
 ## Later milestones (outline)
 
@@ -157,7 +157,6 @@ Open after M3 (see Open items): principals' web pages for students and families,
 - Staff multi-factor sign-in: Keycloak authentication flow to be configured before production (ADR 0006, 0009).
 - Stripe test-mode account: when available, follow the switch-over steps in `docs/operations.md` (Payments). Not built yet in the Stripe adapter: fetching the authoritative payment state, refunds, and expiring the Stripe session when our reservation expires.
 - Parent confirmation e-mail for `commerce.order.paid` (needs the notification integration, M7).
-- Web pages for principals to enrol students and record guardians (the API exists since M3.3).
 - CMS editors sign in through Keycloak (ADR 0017).
 - If the CMS could not be reached when a website was created, the set-up page does not say so yet; calling `POST /admin/schools/:id/website` again adds the missing CMS space.
 - Booking before a child's first day: the catalogue offers lunch only for enrolments that have already started, so parents of a child starting next month cannot book the first days yet. Decide whether to allow sessions on or after the start date.
