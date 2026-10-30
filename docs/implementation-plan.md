@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-29. Current milestone: **M2 built** (M2.1–M2.8) and passing every suite locally; marked complete once CI on GitHub is green for it. M3 (school onboarding and websites) is next.
+Last updated: 2026-10-30. Current milestone: **M2 complete** (CI green on GitHub for every M2 commit, runs #5–#12); **M3 in progress**: the onboarding API (M3.1) is done, accounts for new people (M3.2) are next.
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -65,7 +65,7 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 4. No API code path queries PostgreSQL without a person context, except named system endpoints (health, webhooks, hostname resolution).
 5. CI runs type check, lint, unit tests, the database and Redis suites, and image builds on every push.
 
-## M2 · First vertical slice — built, awaiting CI
+## M2 · First vertical slice — complete
 
 **Goal:** the journey from the requirements, end to end, on the development payment provider (ADR 0010).
 
@@ -88,7 +88,7 @@ Tests added for M2.7: 1 database check (test money reported as test), 4 API unit
 
 Tests added for M2.8: 1 database check (one credit per line), 4 API unit tests (who may cancel what, and when), 8 API integration tests (refused roles, reason required, exact credit with the same company, nothing else changed, kitchen count, CEO figures, no second cancellation or credit), 2 web unit tests and 2 end-to-end tests (School Life cancels from the lunch list and Anna sees it; cross-site form refused).
 
-**Acceptance criteria status (local runs):** 1, 2, 4 and 6 are met and covered by the end-to-end and integration suites. 3: revenue per school is correct, and credited, net and credit owed update after a cancellation; staff invoices ("outstanding") cannot be created in the app yet. 5: the end-to-end journey and the payment edge cases run in the CI workflow, but CI has not yet been checked for these commits.
+**Acceptance criteria status:** 1, 2, 4 and 6 are met and covered by the end-to-end and integration suites. 3: revenue per school is correct, and credited, net and credit owed update after a cancellation; staff invoices ("outstanding") cannot be created in the app yet. 5: the end-to-end journey and the payment edge cases run in the CI workflow and passed on GitHub for every M2 commit (runs #5–#12, and #13–#14 for M3.1).
 
 **Acceptance criteria**
 1. Parent Ivanova, with children at School A and School C, buys lunch for both and an activity for one, pays on the development provider, and sees the confirmation only after the worker has confirmed it.
