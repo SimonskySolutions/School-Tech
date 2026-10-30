@@ -36,6 +36,14 @@
   "attributes": {
     "_development_only": "This file contains synthetic users and a password-grant test client. Never import it in production."
   },
+  "roles": {
+    "client": {
+      "pythagoras-cms": [
+        { "name": "cms-admin", "description": "Edits every website and manages editors in the CMS" },
+        { "name": "cms-editor", "description": "Edits the websites assigned to them in the CMS" }
+      ]
+    }
+  },
   "clients": [
     {
       "clientId": "pythagoras-web",
@@ -106,6 +114,46 @@
       "fullScopeAllowed": true
     },
     {
+      "clientId": "pythagoras-cms",
+      "name": "Pythagoras website CMS",
+      "description": "Sign-in for website editors (ADR 0019). Authorization code flow with PKCE; client roles say who may edit.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_CMS_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": false,
+      "redirectUris": ["http://cms.pythagoras.localhost:53000/sso/callback"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://cms.pythagoras.localhost:53000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "cms roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "pythagoras-cms",
+            "claim.name": "cms_roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "pythagoras-dev-tests",
       "name": "DEVELOPMENT ONLY - automated tests",
       "description": "Password grant for automated tests against synthetic users. Must not exist in production.",
@@ -136,9 +184,9 @@
   "users": [
     { "username": "service-account-pythagoras-provisioning", "enabled": true, "serviceAccountClientId": "pythagoras-provisioning", "clientRoles": { "realm-management": ["manage-users", "view-users", "query-users"] } },
     { "id": "f1000000-0000-7000-8000-000000000001", "username": "ceo@pythagoras.test", "email": "ceo@pythagoras.test", "firstName": "Elena", "lastName": "Petrova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
-    { "id": "f1000000-0000-7000-8000-000000000002", "username": "admin@pythagoras.test", "email": "admin@pythagoras.test", "firstName": "Georgi", "lastName": "Dimitrov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000002", "username": "admin@pythagoras.test", "email": "admin@pythagoras.test", "firstName": "Georgi", "lastName": "Dimitrov", "enabled": true, "emailVerified": true, "clientRoles": { "pythagoras-cms": ["cms-admin"] }, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000003", "username": "finance@pythagoras.test", "email": "finance@pythagoras.test", "firstName": "Maria", "lastName": "Koleva", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
-    { "id": "f1000000-0000-7000-8000-000000000004", "username": "schoollife@pythagoras.test", "email": "schoollife@pythagoras.test", "firstName": "Iva", "lastName": "Stoyanova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
+    { "id": "f1000000-0000-7000-8000-000000000004", "username": "schoollife@pythagoras.test", "email": "schoollife@pythagoras.test", "firstName": "Iva", "lastName": "Stoyanova", "enabled": true, "emailVerified": true, "clientRoles": { "pythagoras-cms": ["cms-editor"] }, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000005", "username": "dpo@pythagoras.test", "email": "dpo@pythagoras.test", "firstName": "Nikolay", "lastName": "Vasilev", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000006", "username": "principal.a@pythagoras.test", "email": "principal.a@pythagoras.test", "firstName": "Petar", "lastName": "Nikolov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000007", "username": "principal.b@pythagoras.test", "email": "principal.b@pythagoras.test", "firstName": "Desislava", "lastName": "Todorova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },

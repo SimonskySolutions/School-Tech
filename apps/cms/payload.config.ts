@@ -34,6 +34,7 @@ export default buildConfig({
   serverURL: process.env.CMS_PUBLIC_URL ?? '',
   admin: {
     user: Users.slug,
+    components: { afterLogin: ['/components/sso-button#SsoButton'] },
     meta: { titleSuffix: ' · Pythagoras websites' },
   },
   collections: [Users, Websites, Pages],

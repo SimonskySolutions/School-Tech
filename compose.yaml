@@ -141,6 +141,7 @@ services:
       - keycloak_web_client_secret
       - keycloak_dev_user_password
       - keycloak_provisioning_client_secret
+      - keycloak_cms_client_secret
     volumes:
       - ./infra/keycloak/entrypoint.sh:/opt/pythagoras/keycloak-entrypoint.sh:ro
       - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
@@ -317,12 +318,16 @@ services:
       CMS_DEV_EDITOR_PASSWORD_FILE: /run/secrets/keycloak_dev_user_password
       # The platform's service account adds a school's website here (ADR 0017).
       CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      # Editors sign in with Keycloak (ADR 0019); passwords only for the seeded development editor.
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_cms_client_secret
+      CMS_PASSWORD_LOGIN: "true"
       NEXT_TELEMETRY_DISABLED: "1"
     secrets:
       - pg_cms_password
       - cms_payload_secret
       - keycloak_dev_user_password
       - cms_platform_api_key
+      - keycloak_cms_client_secret
     volumes: *workspace-volumes
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/websites?limit=1').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
@@ -415,6 +420,8 @@ secrets:
     file: ./secrets/dev_payments_secret
   keycloak_provisioning_client_secret:
     file: ./secrets/keycloak_provisioning_client_secret
+  keycloak_cms_client_secret:
+    file: ./secrets/keycloak_cms_client_secret
 
 volumes:
   pg_data:

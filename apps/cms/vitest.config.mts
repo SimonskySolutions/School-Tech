@@ -2,5 +2,5 @@ import { defineConfig } from 'vitest/config';
 
 // Unit tests of the CMS rules; they need no database.
 export default defineConfig({
-  test: { include: ['collections/**/*.test.ts'] },
+  test: { include: ['collections/**/*.test.ts', 'sso/**/*.test.ts'] },
 });

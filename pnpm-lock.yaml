@@ -269,9 +269,15 @@ importers:
       graphql:
         specifier: 16.11.0
         version: 16.11.0
+      jose:
+        specifier: 6.2.14
+        version: 6.2.14
       next:
         specifier: 16.4.3
         version: 16.4.3(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.19.2)(babel-plugin-macros@3.1.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(sass@1.77.4)
+      openid-client:
+        specifier: 6.8.8
+        version: 6.8.8
       payload:
         specifier: 3.91.0
         version: 3.91.0(graphql@16.11.0)(supports-color@7.2.0)(typescript@6.0.3)
