@@ -71,7 +71,7 @@ jobs:
       - run: bash scripts/db-test.sh
       - run: bash scripts/redis-test.sh
       - name: Start the whole stack
-        run: docker compose up -d --wait postgres redis keycloak api worker web gateway
+        run: docker compose up -d --wait postgres redis keycloak api worker cms web gateway
       - run: bash scripts/db-seed.sh
       - run: bash scripts/identity-test.sh
       - run: bash scripts/api-integration-test.sh

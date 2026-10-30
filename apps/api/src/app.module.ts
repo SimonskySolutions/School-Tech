@@ -17,6 +17,7 @@ import { ReportsController } from './reporting/reports.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { AccountsModule } from './accounts/accounts.module';
 import { FamiliesController } from './families/families.controller';
+import { SitesController } from './org/sites.controller';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule, AccountsModule],
@@ -25,6 +26,7 @@ import { FamiliesController } from './families/families.controller';
     MeController,
     SchoolsController,
     TlsController,
+    SitesController,
     CatalogController,
     CheckoutController,
     WebhookController,

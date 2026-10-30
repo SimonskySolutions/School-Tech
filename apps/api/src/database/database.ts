@@ -10,6 +10,16 @@ export interface RequestContext {
   readonly requestId: string;
 }
 
+export interface SiteRow {
+  website_id: string;
+  code: string;
+  name: string;
+  purpose: string;
+  cms_tenant_key: string | null;
+  default_locale: string;
+  schools: { name: string; kind: string }[];
+}
+
 export interface PersonTransaction {
   query<Row extends QueryResultRow>(sql: string, params?: readonly unknown[]): Promise<Row[]>;
 }
@@ -67,6 +77,25 @@ export class Database {
     );
     const row = result.rows[0];
     return row ? { websiteId: row.website_id, purpose: row.website_purpose } : null;
+  }
+
+  /**
+   * System operation: the live website behind a verified host name, with the
+   * active schools it presents. Public information; read without a person.
+   */
+  async resolveWebsite(hostname: string): Promise<SiteRow | null> {
+    const result = await this.pool.query<SiteRow>(
+      `SELECT w.id AS website_id, w.code, w.name, w.purpose, w.cms_tenant_key, w.default_locale,
+              coalesce(json_agg(json_build_object('name', s.name, 'kind', s.kind) ORDER BY ws.is_primary_website_for_school DESC, s.name)
+                         FILTER (WHERE s.id IS NOT NULL), '[]') AS schools
+         FROM org.resolve_hostname($1) r
+         JOIN org.website w ON w.id = r.website_id
+         LEFT JOIN org.website_school ws ON ws.website_id = w.id
+         LEFT JOIN org.school s ON s.id = ws.school_id AND s.status = 'active'
+        GROUP BY w.id`,
+      [hostname],
+    );
+    return result.rows[0] ?? null;
   }
 
   /**

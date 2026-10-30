@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
 
-docker compose up -d --wait postgres redis keycloak api worker >/dev/null 2>&1 || {
+docker compose up -d --wait postgres redis keycloak api worker cms >/dev/null 2>&1 || {
   docker compose ps
   echo "api-integration: the stack did not become healthy" >&2
   exit 1

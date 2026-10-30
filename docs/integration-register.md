@@ -12,6 +12,6 @@ Tracks every external dependency separately from implemented functionality. "Imp
 | Statutory payroll and official reporting (НАП, НОИ, НЕИСПУО) | Payroll declarations, school reporting | Not in scope of the platform; stays in accounting/payroll software and Shkolo | Nothing | n/a | Confirm boundaries with the accountants and school administration |
 | Qualified e-signature | Signing contracts and consent forms | Depends on the chosen Bulgarian trust service provider | Nothing | None | Choose a provider in the documents milestone |
 | E-mail / SMS / Viber | Notifications | Standard provider APIs | Outbox table | None | Choose providers with the notifications milestone |
-| Payload CMS | School websites | Payload's own API | `org.website.cms_tenant_key` | None | Websites milestone |
+| Payload CMS 3.91.0 | School and group website content | Payload's REST API; self-hosted (ADR 0017) | `apps/cms` with its own database `pythagoras_cms` and role `pyth_cms`; one tenant per website (`org.website.cms_tenant_key`); the web app reads published pages | **Validated locally**: drafts never public, writes need an editor, the two databases cannot reach each other (6 integration tests, 5 end-to-end) | Editors sign in through Keycloak; create a website's tenant automatically when the platform adds a website; production image and migrations (M8) |
 
 Until a contract is confirmed, any adapter for these systems must be a clearly named development adapter and must not be described as an integration.

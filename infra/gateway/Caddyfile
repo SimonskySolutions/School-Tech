@@ -45,6 +45,12 @@ http://api.pythagoras.localhost {
 	}
 }
 
+# Website content editors (ADR 0017): Payload's admin and REST API.
+http://cms.pythagoras.localhost {
+	import proxy_defaults
+	reverse_proxy cms:3000
+}
+
 # School and group websites. The web app decides which website a host belongs
 # to from the verified domains in the database (milestone M3).
 http://pythagoras.localhost, http://*.pythagoras.localhost {

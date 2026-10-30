@@ -19,6 +19,7 @@ portal="http://portal.pythagoras.localhost:$PORT"
 check "localhost redirects to the canonical portal address" \
   bash -c "curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:$PORT/children | grep -qx '308 $portal/children'"
 check "the portal is served by the web app"            test "$(status "$portal/")" = "200"
+check "the CMS has its own host (public website list)" test "$(status "http://cms.pythagoras.localhost:$PORT/api/websites?limit=1")" = "200"
 check "school websites reach the web app"              test "$(status "http://school-c.pythagoras.localhost:$PORT/")" = "200"
 check "the API answers its health check publicly"      test "$(status "http://api.pythagoras.localhost:$PORT/health/ready")" = "200"
 check "the API's other routes are not public"          test "$(status "http://api.pythagoras.localhost:$PORT/me")" = "404"

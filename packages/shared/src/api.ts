@@ -363,3 +363,15 @@ export interface SchoolSetup {
     hasAccount: boolean;
   }[];
 }
+
+/** The public website a host name belongs to (M3.5), for rendering its pages. */
+export interface SiteInfo {
+  websiteId: string;
+  code: string;
+  name: string;
+  purpose: 'school' | 'group' | 'family_portal' | 'campaign';
+  /** The website's tenant in the CMS; null for sites without CMS content (the portal). */
+  cmsKey: string | null;
+  locale: string;
+  schools: { name: string; kind: string }[];
+}

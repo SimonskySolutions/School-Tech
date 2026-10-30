@@ -8,6 +8,8 @@ const schema = z
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     APP_URL: z.url().default('http://localhost:53000'),
     API_INTERNAL_URL: z.url().default('http://api:3000'),
+    // Website content (ADR 0017): published pages are read from the CMS over the internal network.
+    CMS_INTERNAL_URL: z.url().default('http://cms:3000'),
     OIDC_ISSUER: z.url().default('http://localhost:58080/realms/pythagoras'),
     OIDC_INTERNAL_URL: z.url().default('http://keycloak:8080/realms/pythagoras'),
     OIDC_CLIENT_ID: z.string().min(1).default('pythagoras-web'),

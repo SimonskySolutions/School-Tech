@@ -13,13 +13,14 @@ SET password_encryption = 'scram-sha-256';
 \set reporting_password `cat /run/secrets/pg_reporting_password`
 \set backup_password `cat /run/secrets/pg_backup_password`
 \set keycloak_password `cat /run/secrets/pg_keycloak_password`
+\set cms_password `cat /run/secrets/pg_cms_password`
 
 -- Owner of every schema and object. Cannot log in.
 SELECT 'CREATE ROLE pyth_owner NOLOGIN'
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'pyth_owner') \gexec
 
 SELECT format('CREATE ROLE %I LOGIN', r)
-FROM unnest(ARRAY['pyth_migrator', 'pyth_api', 'pyth_worker', 'pyth_reporting', 'pyth_backup', 'pyth_keycloak']) AS r
+FROM unnest(ARRAY['pyth_migrator', 'pyth_api', 'pyth_worker', 'pyth_reporting', 'pyth_backup', 'pyth_keycloak', 'pyth_cms']) AS r
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = r) \gexec
 
 ALTER ROLE pyth_owner     NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
@@ -31,6 +32,9 @@ ALTER ROLE pyth_reporting LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATIO
 ALTER ROLE pyth_backup    LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS   CONNECTION LIMIT 3  PASSWORD :'backup_password';
 -- Keycloak owns its own database and nothing else (ADR 0009).
 ALTER ROLE pyth_keycloak  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 30 PASSWORD :'keycloak_password';
+-- The website CMS owns its own database and nothing else (ADR 0017).
+ALTER ROLE pyth_cms       LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 20 PASSWORD :'cms_password';
+ALTER ROLE pyth_cms       SET statement_timeout = '30s';
 
 -- The migrator acts as the owner, so every object it creates belongs to pyth_owner.
 GRANT pyth_owner TO pyth_migrator WITH INHERIT TRUE, SET TRUE;

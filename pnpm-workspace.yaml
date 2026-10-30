@@ -5,6 +5,8 @@ packages:
 # Only these packages may run install scripts (native binaries).
 allowBuilds:
   '@swc/core': true
+  # Payload's build tooling (drizzle-kit, tsx) needs the platform binary in place.
+  esbuild: true
   msgpackr-extract: false
   unrs-resolver: true
 

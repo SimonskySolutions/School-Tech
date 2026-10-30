@@ -7,6 +7,7 @@ for dir in \
   /workspace/node_modules \
   /workspace/apps/api/node_modules /workspace/apps/api/dist \
   /workspace/apps/web/node_modules /workspace/apps/web/.next \
+  /workspace/apps/cms/node_modules /workspace/apps/cms/.next \
   /workspace/packages/shared/node_modules /workspace/packages/shared/dist; do
   if [ -d "$dir" ] && [ "$(stat -c %u "$dir")" != "1000" ]; then
     chown node:node "$dir"

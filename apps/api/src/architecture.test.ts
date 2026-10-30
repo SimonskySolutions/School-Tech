@@ -40,12 +40,13 @@ describe('architecture', () => {
     expect(importers).toEqual([]);
   });
 
-  it('only health checks, the certificate check, webhooks and the development checkout are public', () => {
+  it('only health checks, the certificate and website look-ups, webhooks and the development checkout are public', () => {
     const publicFiles = files
       .filter((file) => file.text.includes('@Public()') && !file.path.startsWith('auth/'))
       .map((file) => file.path);
     expect(publicFiles.sort()).toEqual([
       'health/health.controller.ts',
+      'org/sites.controller.ts',
       'org/tls.controller.ts',
       'payments/dev-checkout.controller.ts',
       'payments/webhook.controller.ts',
