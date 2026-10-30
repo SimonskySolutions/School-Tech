@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-30. Current milestone: **M2 complete** (CI green on GitHub for every M2 commit, runs #5–#12); **M3 in progress**: **M3 built** (M3.1–M3.7), passing every suite locally; marked complete once CI on GitHub is green for M3.7.
+Last updated: 2026-10-30. Current milestone: **M3 complete** (CI green on GitHub for every M3 commit, runs #13–#30; the fourth-school end-to-end test in runs #29–#30). Next: the open items below, then M4 (School Life services).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. M1 and M2 are planned in detail; later milestones are outlined and get detailed when M2 is done.
 
@@ -98,7 +98,7 @@ Tests added for M2.8: 1 database check (one credit per line), 4 API unit tests (
 5. End-to-end test runs the journey in CI; duplicate and out-of-order events, failed payment and expired reservation are covered by automated tests.
 6. Every screen showing a development payment says so.
 
-## M3 · School onboarding and websites — built, awaiting CI
+## M3 · School onboarding and websites — complete
 
 **Goal:** a group administrator adds a fourth school and its website entirely through the platform, with no code change, migration or deploy, and a parent completes the M2 journey there. The database side is already proven by `db/tests/12_fourth_school.sql` (a fourth school creates no schema objects).
 
@@ -133,12 +133,12 @@ Tests added for M3.6: 5 API unit tests (domain names, the DNS record, split reco
 4. School D's website is served on its local domain; an unverified real domain is never served.
 5. The end-to-end test runs in CI.
 
-**Acceptance criteria status (local runs):**
+**Acceptance criteria status:**
 1. Met: School D, its company, prices, calendar, staff and website are created through the platform by a group administrator (the M3.7 test); the change set for M3.7 contains no application code, migration or configuration, only the test.
 2. Met: School D's principal sees only School D (kitchen counts, students); School A's principal sees nothing of it (M3.3, M3.7 tests).
 3. Met: Anna, with children at School A and School D, buys lunch at both in one basket and gets one paid order per company (M3.3, M3.7 tests).
 4. Met: School D's website is served on its local domain; an unverified real domain is never served or certified (M3.5, M3.6 tests).
-5. Met once CI is green for M3.7: the end-to-end test runs in the CI workflow (`scripts/web-e2e-test.sh`).
+5. Met: the end-to-end test runs in the CI workflow (`scripts/web-e2e-test.sh`) and passed on GitHub (runs #29 and #30).
 
 Open after M3 (see Open items): principals' web pages for students and families, CMS editors signing in through Keycloak, re-checking verified domains.
 
