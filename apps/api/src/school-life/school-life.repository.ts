@@ -1,4 +1,11 @@
-import { type ActivityRegisters, type Allergen, type KitchenCounts, type SchoolId } from '@pythagoras/shared';
+import {
+  type ActivityRegisters,
+  type Allergen,
+  type KitchenCounts,
+  type PersonId,
+  type SchoolId,
+  type StudentActivities,
+} from '@pythagoras/shared';
 import { logSensitiveReads, readsPerChild } from '../common/access-log';
 import { type PersonTransaction } from '../database/database';
 import { dishesBySession, menuConflicts } from './menus';
@@ -148,9 +155,11 @@ interface RegisterSessionRow {
   capacity: number | null;
   confirmed_count: number;
   reserved_count: number;
+  can_mark: boolean;
 }
 
 interface AttendeeRow {
+  booking_id: string;
   session_id: string;
   given_name: string | null;
   family_name: string | null;
@@ -161,7 +170,8 @@ interface AttendeeRow {
 export async function activityRegisters(tx: PersonTransaction, range: DateRange): Promise<ActivityRegisters> {
   const sessions = await tx.query<RegisterSessionRow>(
     `SELECT s.id, o.id AS offering_id, o.name AS offering_name, s.school_id, sc.name AS school_name, sc.time_zone,
-            s.starts_at, s.ends_at, s.location_label, s.capacity, s.confirmed_count, s.reserved_count
+            s.starts_at, s.ends_at, s.location_label, s.capacity, s.confirmed_count, s.reserved_count,
+            (s.starts_at <= now() AND access.has_permission('attendance.mark', s.school_id)) AS can_mark
        FROM scheduling.session s
        JOIN catalog.school_offering o ON o.id = s.offering_id
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
@@ -174,7 +184,7 @@ export async function activityRegisters(tx: PersonTransaction, range: DateRange)
   );
   const attendees = sessions.length
     ? await tx.query<AttendeeRow>(
-        `SELECT b.session_id, p.given_name, p.family_name, e.class_label, b.status
+        `SELECT b.id AS booking_id, b.session_id, p.given_name, p.family_name, e.class_label, b.status
            FROM scheduling.booking b
            LEFT JOIN people.person p ON p.id = b.student_person_id
            LEFT JOIN people.enrolment e ON e.student_person_id = b.student_person_id
@@ -197,9 +207,15 @@ export async function activityRegisters(tx: PersonTransaction, range: DateRange)
       capacity: session.capacity,
       booked: session.confirmed_count,
       awaitingPayment: session.reserved_count,
+      canMark: session.can_mark,
       attendees: attendees
         .filter((row) => row.session_id === session.id)
-        .map((row) => ({ studentName: fullName(row), classLabel: row.class_label, status: row.status })),
+        .map((row) => ({
+          bookingId: row.booking_id,
+          studentName: fullName(row),
+          classLabel: row.class_label,
+          status: row.status,
+        })),
     })),
   };
 }
@@ -224,4 +240,51 @@ export function bySeverity(a: { severity: string | null }, b: { severity: string
     return index === -1 ? SEVERITY_ORDER.length : index;
   };
   return rank(a.severity) - rank(b.severity);
+}
+
+/** Club meetings a guardian's child is booked on (paid), with attendance; null if not their child. */
+export async function studentActivities(
+  tx: PersonTransaction,
+  studentId: string,
+): Promise<StudentActivities | null> {
+  const [student] = await tx.query<{ id: PersonId; given_name: string; family_name: string }>(
+    `SELECT id, given_name, family_name FROM people.person WHERE id = $1 AND access.is_guardian_of(id, 'view')`,
+    [studentId],
+  );
+  if (!student) return null;
+  const rows = await tx.query<{
+    offering_name: string;
+    school_name: string;
+    time_zone: string;
+    starts_at: Date;
+    ends_at: Date | null;
+    location_label: string | null;
+    started: boolean;
+    status: 'confirmed' | 'attended' | 'absent';
+  }>(
+    `SELECT o.name AS offering_name, sc.name AS school_name, sc.time_zone, s.starts_at, s.ends_at, s.location_label,
+            s.starts_at <= now() AS started, b.status
+       FROM scheduling.booking b
+       JOIN scheduling.session s ON s.id = b.session_id
+       JOIN catalog.school_offering o ON o.id = s.offering_id
+       JOIN catalog.service_definition d ON d.id = o.service_definition_id
+       JOIN org.school sc ON sc.id = s.school_id
+      WHERE b.student_person_id = $1 AND d.kind = 'activity' AND s.starts_at IS NOT NULL
+        AND b.status = ANY ($2::text[])
+      ORDER BY s.starts_at, o.name`,
+    [studentId, BOOKED],
+  );
+  return {
+    student: { id: student.id, givenName: student.given_name, familyName: student.family_name },
+    sessions: rows.map((row) => ({
+      offeringName: row.offering_name,
+      schoolName: row.school_name,
+      timeZone: row.time_zone,
+      startsAt: row.starts_at.toISOString(),
+      endsAt: row.ends_at?.toISOString() ?? null,
+      location: row.location_label,
+      started: row.started,
+      status: row.status,
+    })),
+  };
 }

@@ -14,6 +14,7 @@ import {
   type MeResponse,
   type OnboardingOverview,
   type SchoolSummary,
+  type StudentActivities,
   type StudentDietary,
   type StudentOfferings,
 } from '@pythagoras/shared';
@@ -176,3 +177,6 @@ export const fetchStudentDietary = (apiUrl: string, accessToken: string, student
 
 export const fetchDietaryReview = (apiUrl: string, accessToken: string) =>
   get<DietaryReview>(apiUrl, '/school-life/dietary', accessToken);
+
+export const fetchStudentActivities = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentActivities>(apiUrl, `/students/${encodeURIComponent(studentId)}/activities`, accessToken);

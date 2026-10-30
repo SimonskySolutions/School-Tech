@@ -115,11 +115,9 @@ describe('activity registers', () => {
     const chess = body.sessions.find((session) => session.offering.name === 'Chess club, School A')!;
     expect(chess).toMatchObject({ location: 'Room 12', capacity: 12 });
     expect(chess.booked).toBeGreaterThanOrEqual(1);
-    expect(chess.attendees).toContainEqual({
-      studentName: 'Mila Ivanova',
-      classLabel: '3A',
-      status: 'confirmed',
-    });
+    expect(chess.attendees).toContainEqual(
+      expect.objectContaining({ studentName: 'Mila Ivanova', classLabel: '3A', status: 'confirmed' }),
+    );
   });
 
   it("shows a School B teacher no other school's register", async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attendanceNotice,
   cancelNotice,
   dietaryLabel,
   formatDay,
@@ -64,5 +65,14 @@ describe('lunch list and cancellation', () => {
     expect(cancelNotice(409)).toBe('refused');
     expect(cancelNotice(403)).toBe('refused');
     expect(cancelNotice(500)).toBe('failed');
+  });
+});
+
+describe('attendance notices', () => {
+  it('explains why attendance was not saved', () => {
+    expect(attendanceNotice(409)).toBe('not-started');
+    expect(attendanceNotice(403)).toBe('refused');
+    expect(attendanceNotice(404)).toBe('refused');
+    expect(attendanceNotice(500)).toBe('failed');
   });
 });

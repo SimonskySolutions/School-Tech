@@ -24,3 +24,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0018](0018-real-domains.md) | Real domains for school websites | Accepted |
 | [0019](0019-cms-sign-in-with-keycloak.md) | CMS editors sign in with Keycloak | Accepted |
 | [0020](0020-menus-allergens-dietary-verification.md) | Lunch menus, allergens and verified dietary needs | Accepted |
+| [0021](0021-activity-eligibility-and-attendance.md) | Activity eligibility and attendance | Accepted |

@@ -8,9 +8,11 @@ import {
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import { dishesBySession } from '../school-life/menus';
+import { eligibilityFromDatabase } from './eligibility';
 import {
   findBookableOfferings,
   findBookedSessionIds,
+  findEligibilityProblems,
   findOpenSessions,
   findStudentWithSchools,
   pickSessions,
@@ -39,6 +41,17 @@ export class CatalogController {
           )
         : [];
       const booked = await findBookedSessionIds(tx, studentId);
+      const problems = await findEligibilityProblems(
+        tx,
+        studentId,
+        offerings.map((offering) => {
+          const first = sessions.find((session) => session.offering_id === offering.id);
+          return {
+            id: offering.id,
+            firstDay: first?.service_date ?? first?.starts_at?.toISOString().slice(0, 10) ?? null,
+          };
+        }),
+      );
       const lunchIds = new Set(offerings.filter((o) => o.kind === 'lunch').map((o) => o.id));
       const menus = await dishesBySession(
         tx,
@@ -64,6 +77,10 @@ export class CatalogController {
             vatRateBp: offering.vat_rate_bp,
           },
           pickSessions: pickSessions(offering.kind, offering.price_unit),
+          eligibility: {
+            rules: eligibilityFromDatabase(offering.eligibility),
+            problem: problems.get(offering.id) ?? null,
+          },
           sessions: sessions
             .filter((session) => session.offering_id === offering.id)
             .map((session) => ({

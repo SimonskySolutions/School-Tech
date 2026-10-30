@@ -12,6 +12,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Res,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -19,6 +20,7 @@ import { type CreatedWebsiteResponse, type OnboardingOverview } from '@pythagora
 import { type Response } from 'express';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
+import { eligibilitySchema } from '../catalog/eligibility';
 import { asHttpError } from '../common/database-errors';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
@@ -31,6 +33,7 @@ import {
   createBillingEntity,
   createOffering,
   createSchool,
+  setEligibility,
   createSessions,
   createStaff,
   createWebsite,
@@ -66,6 +69,7 @@ const offeringSchema = z.object({
   unitAmountMinor: z.number().int().min(0).max(100_000_000),
   priceUnit: z.enum(['per_session', 'per_day', 'per_month', 'per_term', 'one_off']),
   vatRateBp: z.number().int().min(0).max(10_000).optional(),
+  eligibility: eligibilitySchema.optional(),
 });
 
 const sessionsSchema = z.object({
@@ -165,6 +169,18 @@ export class OnboardingController {
       (tx) => createOffering(tx, schoolId, principal.personId, data),
       'this school already offers that service',
     );
+  }
+
+  /** Changes who may take an offering; bookings already made stay. */
+  @Put('schools/:schoolId/offerings/:offeringId/eligibility')
+  eligibility(
+    @CurrentPrincipal() principal: Principal,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('offeringId', new ParseUUIDPipe()) offeringId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(eligibilitySchema, body);
+    return this.run(principal, (tx) => setEligibility(tx, schoolId, offeringId, data), 'conflict');
   }
 
   @Post('schools/:schoolId/sessions')

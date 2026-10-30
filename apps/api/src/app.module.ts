@@ -13,7 +13,7 @@ import { DevCheckoutController } from './payments/dev-checkout.controller';
 import { PaymentsModule } from './payments/payments.module';
 import { WebhookController } from './payments/webhook.controller';
 import { MeController } from './people/me.controller';
-import { SchoolLifeController } from './school-life/school-life.controller';
+import { SchoolLifeController, StudentActivitiesController } from './school-life/school-life.controller';
 import { ReportsController } from './reporting/reports.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { AccountsModule } from './accounts/accounts.module';
@@ -38,6 +38,7 @@ import { type Env } from './config/env';
     WebhookController,
     DevCheckoutController,
     SchoolLifeController,
+    StudentActivitiesController,
     ReportsController,
     OnboardingController,
     FamiliesController,

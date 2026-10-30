@@ -73,6 +73,10 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={`/children/${child.id}/dietary`} data-testid="child-dietary-link">
                   Dietary needs
                 </Link>
+                {' · '}
+                <Link href={`/children/${child.id}/activities`} data-testid="child-activities-link">
+                  Clubs and attendance
+                </Link>
               </li>
             ))}
           </ul>

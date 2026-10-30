@@ -110,6 +110,15 @@ SELECT :G, v.student::uuid, v.school::uuid, '2026/2027', v.grade, v.class, DATE 
 ) AS v (student, school, grade, class)
 WHERE NOT EXISTS (SELECT 1 FROM people.enrolment e WHERE e.student_person_id = v.student::uuid AND e.school_id = v.school::uuid);
 
+-- Synthetic dates of birth: age rules need them (M4.2).
+UPDATE people.person SET date_of_birth = v.born::date
+FROM (VALUES
+  ('c1000000-0000-7000-8000-000000000030', '2018-04-12'),
+  ('c1000000-0000-7000-8000-000000000031', '2020-05-20'),
+  ('c1000000-0000-7000-8000-000000000032', '2016-09-03')
+) AS v (student, born)
+WHERE id = v.student::uuid AND date_of_birth IS NULL;
+
 -- Anna Ivanova: two children at two schools. Hristo Georgiev: one child.
 -- Teodora Marinova: a pending, unverified request for Mila (grants nothing).
 INSERT INTO people.guardian_relationship
@@ -139,6 +148,7 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000001', :G, 'lunch',    'lunch',    'School lunch'),
   ('d1000000-0000-7000-8000-000000000002', :G, 'chess',    'activity', 'Chess club'),
   ('d1000000-0000-7000-8000-000000000003', :G, 'robotics', 'activity', 'Robotics club'),
+  ('d1000000-0000-7000-8000-000000000005', :G, 'debate',   'activity', 'Debate club'),
   ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
 ON CONFLICT (id) DO NOTHING;
 
@@ -149,6 +159,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000c1', :G, :SC, 'd1000000-0000-7000-8000-000000000001', :CO, 'lunch',    'Lunch at School C',    'published'),
   ('d2000000-0000-7000-8000-0000000000a2', :G, :SA, 'd1000000-0000-7000-8000-000000000002', :CO, 'chess',    'Chess club, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000c3', :G, :SC, 'd1000000-0000-7000-8000-000000000003', :CO, 'robotics', 'Robotics club, School C', 'published'),
+  ('d2000000-0000-7000-8000-0000000000a5', :G, :SA, 'd1000000-0000-7000-8000-000000000005', :CO, 'debate',   'Debate club, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
@@ -162,6 +173,7 @@ FROM (VALUES
   ('d2000000-0000-7000-8000-0000000000c1',   500, 'per_day'),
   ('d2000000-0000-7000-8000-0000000000a2',  6000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000c3',  8000, 'per_term'),
+  ('d2000000-0000-7000-8000-0000000000a5',  5000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a4', 45000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000b4', 42000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000c4', 48000, 'per_month')
@@ -176,8 +188,18 @@ SELECT :G, o.id, 'booking_and_cancellation', 1,
             ELSE '{"booking_cutoff": "session start minus 24 hours", "cancellation_cutoff": "before first session", "after_cancellation": "account_credit"}'::jsonb END,
        TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia'
 FROM catalog.school_offering o
-WHERE o.group_id = :G AND o.code IN ('lunch', 'chess', 'robotics')
+WHERE o.group_id = :G AND o.code IN ('lunch', 'chess', 'robotics', 'debate')
   AND NOT EXISTS (SELECT 1 FROM catalog.policy_version p WHERE p.offering_id = o.id);
+
+-- Who may take each club (M4.2): grades at the school, or ages on the day.
+-- Mila (grade 3) may take chess but not debate; Boris (6) may take robotics.
+UPDATE catalog.school_offering SET eligibility = v.rules::jsonb
+FROM (VALUES
+  ('d2000000-0000-7000-8000-0000000000a2', '{"grades": ["2", "3", "4", "5", "6", "7"]}'),
+  ('d2000000-0000-7000-8000-0000000000a5', '{"grades": ["5", "6", "7"]}'),
+  ('d2000000-0000-7000-8000-0000000000c3', '{"min_age": 5, "max_age": 10}')
+) AS v (offering, rules)
+WHERE id = v.offering::uuid AND eligibility = '{}';
 
 -- Sessions: the next 20 school days of lunch at each school, and weekly club
 -- meetings for the next 8 weeks. Dates are relative to the day the seed runs.
@@ -202,7 +224,8 @@ SELECT :G, o.school_id, o.id,
        (d::date + v.starts) AT TIME ZONE s.time_zone - interval '24 hours'
 FROM (VALUES
   ('d2000000-0000-7000-8000-0000000000a2', 3, TIME '14:00', TIME '15:00', 'Room 12', 12),
-  ('d2000000-0000-7000-8000-0000000000c3', 4, TIME '15:00', TIME '16:30', 'Lab 2',   10)
+  ('d2000000-0000-7000-8000-0000000000c3', 4, TIME '15:00', TIME '16:30', 'Lab 2',   10),
+  ('d2000000-0000-7000-8000-0000000000a5', 2, TIME '15:00', TIME '16:00', 'Library', 16)
 ) AS v (offering, weekday, starts, ends, room, capacity)
 JOIN catalog.school_offering o ON o.id = v.offering::uuid
 JOIN org.school s ON s.id = o.school_id

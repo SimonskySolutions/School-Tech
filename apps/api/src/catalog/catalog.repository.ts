@@ -22,6 +22,7 @@ export interface OfferingRow {
   currency: string;
   price_unit: string;
   vat_rate_bp: number;
+  eligibility: Record<string, unknown>;
 }
 
 export interface SessionRow {
@@ -68,7 +69,8 @@ export function findBookableOfferings(
   return tx.query<OfferingRow>(
     `SELECT o.id, d.kind, o.name, o.school_id, s.name AS school_name,
             o.billing_entity_id, le.legal_name AS billing_entity_name,
-            pv.id AS price_version_id, pv.unit_amount_minor, pv.currency, pv.price_unit, pv.vat_rate_bp
+            pv.id AS price_version_id, pv.unit_amount_minor, pv.currency, pv.price_unit, pv.vat_rate_bp,
+            o.eligibility
        FROM catalog.school_offering o
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
        JOIN org.school s ON s.id = o.school_id
@@ -115,4 +117,23 @@ export async function findBookedSessionIds(tx: PersonTransaction, studentId: str
     [studentId],
   );
   return new Set(rows.map((row) => row.session_id));
+}
+
+/**
+ * Why the child may not take each offering (absent when they may), judged on
+ * the offering's first open day. The database checks every booking again,
+ * on that session's own day.
+ */
+export async function findEligibilityProblems(
+  tx: PersonTransaction,
+  studentId: string,
+  offerings: readonly { id: string; firstDay: string | null }[],
+): Promise<Map<string, string>> {
+  if (offerings.length === 0) return new Map();
+  const rows = await tx.query<{ offering_id: string; problem: string | null }>(
+    `SELECT v.offering_id, catalog.eligibility_problem(v.offering_id, $1, coalesce(v.first_day, current_date)) AS problem
+       FROM unnest($2::uuid[], $3::date[]) AS v (offering_id, first_day)`,
+    [studentId, offerings.map((o) => o.id), offerings.map((o) => o.firstDay)],
+  );
+  return new Map(rows.flatMap((row) => (row.problem ? [[row.offering_id, row.problem] as const] : [])));
 }

@@ -179,10 +179,16 @@ describe('checkout and payment confirmation', () => {
   it('Anna buys lunch for both children and a club for one; the worker confirms the payment', async () => {
     const mila = await offeringsOf(MILA);
     const boris = await offeringsOf(BORIS);
+    // Test files run in any order, and others may already have booked Mila's chess club;
+    // then the club in this basket is Boris's robotics.
+    const milaClubFree = !mila.activity.sessions.some((session) => session.alreadyBooked);
+    const club = milaClubFree
+      ? { studentId: MILA, offering: mila.activity }
+      : { studentId: BORIS, offering: boris.activity };
     const items = [
       { studentId: MILA, offeringId: mila.lunch.id, sessionIds: sessionsOf(mila.lunch).slice(0, 2) },
       { studentId: BORIS, offeringId: boris.lunch.id, sessionIds: sessionsOf(boris.lunch).slice(0, 1) },
-      { studentId: MILA, offeringId: mila.activity.id },
+      { studentId: club.studentId, offeringId: club.offering.id },
     ];
     const key = crypto.randomUUID();
     const placed = await checkout(items, key);
@@ -192,7 +198,7 @@ describe('checkout and payment confirmation', () => {
     const [order] = placed.body.orders;
     expect(order).toMatchObject({
       billingEntityName: 'Testing Company',
-      totalMinor: 2 * 450 + 500 + 6000,
+      totalMinor: 2 * 450 + 500 + club.offering.price.unitAmountMinor,
       currency: 'EUR',
     });
     expect(order!.checkoutUrl).toContain('/dev-payments/checkout/');

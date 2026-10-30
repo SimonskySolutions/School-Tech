@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchRegisters } from '../../../lib/api-client';
-import { attendanceLabel, formatSessionTime, readRange, shiftRange } from '../../../lib/school-life';
+import {
+  ATTENDANCE_NOTICES,
+  attendanceLabel,
+  formatSessionTime,
+  readRange,
+  shiftRange,
+} from '../../../lib/school-life';
 import { currentSession, runtime } from '../../../lib/server';
 import { DevelopmentBanner } from '../../development-banner';
 
@@ -11,7 +17,9 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 /** Club and activity sessions with the children booked on them (paid bookings only). */
 export default async function RegistersPage({ searchParams }: { searchParams: SearchParams }) {
-  const { from, days } = readRange(await searchParams);
+  const params = await searchParams;
+  const { from, days } = readRange(params);
+  const notice = typeof params.notice === 'string' ? (ATTENDANCE_NOTICES[params.notice] ?? null) : null;
   const session = await currentSession();
   if (!session) redirect('/auth/sign-in');
 
@@ -39,6 +47,11 @@ export default async function RegistersPage({ searchParams }: { searchParams: Se
         <Link href="/">Home</Link> · <Link href="/school-life/kitchen">Kitchen</Link>
       </p>
       <h1>Club registers</h1>
+      {notice ? (
+        <p role="status" data-testid="notice">
+          {notice}
+        </p>
+      ) : null}
       <p>
         <Link href={`/school-life/registers${shiftRange(registers.from, registers.days, -1)}`}>Earlier</Link>{' '}
         · <Link href={`/school-life/registers${shiftRange(registers.from, registers.days, 1)}`}>Later</Link>
@@ -64,13 +77,43 @@ export default async function RegistersPage({ searchParams }: { searchParams: Se
               .filter(Boolean)
               .join(' · ')}
           </p>
+          {!entry.canMark && entry.attendees.length > 0 ? (
+            <p>Attendance can be marked here once the meeting has started.</p>
+          ) : null}
           {entry.attendees.length === 0 ? (
             <p>Nobody is booked yet.</p>
           ) : (
             <ol data-testid="attendees">
-              {entry.attendees.map((attendee, index) => (
-                <li key={index}>
+              {entry.attendees.map((attendee) => (
+                <li key={attendee.bookingId} data-testid={`attendee-${attendee.bookingId}`}>
                   {`${attendee.studentName ?? 'Name hidden for your role'}${attendee.classLabel ? `, ${attendee.classLabel}` : ''}: ${attendanceLabel(attendee.status)}`}
+                  {entry.canMark ? (
+                    <form
+                      method="post"
+                      action="/school-life/attendance"
+                      style={{ display: 'inline', marginLeft: '0.5rem' }}
+                    >
+                      <input type="hidden" name="booking_id" value={attendee.bookingId} />
+                      <input type="hidden" name="from" value={registers.from} />
+                      <input type="hidden" name="days" value={registers.days} />
+                      <button
+                        type="submit"
+                        name="status"
+                        value="attended"
+                        disabled={attendee.status === 'attended'}
+                      >
+                        Attended
+                      </button>{' '}
+                      <button
+                        type="submit"
+                        name="status"
+                        value="absent"
+                        disabled={attendee.status === 'absent'}
+                      >
+                        Absent
+                      </button>
+                    </form>
+                  ) : null}
                 </li>
               ))}
             </ol>

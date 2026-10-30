@@ -13,6 +13,8 @@ const MESSAGES: Record<string, () => HttpException> = {
   PY002: () => new ConflictException('one of the chosen sessions is full'),
   PY007: () => new ConflictException('one of the chosen sessions is no longer open for booking'),
   PY008: () => new ConflictException('a price changed; please review the basket again'),
+  PY012: () => new UnprocessableEntityException('a child is not eligible for one of the chosen services'),
+  PY013: () => new ConflictException('the session has not started yet'),
   '23505': () => new ConflictException('already booked or already submitted'),
   '23503': () =>
     new UnprocessableEntityException('the request refers to something that does not belong together'),

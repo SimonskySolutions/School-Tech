@@ -77,6 +77,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
 
+Who may take an offering is `catalog.school_offering.eligibility` (`{"grades", "min_age", "max_age"}`, each optional; ADR 0021), checked on every new booking for that session's day. Attendance is marked only through `scheduling.mark_attendance`, with `attendance.mark` at the booking's school, once the session has started; the booking records who marked it and when.
+
 Dietary needs and menus share one list of allergen codes, the 14 of EU Regulation 1169/2011, Annex II (`catalog.allergen_codes()`, ADR 0020). Whether a need is verified is decided by a trigger, never by the caller: staff with `sensitive.dietary.manage` verify as themselves, and any change by a guardian makes the need unverified again. Every read of dietary rows through the API writes one `audit.access_log` row per child (resources `sensitive.dietary_requirement:kitchen`, `:review` and `:family`).
 
 `people.find_person_by_email(email, school)` is the one way to learn about a person outside one's own scope: it returns only the id of the active person with exactly that address, only to staff who manage guardians at that school, and logs every lookup in `audit.access_log`. It exists so a principal links an existing parent to a new child instead of registering the parent twice.
@@ -99,6 +101,8 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY009` | Credit inactive or insufficient |
 | `PY010` | Payment not succeeded, or refunds would exceed it |
 | `PY011` | Person not found or already pseudonymised |
+| `PY012` | The child is not eligible for the offering on that day (grades or ages) |
+| `PY013` | The session has not started, so attendance cannot be marked yet |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

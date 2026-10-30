@@ -15,6 +15,7 @@ const offering = (id: string, overrides: Partial<OfferingRow> = {}): OfferingRow
   currency: 'EUR',
   price_unit: 'per_day',
   vat_rate_bp: 0,
+  eligibility: {},
   ...overrides,
 });
 

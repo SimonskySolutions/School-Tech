@@ -4,12 +4,14 @@ import {
   type CreateSchoolRequest,
   type CreateSessionsRequest,
   type CreateStaffRequest,
+  type EligibilityRules,
   type OnboardingOverview,
   type PersonId,
   type SchoolSetup,
   type SchoolWebsite,
   type SchoolId,
 } from '@pythagoras/shared';
+import { eligibilityFromDatabase, eligibilityToDatabase } from '../catalog/eligibility';
 import { type PersonTransaction } from '../database/database';
 import { dnsInstructions, GRACE_DAYS, newToken } from '../org/domains';
 import { missingForActivation, schoolDays, weeklyDays } from './calendar';
@@ -166,9 +168,17 @@ export async function createOffering(
   );
   if (!definition) throw new OnboardingRejected(422, 'no such service');
   const [offering] = await tx.query<{ id: string; group_id: string }>(
-    `INSERT INTO catalog.school_offering (group_id, school_id, service_definition_id, billing_entity_id, code, name, status)
-     VALUES (access.current_group_id(), $1, $2, $3, $4, $5, 'published') RETURNING id, group_id`,
-    [target.id, definition.id, target.default_billing_entity_id, definition.code, body.name],
+    `INSERT INTO catalog.school_offering
+       (group_id, school_id, service_definition_id, billing_entity_id, code, name, status, eligibility)
+     VALUES (access.current_group_id(), $1, $2, $3, $4, $5, 'published', $6) RETURNING id, group_id`,
+    [
+      target.id,
+      definition.id,
+      target.default_billing_entity_id,
+      definition.code,
+      body.name,
+      JSON.stringify(eligibilityToDatabase(body.eligibility ?? {})),
+    ],
   );
   const [price] = await tx.query<{ id: string }>(
     `INSERT INTO catalog.price_version
@@ -193,6 +203,21 @@ export async function createOffering(
     );
   }
   return { offeringId: offering!.id, priceVersionId: price!.id };
+}
+
+export async function setEligibility(
+  tx: PersonTransaction,
+  schoolId: string,
+  offeringId: string,
+  rules: EligibilityRules,
+): Promise<{ offeringId: string; eligibility: EligibilityRules }> {
+  const target = await school(tx, schoolId);
+  const [row] = await tx.query<{ eligibility: Record<string, unknown> }>(
+    `UPDATE catalog.school_offering SET eligibility = $3 WHERE id = $1 AND school_id = $2 RETURNING eligibility`,
+    [offeringId, target.id, JSON.stringify(eligibilityToDatabase(rules))],
+  );
+  if (!row) throw new OnboardingRejected(404, 'no such offering at this school, or not yours to change');
+  return { offeringId, eligibility: eligibilityFromDatabase(row.eligibility) };
 }
 
 export async function createSessions(
@@ -464,11 +489,12 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
     unit_amount_minor: string | null;
     currency: string | null;
     price_unit: string | null;
+    eligibility: Record<string, unknown>;
     sessions: number;
     first_date: string | null;
     last_date: string | null;
   }>(
-    `SELECT o.id, o.name, d.kind, o.status, p.unit_amount_minor, p.currency, p.price_unit,
+    `SELECT o.id, o.name, d.kind, o.status, p.unit_amount_minor, p.currency, p.price_unit, o.eligibility,
             (SELECT count(*)::int FROM scheduling.session x WHERE x.offering_id = o.id) AS sessions,
             (SELECT to_char(min(coalesce(x.service_date, (x.starts_at AT TIME ZONE $2)::date)), 'YYYY-MM-DD')
                FROM scheduling.session x WHERE x.offering_id = o.id) AS first_date,
@@ -522,6 +548,7 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
               currency: row.currency!,
               unit: row.price_unit!,
             },
+      eligibility: eligibilityFromDatabase(row.eligibility),
       sessions: row.sessions,
       firstDate: row.first_date,
       lastDate: row.last_date,

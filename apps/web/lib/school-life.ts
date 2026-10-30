@@ -87,6 +87,20 @@ export function readLunchQuery(
     : null;
 }
 
+export const ATTENDANCE_NOTICES: Record<string, string> = {
+  marked: 'Attendance saved.',
+  'not-started': 'This meeting has not started yet; attendance is marked once it has.',
+  refused: 'Your role cannot mark attendance for this club.',
+  failed: 'Attendance was not saved. Please try again.',
+};
+
+/** Maps the API's answer to one of ATTENDANCE_NOTICES. */
+export function attendanceNotice(status: number): keyof typeof ATTENDANCE_NOTICES {
+  if (status === 409) return 'not-started';
+  if (status === 403 || status === 404) return 'refused';
+  return 'failed';
+}
+
 export const CANCEL_NOTICES: Record<string, string> = {
   cancelled: 'Lunch cancelled. The family receives credit for that day within a minute.',
   'no-reason': 'Give a reason of at least 3 characters.',

@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   backTo,
   companyBody,
+  eligibilityBody,
   type Form,
   FormProblem,
   offeringBody,
@@ -11,7 +12,7 @@ import {
   staffBody,
   text,
 } from '../../../lib/admin';
-import { postAdmin } from '../../../lib/api-client';
+import { postAdmin, writeApi } from '../../../lib/api-client';
 import { currentSession, runtime } from '../../../lib/server';
 
 export const dynamic = 'force-dynamic';
@@ -19,10 +20,22 @@ export const dynamic = 'force-dynamic';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Which API request each set-up form makes, and where a new school's page is. */
-const ACTIONS: Record<string, (form: Form, id: string) => { path: string; body?: unknown }> = {
+const ACTIONS: Record<
+  string,
+  (form: Form, id: string) => { path: string; body?: unknown; method?: 'POST' | 'PUT' }
+> = {
   'create-company': (form) => ({ path: '/admin/billing-entities', body: companyBody(form) }),
   'create-school': (form) => ({ path: '/admin/schools', body: schoolBody(form) }),
   'add-offering': (form, id) => ({ path: `/admin/schools/${id}/offerings`, body: offeringBody(form) }),
+  'set-eligibility': (form, id) => {
+    const offeringId = text(form, 'offering_id');
+    if (!UUID.test(offeringId)) throw new FormProblem('no such offering');
+    return {
+      method: 'PUT',
+      path: `/admin/schools/${id}/offerings/${offeringId}/eligibility`,
+      body: eligibilityBody(form),
+    };
+  },
   'add-sessions': (form, id) => ({ path: `/admin/schools/${id}/sessions`, body: sessionsBody(form) }),
   'add-staff': (form, id) => ({ path: `/admin/schools/${id}/staff`, body: staffBody(form) }),
   activate: (_form, id) => ({ path: `/admin/schools/${id}/activate` }),
@@ -101,16 +114,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!build || (action !== 'create-company' && action !== 'create-school' && !UUID.test(schoolId))) {
     return go(backTo(back, { error: 'unknown action' }));
   }
-  let request_: { path: string; body?: unknown };
+  let request_: { path: string; body?: unknown; method?: 'POST' | 'PUT' };
   try {
     request_ = build(form, schoolId);
   } catch (error) {
     if (error instanceof FormProblem) return go(backTo(back, { error: error.message }));
     throw error;
   }
-  const result = await postAdmin<{ id?: string }>(
+  const result = await writeApi<{ id?: string }>(
     config.API_INTERNAL_URL,
     session.accessToken,
+    request_.method ?? 'POST',
     request_.path,
     request_.body,
   );

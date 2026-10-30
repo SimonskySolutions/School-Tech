@@ -1,4 +1,4 @@
-import { formatMoney } from '@pythagoras/shared';
+import { describeEligibility, formatMoney } from '@pythagoras/shared';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { DONE, PRICE_UNITS, ROLE_CHOICES, WEEKDAYS } from '../../../../lib/admin';
@@ -189,6 +189,23 @@ export default async function SchoolSetupPage({
                   ? `${formatMoney(offering.price.unitAmountMinor, offering.price.currency)} ${PRICE_UNITS[offering.price.unit] ?? offering.price.unit}`
                   : 'no price'
               }; ${offering.sessions} sessions${offering.firstDate ? ` from ${offering.firstDate} to ${offering.lastDate}` : ''}`}
+              {offering.kind === 'activity' ? (
+                <details data-testid={`eligibility-${offering.id}`}>
+                  <summary>{`Who may take it: ${describeEligibility(offering.eligibility) ?? 'every child at the school'}`}</summary>
+                  <form method="post" action="/admin/actions" style={grid}>
+                    <input type="hidden" name="action" value="set-eligibility" />
+                    <input type="hidden" name="school_id" value={school.id} />
+                    <input type="hidden" name="offering_id" value={offering.id} />
+                    <input type="hidden" name="back" value={back} />
+                    <EligibilityFields
+                      grades={offering.eligibility.grades?.join(', ') ?? ''}
+                      minAge={offering.eligibility.minAge}
+                      maxAge={offering.eligibility.maxAge}
+                    />
+                    <button type="submit">Save who may take it</button>
+                  </form>
+                </details>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -223,6 +240,7 @@ export default async function SchoolSetupPage({
               ))}
             </select>
           </label>
+          <EligibilityFields grades="" />
           <button type="submit">Add the offering</button>
         </form>
       </section>
@@ -346,5 +364,23 @@ export default async function SchoolSetupPage({
         </form>
       </section>
     </main>
+  );
+}
+
+/** Grades and ages; empty means every child at the school (clubs only use them in practice). */
+function EligibilityFields({ grades, minAge, maxAge }: { grades: string; minAge?: number; maxAge?: number }) {
+  return (
+    <>
+      <label>
+        For grades (empty: all){' '}
+        <input name="grades" defaultValue={grades} placeholder="2, 3, 4" maxLength={200} />
+      </label>
+      <label>
+        Youngest age <input name="min_age" defaultValue={minAge ?? ''} inputMode="numeric" size={3} />
+      </label>
+      <label>
+        Oldest age <input name="max_age" defaultValue={maxAge ?? ''} inputMode="numeric" size={3} />
+      </label>
+    </>
   );
 }

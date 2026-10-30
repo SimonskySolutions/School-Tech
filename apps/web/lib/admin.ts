@@ -1,4 +1,4 @@
-import { parseMoney } from '@pythagoras/shared';
+import { type EligibilityRules, parseMoney } from '@pythagoras/shared';
 
 // The school set-up pages' rules (M3.4), as plain functions so they can be
 // tested without a browser. Every form posts to /admin/actions, which turns
@@ -53,11 +53,43 @@ export function schoolBody(form: Form) {
 }
 
 export function offeringBody(form: Form) {
+  const eligibility = eligibilityBody(form);
   return {
     serviceDefinitionId: text(form, 'service_definition_id'),
     name: text(form, 'name'),
     unitAmountMinor: amountMinor(text(form, 'price')),
     priceUnit: text(form, 'price_unit'),
+    ...(Object.keys(eligibility).length ? { eligibility } : {}),
+  };
+}
+
+const age = (input: string, label: string): number | undefined => {
+  if (!input) return undefined;
+  const value = Number(input);
+  if (!Number.isInteger(value) || value < 0 || value > 25) {
+    throw new FormProblem(`the ${label} age is a whole number of years from 0 to 25`);
+  }
+  return value;
+};
+
+/** Who may take an offering: grades typed "2, 3, 4" or "2 3 4", ages in whole years; all optional. */
+export function eligibilityBody(form: Form): EligibilityRules {
+  const grades = [
+    ...new Set(
+      text(form, 'grades')
+        .split(/[\s,;]+/)
+        .filter(Boolean),
+    ),
+  ];
+  const minAge = age(text(form, 'min_age'), 'minimum');
+  const maxAge = age(text(form, 'max_age'), 'maximum');
+  if (minAge !== undefined && maxAge !== undefined && minAge > maxAge) {
+    throw new FormProblem('the minimum age is above the maximum');
+  }
+  return {
+    ...(grades.length ? { grades } : {}),
+    ...(minAge !== undefined ? { minAge } : {}),
+    ...(maxAge !== undefined ? { maxAge } : {}),
   };
 }
 
@@ -113,6 +145,7 @@ export const DONE: Record<string, string> = {
   'create-company': 'Company added.',
   'create-school': 'School created as a draft. Add offerings, calendars and a principal, then activate it.',
   'add-offering': 'Offering added with its first price.',
+  'set-eligibility': 'Saved who may take it. Bookings already made stay.',
   'add-sessions': 'Calendar added.',
   'add-staff': 'Staff member registered. Create their sign-in account when they are ready.',
   activate: 'The school is live: parents and staff can now see it, and so is its website.',

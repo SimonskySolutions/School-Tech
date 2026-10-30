@@ -1,5 +1,11 @@
 import Link from 'next/link';
-import { type Allergen, formatMoney, type BookableOffering, type StudentOfferings } from '@pythagoras/shared';
+import {
+  type Allergen,
+  type BookableOffering,
+  describeEligibility,
+  formatMoney,
+  type StudentOfferings,
+} from '@pythagoras/shared';
 import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { fetchMe, fetchOfferings, fetchStudentDietary } from '../../lib/api-client';
@@ -134,13 +140,15 @@ function LunchDays({
   offering: BookableOffering;
   allergens: Allergen[];
 }) {
-  const days = offering.sessions.filter((session) => session.serviceDate);
+  const problem = offering.eligibility.problem;
+  const days = offering.sessions.filter((session) => session.serviceDate && !problem);
   return (
     <fieldset data-testid={`offering-${offering.kind}`}>
       <legend>
         {offering.name}: {priceText(offering)}
       </legend>
-      {days.length === 0 ? <p>No days open for booking.</p> : null}
+      {problem ? <p data-testid="not-eligible">{`${givenName} cannot book this: ${problem}.`}</p> : null}
+      {days.length === 0 && !problem ? <p>No days open for booking.</p> : null}
       <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
         {days.map((day) => {
           const full = day.available === 0;
@@ -180,20 +188,24 @@ function LunchDays({
 function Activity({ studentId, offering }: { studentId: string; offering: BookableOffering }) {
   const booked = offering.sessions.length > 0 && offering.sessions.every((session) => session.alreadyBooked);
   const full = offering.sessions.some((session) => !session.alreadyBooked && session.available === 0);
-  const unavailable = booked || full || offering.sessions.length === 0;
+  const problem = offering.eligibility.problem;
+  const unavailable = booked || full || offering.sessions.length === 0 || problem !== null;
+  const who = describeEligibility(offering.eligibility.rules);
   return (
     <fieldset data-testid={`offering-${offering.kind}`}>
-      <legend>{offering.name}</legend>
+      <legend>{who ? `${offering.name} (${who})` : offering.name}</legend>
       <label style={{ opacity: unavailable ? 0.6 : 1 }}>
         <input type="checkbox" name="activity" value={`${studentId}|${offering.id}`} disabled={unavailable} />{' '}
         {priceText(offering)} ({activitySummary(offering)})
         {booked
           ? ' (booked)'
-          : full
-            ? ' (full)'
-            : offering.sessions.length === 0
-              ? ' (no meetings open)'
-              : ''}
+          : problem
+            ? ` (cannot be booked: ${problem})`
+            : full
+              ? ' (full)'
+              : offering.sessions.length === 0
+                ? ' (no meetings open)'
+                : ''}
       </label>
     </fieldset>
   );

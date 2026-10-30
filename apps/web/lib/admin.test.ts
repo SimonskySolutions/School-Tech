@@ -3,6 +3,7 @@ import {
   amountMinor,
   backTo,
   dateList,
+  eligibilityBody,
   FormProblem,
   offeringBody,
   schoolBody,
@@ -125,5 +126,29 @@ describe('backTo', () => {
   it('never sends the administrator anywhere else', () => {
     expect(backTo('https://evil.test/', { error: 'x' })).toBe('/admin/schools?error=x');
     expect(backTo('/admin/schools/../../me', {})).toBe('/admin/schools?');
+  });
+});
+
+describe('who may take an offering', () => {
+  it('reads grades separated by commas or spaces, and whole-year ages, all optional', () => {
+    expect(eligibilityBody(form({ grades: '2, 3 4,,3', min_age: '7', max_age: '11' }))).toEqual({
+      grades: ['2', '3', '4'],
+      minAge: 7,
+      maxAge: 11,
+    });
+    expect(eligibilityBody(form({}))).toEqual({});
+    expect(eligibilityBody(form({ min_age: '0' }))).toEqual({ minAge: 0 });
+  });
+
+  it('refuses ages that are not whole years from 0 to 25, or a minimum above the maximum', () => {
+    expect(() => eligibilityBody(form({ min_age: '7.5' }))).toThrow(FormProblem);
+    expect(() => eligibilityBody(form({ max_age: '30' }))).toThrow(FormProblem);
+    expect(() => eligibilityBody(form({ min_age: '9', max_age: '7' }))).toThrow(FormProblem);
+  });
+
+  it('sends the rules with a new offering only when there are any', () => {
+    const base = { service_definition_id: 'x', name: 'Chess', price: '60', price_unit: 'per_term' };
+    expect(offeringBody(form(base))).not.toHaveProperty('eligibility');
+    expect(offeringBody(form({ ...base, grades: '5 6' })).eligibility).toEqual({ grades: ['5', '6'] });
   });
 });

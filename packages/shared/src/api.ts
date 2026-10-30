@@ -50,6 +50,8 @@ export interface BookableOffering {
   price: { unitAmountMinor: number; currency: string; unit: string; vatRateBp: number };
   /** Lunch: pick days. Activity: the whole set of sessions is booked together. */
   pickSessions: boolean;
+  /** Who may take it, and why this child may not (null when they may). The database checks it again. */
+  eligibility: { rules: EligibilityRules; problem: string | null };
   sessions: {
     id: string;
     serviceDate: string | null;
@@ -265,8 +267,43 @@ export interface ActivityRegisters {
     capacity: number | null;
     booked: number;
     awaitingPayment: number;
-    attendees: { studentName: string | null; classLabel: string | null; status: string }[];
+    /** The session has started and the viewer may mark attendance at this school. */
+    canMark: boolean;
+    attendees: {
+      bookingId: string;
+      studentName: string | null;
+      classLabel: string | null;
+      status: string;
+    }[];
   }[];
+}
+
+export interface MarkAttendanceRequest {
+  status: 'attended' | 'absent';
+}
+
+/** A guardian's view of one child's club meetings and attendance. */
+export interface StudentActivities {
+  student: { id: PersonId; givenName: string; familyName: string };
+  sessions: {
+    offeringName: string;
+    schoolName: string;
+    timeZone: string;
+    startsAt: string;
+    endsAt: string | null;
+    location: string | null;
+    /** The meeting has started (judged by the server). */
+    started: boolean;
+    /** confirmed (booked), attended or absent. */
+    status: 'confirmed' | 'attended' | 'absent';
+  }[];
+}
+
+/** Who may take an offering: grades at the school, ages on the day (whole years). Each part optional. */
+export interface EligibilityRules {
+  grades?: string[];
+  minAge?: number;
+  maxAge?: number;
 }
 
 /** Money allocated to a school in a period, in minor units. net = received + paid by credit - refunded - credited. */
@@ -363,6 +400,7 @@ export interface CreateOfferingRequest {
   unitAmountMinor: number;
   priceUnit: 'per_session' | 'per_day' | 'per_month' | 'per_term' | 'one_off';
   vatRateBp?: number;
+  eligibility?: EligibilityRules;
 }
 
 export type SessionSchedule =
@@ -493,6 +531,7 @@ export interface SchoolSetup {
     kind: string;
     status: string;
     price: { unitAmountMinor: number; currency: string; unit: string } | null;
+    eligibility: EligibilityRules;
     sessions: number;
     firstDate: string | null;
     lastDate: string | null;

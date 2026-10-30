@@ -4,6 +4,7 @@ import { type CheckoutGroupView, type CheckoutResponse } from '@pythagoras/share
 import { type Principal } from '../auth/principal';
 import {
   findBookableOfferings,
+  findEligibilityProblems,
   findOpenSessions,
   findStudentWithSchools,
   type OfferingRow,
@@ -113,6 +114,19 @@ export class CheckoutService {
       }
       const wanted = items.filter((item) => item.studentId === studentId).map((item) => item.offeringId);
       const offerings = await findBookableOfferings(tx, found.schoolIds, wanted);
+      // A clear refusal before anything is written; the booking trigger checks each session again.
+      const problems = await findEligibilityProblems(
+        tx,
+        studentId,
+        offerings.map((offering) => ({ id: offering.id, firstDay: null })),
+      );
+      const refused = offerings.find((offering) => problems.has(offering.id));
+      if (refused) {
+        throw new CheckoutRejected(
+          422,
+          `${found.student.given_name} cannot take ${refused.name}: ${problems.get(refused.id)}`,
+        );
+      }
       offeringsByStudent.set(studentId, new Map(offerings.map((offering) => [offering.id, offering])));
       const missing = offerings.map((o) => o.id).filter((id) => !openSessionsByOffering.has(id));
       if (missing.length) {
