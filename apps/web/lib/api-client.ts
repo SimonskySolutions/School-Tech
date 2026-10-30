@@ -7,7 +7,9 @@ import {
   type KitchenCounts,
   type LunchList,
   type RevenueReport,
+  type SchoolSetup,
   type MeResponse,
+  type OnboardingOverview,
   type SchoolSummary,
   type StudentOfferings,
 } from '@pythagoras/shared';
@@ -119,4 +121,33 @@ export async function postCancelBooking(
   );
   if (!response.ok) return { kind: 'refused', status: response.status };
   return { kind: 'ok', value: (await response.json()) as CancelBookingResponse };
+}
+
+export const fetchOnboarding = (apiUrl: string, accessToken: string) =>
+  get<OnboardingOverview>(apiUrl, '/admin/onboarding', accessToken);
+
+export const fetchSchoolSetup = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolSetup>(apiUrl, `/admin/schools/${encodeURIComponent(schoolId)}`, accessToken);
+
+export type AdminResult<T> = { kind: 'ok'; value: T } | { kind: 'refused'; status: number; message: string };
+
+/** A school set-up write as the signed-in administrator; the API's refusal message is kept for the page. */
+export async function postAdmin<T>(
+  apiUrl: string,
+  accessToken: string,
+  path: string,
+  body?: unknown,
+): Promise<AdminResult<T>> {
+  const response = await fetch(new URL(path, apiUrl), {
+    method: 'POST',
+    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: 'no-store',
+  });
+  const json = (await response.json().catch(() => ({}))) as { message?: unknown };
+  if (!response.ok) {
+    const message = typeof json.message === 'string' ? json.message : `the API answered ${response.status}`;
+    return { kind: 'refused', status: response.status, message };
+  }
+  return { kind: 'ok', value: json as T };
 }

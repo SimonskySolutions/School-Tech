@@ -338,3 +338,28 @@ export interface AddGuardianResponse {
   /** True when the guardian already existed (for example a parent with children at another school). */
   existing: boolean;
 }
+
+/** Everything the set-up page shows for one school (M3.4). */
+export interface SchoolSetup {
+  school: OnboardingOverview['schools'][number];
+  billingEntityName: string;
+  serviceDefinitions: OnboardingOverview['serviceDefinitions'];
+  offerings: {
+    id: string;
+    name: string;
+    kind: string;
+    status: string;
+    price: { unitAmountMinor: number; currency: string; unit: string } | null;
+    sessions: number;
+    firstDate: string | null;
+    lastDate: string | null;
+  }[];
+  staff: {
+    personId: PersonId;
+    name: string;
+    email: string | null;
+    roleCode: string;
+    roleName: string;
+    hasAccount: boolean;
+  }[];
+}

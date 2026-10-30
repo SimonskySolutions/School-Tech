@@ -27,6 +27,7 @@ import {
   createStaff,
   OnboardingRejected,
   overview,
+  schoolSetup,
 } from './onboarding.repository';
 
 const CODE = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -110,6 +111,11 @@ export class OnboardingController {
   @Get('onboarding')
   overview(@CurrentPrincipal() principal: Principal): Promise<OnboardingOverview> {
     return this.run(principal, (tx) => overview(tx));
+  }
+
+  @Get('schools/:schoolId')
+  setup(@CurrentPrincipal() principal: Principal, @Param('schoolId', new ParseUUIDPipe()) schoolId: string) {
+    return this.run(principal, (tx) => schoolSetup(tx, schoolId));
   }
 
   @Post('billing-entities')

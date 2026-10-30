@@ -5,6 +5,8 @@ import {
   type CreateSessionsRequest,
   type CreateStaffRequest,
   type OnboardingOverview,
+  type PersonId,
+  type SchoolSetup,
   type SchoolId,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
@@ -292,4 +294,95 @@ export async function activateSchool(
   if (missing.length > 0) throw new OnboardingRejected(409, `not ready: ${missing.join('; ')}`);
   await tx.query(`UPDATE org.school SET status = 'active' WHERE id = $1`, [target.id]);
   return schoolView(await school(tx, target.id));
+}
+
+/** One school with its offerings, calendars and staff, for the set-up page. */
+export async function schoolSetup(tx: PersonTransaction, schoolId: string): Promise<SchoolSetup> {
+  const target = await school(tx, schoolId);
+  const [company] = await tx.query<{ legal_name: string }>(
+    'SELECT legal_name FROM org.legal_entity WHERE id = $1',
+    [target.default_billing_entity_id],
+  );
+  const serviceDefinitions = await tx.query<{ id: string; code: string; kind: string; name: string }>(
+    `SELECT id, code, kind, name FROM catalog.service_definition
+      WHERE group_id = access.current_group_id() AND status = 'active' ORDER BY kind, name`,
+  );
+  const offerings = await tx.query<{
+    id: string;
+    name: string;
+    kind: string;
+    status: string;
+    unit_amount_minor: string | null;
+    currency: string | null;
+    price_unit: string | null;
+    sessions: number;
+    first_date: string | null;
+    last_date: string | null;
+  }>(
+    `SELECT o.id, o.name, d.kind, o.status, p.unit_amount_minor, p.currency, p.price_unit,
+            (SELECT count(*)::int FROM scheduling.session x WHERE x.offering_id = o.id) AS sessions,
+            (SELECT to_char(min(coalesce(x.service_date, (x.starts_at AT TIME ZONE $2)::date)), 'YYYY-MM-DD')
+               FROM scheduling.session x WHERE x.offering_id = o.id) AS first_date,
+            (SELECT to_char(max(coalesce(x.service_date, (x.starts_at AT TIME ZONE $2)::date)), 'YYYY-MM-DD')
+               FROM scheduling.session x WHERE x.offering_id = o.id) AS last_date
+       FROM catalog.school_offering o
+       JOIN catalog.service_definition d ON d.id = o.service_definition_id
+       LEFT JOIN LATERAL (
+         SELECT unit_amount_minor, currency, price_unit FROM catalog.price_version
+          WHERE offering_id = o.id AND valid_from <= now() AND (valid_until IS NULL OR valid_until > now())
+          ORDER BY valid_from DESC LIMIT 1
+       ) p ON true
+      WHERE o.school_id = $1
+      ORDER BY d.kind, o.name`,
+    [target.id, target.time_zone],
+  );
+  const staff = await tx.query<{
+    person_id: PersonId;
+    given_name: string;
+    family_name: string;
+    email: string | null;
+    role_code: string;
+    role_name: string;
+    has_account: boolean;
+  }>(
+    `SELECT p.id AS person_id, p.given_name, p.family_name, p.email, r.code AS role_code, r.name AS role_name,
+            EXISTS (SELECT 1 FROM people.login_identity li WHERE li.person_id = p.id AND li.disabled_at IS NULL)
+              AS has_account
+       FROM access.role_assignment ra
+       JOIN access.role r ON r.code = ra.role_code
+       JOIN people.person p ON p.id = ra.person_id
+      WHERE ra.school_id = $1 AND ra.revoked_at IS NULL
+      ORDER BY r.name, p.family_name, p.given_name`,
+    [target.id],
+  );
+  return {
+    school: schoolView(target),
+    billingEntityName: company?.legal_name ?? '',
+    serviceDefinitions,
+    offerings: offerings.map((row) => ({
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      status: row.status,
+      price:
+        row.unit_amount_minor === null
+          ? null
+          : {
+              unitAmountMinor: Number(row.unit_amount_minor),
+              currency: row.currency!,
+              unit: row.price_unit!,
+            },
+      sessions: row.sessions,
+      firstDate: row.first_date,
+      lastDate: row.last_date,
+    })),
+    staff: staff.map((row) => ({
+      personId: row.person_id,
+      name: `${row.given_name} ${row.family_name}`,
+      email: row.email,
+      roleCode: row.role_code,
+      roleName: row.role_name,
+      hasAccount: row.has_account,
+    })),
+  };
 }

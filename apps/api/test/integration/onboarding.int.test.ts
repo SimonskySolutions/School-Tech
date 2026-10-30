@@ -1,4 +1,4 @@
-import { type OnboardingOverview, type SchoolSummary } from '@pythagoras/shared';
+import { type OnboardingOverview, type SchoolSetup, type SchoolSummary } from '@pythagoras/shared';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { API, get, secret, tokenFor } from './helpers';
@@ -259,6 +259,24 @@ describe('adding School T', () => {
     );
     expect(created).toMatchObject({ status: 201, body: { roleCode: 'principal' } });
     expect((await school()).missing).toEqual([]);
+  });
+
+  it('shows the set-up page everything added so far', async () => {
+    const { status, body } = await get<SchoolSetup>(`/admin/schools/${schoolId}`, tokens.admin!);
+    expect(status).toBe(200);
+    expect(body.billingEntityName).toBe(`Test company ${run}`);
+    expect(body.offerings.map((o) => [o.kind, o.price?.unitAmountMinor, o.price?.unit, o.sessions])).toEqual([
+      ['activity', 5500, 'per_term', 4],
+      ['lunch', 520, 'per_day', 9],
+    ]);
+    expect(body.offerings.find((o) => o.kind === 'lunch')).toMatchObject({
+      firstDate: plus(monday, 0),
+      lastDate: plus(monday, 11),
+    });
+    expect(body.staff).toEqual([
+      expect.objectContaining({ name: 'Tanya Principal', roleCode: 'principal', hasAccount: false }),
+    ]);
+    expect((await get(`/admin/schools/${schoolId}`, tokens['principal.a']!)).status).toBe(403);
   });
 
   it('activates the school; it then appears for everyone', async () => {

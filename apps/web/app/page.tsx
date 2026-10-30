@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { fetchMe, fetchSchools } from '../lib/api-client';
 import { buildHome, type HomeView, NOTICES } from '../lib/home';
 import { currentSession, runtime } from '../lib/server';
@@ -127,6 +128,17 @@ function Home({ view }: { view: HomeView }) {
             <a href="/reports/revenue" data-testid="revenue-link">
               Revenue and balances per school
             </a>
+          </p>
+        </section>
+      ) : null}
+
+      {view.showsSchoolSetup ? (
+        <section aria-labelledby="setup" data-testid="setup">
+          <h2 id="setup">Set-up</h2>
+          <p>
+            <Link href="/admin/schools" data-testid="schools-admin-link">
+              Schools, companies and staff
+            </Link>
           </p>
         </section>
       ) : null}

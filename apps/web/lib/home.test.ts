@@ -116,6 +116,16 @@ describe('buildHome', () => {
     expect(reports('kitchen')).toBe(false);
   });
 
+  it('offers school set-up to the group administrator but not to principals', () => {
+    const setup = (code: string) =>
+      buildHome(
+        { person: person('X'), roles: [{ code, name: code, scope: 'group', school: null }], children: [] },
+        schools,
+      ).showsSchoolSetup;
+    expect(setup('group_admin')).toBe(true);
+    expect(setup('principal')).toBe(false);
+  });
+
   it('says so when nothing is linked yet', () => {
     expect(buildHome({ person: person('Teodora'), roles: [], children: [] }, schools).hasNothing).toBe(true);
   });
