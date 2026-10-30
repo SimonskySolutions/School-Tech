@@ -134,13 +134,12 @@ describe('each person sees their own world', () => {
     ]);
   });
 
-  it('everyone signed in sees the three active schools', async () => {
+  it('everyone signed in sees the active schools', async () => {
     const { status, body } = await api('/schools', tokens['hristo.georgiev']);
     expect(status).toBe(200);
-    expect((body as { code: string }[]).map((school) => school.code)).toEqual([
-      'school-a',
-      'school-b',
-      'school-c',
-    ]);
+    // The seeded three, plus any the onboarding tests activated in this run.
+    const codes = (body as { code: string }[]).map((school) => school.code);
+    expect(codes).toEqual(expect.arrayContaining(['school-a', 'school-b', 'school-c']));
+    expect(codes.every((code) => /^school-[abc]$/.test(code) || code.startsWith('test-'))).toBe(true);
   });
 });

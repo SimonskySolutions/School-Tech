@@ -128,7 +128,7 @@ Development uses the **development payment provider** (ADR 0010): no money moves
 Useful checks, as the superuser (`docker compose exec -u postgres postgres psql -d pythagoras`):
 
 - Events not applied: `SELECT provider, event_type, processing_status, attempts, last_error FROM integration.inbound_event WHERE processing_status IN ('received', 'failed') ORDER BY received_at;`. A `failed` event (for example an amount mismatch) needs a person: check it with the provider, then fix the payment by hand.
-- Remove all test orders and bookings, keeping the catalogue and people: `bash scripts/db-reset-commerce.sh` (refuses unless every person is synthetic). The API integration and end-to-end scripts run it first.
+- Remove all test orders and bookings, and the schools the onboarding tests add (codes starting `test-`, with their offerings, sessions, staff and "Test company" billing entities), keeping the seeded schools, catalogue and people: `bash scripts/db-reset-test-data.sh` (refuses unless every person is synthetic). The identity, API integration and end-to-end scripts run it first.
 
 **Switching to Stripe (test mode)**, when the account exists:
 

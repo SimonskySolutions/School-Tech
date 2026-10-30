@@ -14,6 +14,6 @@ docker compose up -d --wait postgres redis keycloak api worker web >/dev/null 2>
 }
 bash scripts/db-migrate.sh up >/dev/null 2>&1
 bash scripts/db-seed.sh >/dev/null
-bash scripts/db-reset-commerce.sh
+bash scripts/db-reset-test-data.sh
 docker compose run --rm --no-TTY workspace pnpm --filter @pythagoras/web test:e2e 2>&1 | grep -v '^ *Container '
 exit "${PIPESTATUS[0]}"

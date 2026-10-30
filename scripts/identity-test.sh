@@ -7,6 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
 
+# Schools and companies the onboarding tests add would change the counts below.
+bash scripts/db-reset-test-data.sh
+
 KC=${KEYCLOAK_URL:-http://localhost:${KEYCLOAK_HOST_PORT:-58080}}
 REALM=pythagoras
 ISSUER="$KC/realms/$REALM"

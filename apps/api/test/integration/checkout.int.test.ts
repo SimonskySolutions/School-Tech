@@ -8,7 +8,7 @@ import { expireReservations } from '../../src/worker/reservations';
 
 // Buying and paying against the real stack: API, worker, Keycloak and the
 // seeded database, with the development payment provider. The test script
-// clears earlier orders first (scripts/db-reset-commerce.sh).
+// clears earlier orders first (scripts/db-reset-test-data.sh).
 
 const API = process.env.API_URL ?? 'http://api:3000';
 const KEYCLOAK = process.env.KEYCLOAK_URL ?? 'http://keycloak:8080';

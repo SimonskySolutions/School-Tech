@@ -14,6 +14,7 @@ import { WebhookController } from './payments/webhook.controller';
 import { MeController } from './people/me.controller';
 import { SchoolLifeController } from './school-life/school-life.controller';
 import { ReportsController } from './reporting/reports.controller';
+import { OnboardingController } from './onboarding/onboarding.controller';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule],
@@ -28,6 +29,7 @@ import { ReportsController } from './reporting/reports.controller';
     DevCheckoutController,
     SchoolLifeController,
     ReportsController,
+    OnboardingController,
   ],
   providers: [CheckoutService],
 })

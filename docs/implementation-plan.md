@@ -80,7 +80,7 @@ On request, the PostgreSQL and Redis foundation was built before the rest of the
 | M2.7 CEO reporting | M2.4 | Revenue and outstanding balances per school from the `reporting` views | **Done** (2026-10-29): `GET /reports/revenue` (period in school-local dates, default this month, at most a year) and `/reports/revenue` in the web app, linked for roles with `reports.read`. Per school: received, paid by credit, refunded, credited, net; unpaid staff invoices and overdue; checkouts in progress; credit owed to families. Migration `20261031090000` splits `reporting.school_revenue_daily` by `payment_mode`, so test-mode money (the development provider) has its own column and is never shown as revenue. The CEO sees all schools, a principal their own, teachers, the kitchen and parents nothing |
 | M2.8 Authorised cancellation | M2.4 | Staff cancel a lunch day; credit issued to the payer; enrolment and other services untouched | **Done** (2026-10-29): `GET /school-life/lunch` (children booked at one school on one day) and `POST /school-life/bookings/:id/cancel` with a required reason, for staff with `bookings.manage` at the school (not the kitchen or teachers), for paid lunch days that have not passed. The API cancels the booking and its line and writes `commerce.order_line.cancelled`; the worker then issues credit for exactly what was paid for that line, with the same billing entity, and the balancing `credit_issued` allocation. A unique index allows one credit per line (migration `20261101090000`). Web: each day on the kitchen page opens its lunch list with a cancel form. Club bookings, other lines and enrolments are untouched |
 
-Tests added for M2.1–M2.5: 22 API unit tests (signatures, both adapters, basket rules, error mapping, expiry schedule), 11 API integration tests against the running stack (purchase and confirmation, idempotency, another family's child, duplicate and out-of-order webhooks, forged signature, failed payment, expiry, late payment with a free seat and with a full session), 8 web unit tests, 3 end-to-end tests through the web app and the real Keycloak login (Anna's purchase, cross-site form refusal, another family's order) and 2 gateway checks. `scripts/db-reset-commerce.sh` clears earlier test orders so the suites can run repeatedly.
+Tests added for M2.1–M2.5: 22 API unit tests (signatures, both adapters, basket rules, error mapping, expiry schedule), 11 API integration tests against the running stack (purchase and confirmation, idempotency, another family's child, duplicate and out-of-order webhooks, forged signature, failed payment, expiry, late payment with a free seat and with a full session), 8 web unit tests, 3 end-to-end tests through the web app and the real Keycloak login (Anna's purchase, cross-site form refusal, another family's order) and 2 gateway checks. `scripts/db-reset-test-data.sh` clears earlier test orders so the suites can run repeatedly.
 
 Tests added for M2.6: 1 API unit test (dietary order), 7 API integration tests (counts per role after a real purchase, unpaid reservations kept apart, parents refused, parameter checks, registers per school), 6 web unit tests and 5 end-to-end tests (coordinator, School A kitchen, CEO, register, parent). API integration files now run one after another, since they share the development database.
 
@@ -98,11 +98,33 @@ Tests added for M2.8: 1 database check (one credit per line), 4 API unit tests (
 5. End-to-end test runs the journey in CI; duplicate and out-of-order events, failed payment and expired reservation are covered by automated tests.
 6. Every screen showing a development payment says so.
 
+## M3 · School onboarding and websites — in progress
+
+**Goal:** a group administrator adds a fourth school and its website entirely through the platform, with no code change, migration or deploy, and a parent completes the M2 journey there. The database side is already proven by `db/tests/12_fourth_school.sql` (a fourth school creates no schema objects).
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M3.1 Onboarding API | M2 | For group administrators (`org.manage`, `catalog.manage`, `access.manage`): add a billing company; create a school as a draft (code, name, kind, time zone, billing company); add offerings from the group's service definitions with a first price and booking policy; generate sessions (lunch on school days between two dates, skipping closures; clubs weekly); register staff and give them a role at the school; activate the school. Every write under the administrator's row-level security | **Done** (2026-10-30): `GET /admin/onboarding`, `POST /admin/billing-entities`, `/admin/schools`, `/admin/schools/:id/offerings`, `/sessions`, `/staff`, `/activate`. Gate: `org.manage`; the database then checks `catalog.manage`, `people.manage` and `access.manage` per write (the CEO can create a school but not price it). Lunch calendars close booking at 10:00 and cancelling at 14:00 the day before, school time; clubs close 24 hours before. Session generation is idempotent. Activation needs a priced offering, sessions for every published offering and a principal. Staff get a person record and role, but no sign-in yet (M3.2) |
+| M3.2 Accounts for new people (next) | M3.1, M1.1 | Keycloak users for staff and parents created through the Keycloak admin API by a dedicated service account (no self-registration), linked to their person record, with an e-mailed "set your password" action; until e-mail exists, the action link is shown to the administrator in development only | Planned |
+| M3.3 Students and families | M3.1 | Principal enrols students and records guardians (verified on creation by the principal); a parent with children at several schools sees all of them | Planned |
+| M3.4 Admin web | M3.1–M3.3 | Onboarding pages in the web app for group administrators: company, school, offerings and prices, session calendar, staff, activation, with a checklist of what is missing before a school can go live | Planned |
+| M3.5 Websites (Payload) | M3.1 | Payload CMS as its own service with its own database role and schema, one tenant per `org.website.cms_tenant_key`; the web app renders a school's public pages for the host name resolved by `org.resolve_hostname`; a new website at `<code>.pythagoras.localhost` in development. ADR before building | Planned |
+| M3.6 Domains | M3.5, M1.6 | Real domains verified by the worker (DNS TXT or HTTP token), then served by the gateway's on-demand TLS; `.test` and `.localhost` stay local-development only | Planned |
+| M3.7 Fourth school end to end | M3.1–M3.6 | One test in CI: create School D from nothing, publish its website, enrol a child, the parent pays for lunch, School D's kitchen and the CEO see it. No code or schema change between "three schools" and "four" | Planned |
+
+Tests added for M3.1: 6 API unit tests (school and weekly calendars, closures, date checks, activation readiness) and 13 API integration tests (who may add schools, draft school, duplicate code, unknown time zone, draft hidden from parents, offerings and the CEO refused pricing, activation refused until ready, lunch and club calendars in the school time zone and never twice, principal, activation, no new tables). `scripts/db-reset-test-data.sh` (renamed from `db-reset-commerce.sh`) now also removes schools with codes starting `test-`; the identity, API and end-to-end scripts run it first, and tests no longer assume exactly three schools.
+
+**Acceptance criteria**
+1. School D, its company, prices, calendar, staff and website are created through the platform by a group administrator; the change contains no code, migration or configuration file.
+2. Staff at School D see only School D; other principals see nothing of it.
+3. A parent with children at School A and School D buys lunch at both; each order is billed by the right company.
+4. School D's website is served on its local domain; an unverified real domain is never served.
+5. The end-to-end test runs in CI.
+
 ## Later milestones (outline)
 
 | Milestone | Depends on | Outcome |
 | --- | --- | --- |
-| M3 · School onboarding and websites | M1, M2 | Admin onboarding for a fourth school and its website (Payload, local test domain), completing the M2 journey without code changes |
 | M4 · School Life services | M2 | Lunch menus and dietary handling, activities, lessons and packages, trips and consent, transport seats, uniforms and stock, parent requests |
 | M5 · Admissions and CRM | M1 | Inquiries, applications, enrolment hand-off |
 | M6 · Staff, documents, tasks | M1 | Staff records and qualifications, documents and approvals, tasks and projects |

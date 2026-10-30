@@ -218,3 +218,65 @@ export interface CancelBookingResponse {
   creditAmountMinor: number;
   currency: string;
 }
+
+/** What a group administrator works with when adding a school. */
+export interface OnboardingOverview {
+  billingEntities: { id: string; legalName: string; registrationNumber: string | null; status: string }[];
+  serviceDefinitions: { id: string; code: string; kind: string; name: string }[];
+  schools: {
+    id: SchoolId;
+    code: string;
+    name: string;
+    kind: string;
+    status: string;
+    timeZone: string;
+    billingEntityId: string;
+    publishedOfferings: number;
+    sessions: number;
+    principals: number;
+    /** What still stops a draft school from going live; empty when ready. */
+    missing: string[];
+  }[];
+}
+
+export interface CreateSchoolRequest {
+  code: string;
+  name: string;
+  kind: 'school' | 'kindergarten' | 'sports_academy' | 'training_centre' | 'college' | 'other';
+  timeZone: string;
+  billingEntityId: string;
+}
+
+export interface CreateOfferingRequest {
+  serviceDefinitionId: string;
+  name: string;
+  unitAmountMinor: number;
+  priceUnit: 'per_session' | 'per_day' | 'per_month' | 'per_term' | 'one_off';
+  vatRateBp?: number;
+}
+
+export type SessionSchedule =
+  | { type: 'school_days'; from: string; to: string; closed?: string[] }
+  | {
+      type: 'weekly';
+      weekday: number;
+      startTime: string;
+      endTime: string;
+      from: string;
+      to: string;
+      closed?: string[];
+    };
+
+export interface CreateSessionsRequest {
+  offeringId: string;
+  capacity: number;
+  location?: string;
+  schedule: SessionSchedule;
+}
+
+export interface CreateStaffRequest {
+  givenName: string;
+  familyName: string;
+  email: string;
+  roleCode: 'principal' | 'school_admin' | 'teacher' | 'kitchen';
+}

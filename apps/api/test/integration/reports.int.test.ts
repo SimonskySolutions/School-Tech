@@ -46,7 +46,10 @@ describe('revenue per school', () => {
   it("shows the CEO today's development payment as test money at School A and School C", async () => {
     const { status, body } = await report('ceo', `?from=${today}&to=${today}`);
     expect(status).toBe(200);
-    expect(body.schools.map((row) => row.school.name)).toEqual(['School A', 'School B', 'School C']);
+    // Other schools (for example ones the onboarding tests add) may exist too.
+    expect(body.schools.map((row) => row.school.name)).toEqual(
+      expect.arrayContaining(['School A', 'School B', 'School C']),
+    );
     expect(school(body, 'School A').test.receivedMinor).toBe(
       school(before, 'School A').test.receivedMinor + lunchA,
     );
