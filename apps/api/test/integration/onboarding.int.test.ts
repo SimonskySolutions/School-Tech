@@ -77,7 +77,16 @@ describe('who may add schools', () => {
   it('is closed to principals and parents', async () => {
     expect((await get('/admin/onboarding', tokens['principal.a']!)).status).toBe(403);
     expect((await get('/admin/onboarding', tokens['anna.ivanova']!)).status).toBe(403);
-    expect((await post('principal.a', '/admin/billing-entities', { legalName: 'Nope' })).status).toBe(403);
+    expect(
+      (await post('principal.a', '/admin/billing-entities', { legalName: 'Nope', registrationNumber: '1' }))
+        .status,
+    ).toBe(403);
+  });
+
+  it('needs the company registration number', async () => {
+    expect(
+      (await post('admin', '/admin/billing-entities', { legalName: `Test company ${run}-x` })).status,
+    ).toBe(400);
   });
 });
 
@@ -85,7 +94,7 @@ describe('adding School T', () => {
   it('adds a billing company and a draft school', async () => {
     const company = await post<{ id: string }>('admin', '/admin/billing-entities', {
       legalName: `Test company ${run}`,
-      registrationNumber: '000000099',
+      registrationNumber: String(Date.now()).slice(-9),
     });
     expect(company.status).toBe(201);
     companyId = company.body.id;

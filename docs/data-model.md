@@ -76,6 +76,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
 
+`people.find_person_by_email(email, school)` is the one way to learn about a person outside one's own scope: it returns only the id of the active person with exactly that address, only to staff who manage guardians at that school, and logs every lookup in `audit.access_log`. It exists so a principal links an existing parent to a new child instead of registering the parent twice.
+
 Writes the API can never make, whoever is signed in: confirm a payment, mark an order paid, confirm a reservation, rewrite a price, edit a placed order's lines, alter the audit log or financial ledger, verify a real domain, grant a role outside its own scope or to oneself, approve a refund it requested.
 
 The worker (`pyth_worker`) acts as the system on the tables its jobs need. It cannot read health data or the audit log, and cannot change prices, lines or the ledger.

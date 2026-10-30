@@ -16,6 +16,7 @@ import { SchoolLifeController } from './school-life/school-life.controller';
 import { ReportsController } from './reporting/reports.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { AccountsModule } from './accounts/accounts.module';
+import { FamiliesController } from './families/families.controller';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule, AccountsModule],
@@ -31,6 +32,7 @@ import { AccountsModule } from './accounts/accounts.module';
     SchoolLifeController,
     ReportsController,
     OnboardingController,
+    FamiliesController,
   ],
   providers: [CheckoutService],
 })

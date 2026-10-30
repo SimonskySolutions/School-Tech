@@ -221,7 +221,7 @@ export interface CancelBookingResponse {
 
 /** What a group administrator works with when adding a school. */
 export interface OnboardingOverview {
-  billingEntities: { id: string; legalName: string; registrationNumber: string | null; status: string }[];
+  billingEntities: { id: string; legalName: string; registrationNumber: string; status: string }[];
   serviceDefinitions: { id: string; code: string; kind: string; name: string }[];
   schools: {
     id: SchoolId;
@@ -288,4 +288,53 @@ export interface CreatedAccountResponse {
   /** temporary_password: development only; the person must change it at first sign-in. */
   setup: 'temporary_password' | 'email';
   temporaryPassword: string | null;
+}
+
+/** Current students of one school with their guardians (M3.3), for staff. */
+export interface StudentList {
+  school: { id: SchoolId; name: string };
+  students: {
+    id: PersonId;
+    givenName: string;
+    familyName: string;
+    academicYear: string;
+    gradeLevel: string | null;
+    classLabel: string | null;
+    guardians: {
+      personId: PersonId;
+      name: string;
+      relationship: string;
+      status: 'pending' | 'active';
+      canPay: boolean;
+      canManageBookings: boolean;
+      canConsent: boolean;
+    }[];
+  }[];
+}
+
+export interface EnrolStudentRequest {
+  givenName: string;
+  familyName: string;
+  dateOfBirth?: string;
+  academicYear: string;
+  gradeLevel?: string;
+  classLabel?: string;
+  startDate: string;
+}
+
+/** Records a guardian: an existing person found by exact e-mail, or a new one (names required). */
+export interface AddGuardianRequest {
+  email: string;
+  givenName?: string;
+  familyName?: string;
+  relationship: 'mother' | 'father' | 'parent' | 'legal_guardian' | 'foster_carer' | 'other';
+  canPay?: boolean;
+  canManageBookings?: boolean;
+  canConsent?: boolean;
+}
+
+export interface AddGuardianResponse {
+  guardianPersonId: PersonId;
+  /** True when the guardian already existed (for example a parent with children at another school). */
+  existing: boolean;
 }

@@ -36,7 +36,8 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 
 const billingEntitySchema = z.object({
   legalName: text(200),
-  registrationNumber: text(40).optional(),
+  // The company's registration number (in Bulgaria the EIK); the database requires it.
+  registrationNumber: text(40),
   vatNumber: text(40).optional(),
 });
 
@@ -115,7 +116,11 @@ export class OnboardingController {
   @HttpCode(201)
   billingEntity(@CurrentPrincipal() principal: Principal, @Body() body: unknown) {
     const data = parse(billingEntitySchema, body);
-    return this.run(principal, (tx) => createBillingEntity(tx, data));
+    return this.run(
+      principal,
+      (tx) => createBillingEntity(tx, data),
+      'a company with this registration number already exists',
+    );
   }
 
   @Post('schools')

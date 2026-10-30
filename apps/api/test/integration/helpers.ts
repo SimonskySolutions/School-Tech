@@ -65,3 +65,54 @@ export async function payAndWait(token: string, placed: CheckoutResponse): Promi
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
+
+const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? 'http://keycloak:8080';
+
+/** Stands in for a new person completing first sign-in: sets their own password, then signs in. */
+export async function finishFirstSignIn(username: string, password: string): Promise<string> {
+  const admin = await fetch(`${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'admin-cli',
+      username: 'admin',
+      password: secret('keycloak_admin_password'),
+    }),
+  });
+  const { access_token: adminToken } = (await admin.json()) as { access_token: string };
+  const call = (path: string, init: RequestInit = {}) =>
+    fetch(`${KEYCLOAK_URL}/admin/realms/pythagoras${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    });
+  const [user] = (await (
+    await call(`/users?username=${encodeURIComponent(username)}&exact=true`)
+  ).json()) as {
+    id: string;
+  }[];
+  await call(`/users/${user!.id}`, { method: 'PUT', body: JSON.stringify({ requiredActions: [] }) });
+  await call(`/users/${user!.id}/reset-password`, {
+    method: 'PUT',
+    body: JSON.stringify({ type: 'password', value: password, temporary: false }),
+  });
+  const signedIn = await fetch(`${KEYCLOAK_URL}/realms/pythagoras/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'pythagoras-dev-tests',
+      username,
+      password,
+    }),
+  });
+  if (!signedIn.ok) throw new Error(`first sign-in for ${username}: ${signedIn.status}`);
+  return ((await signedIn.json()) as { access_token: string }).access_token;
+}
+
+export async function post<T>(token: string, path: string, body?: unknown) {
+  const response = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as T & { message?: string } };
+}

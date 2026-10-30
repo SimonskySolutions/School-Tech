@@ -93,7 +93,7 @@ export async function overview(tx: PersonTransaction): Promise<OnboardingOvervie
   const billingEntities = await tx.query<{
     id: string;
     legal_name: string;
-    registration_number: string | null;
+    registration_number: string;
     status: string;
   }>(
     `SELECT id, legal_name, registration_number, status FROM org.legal_entity
@@ -126,12 +126,12 @@ async function school(tx: PersonTransaction, schoolId: string): Promise<SchoolFa
 
 export async function createBillingEntity(
   tx: PersonTransaction,
-  body: { legalName: string; registrationNumber?: string; vatNumber?: string },
+  body: { legalName: string; registrationNumber: string; vatNumber?: string },
 ): Promise<{ id: string }> {
   const [row] = await tx.query<{ id: string }>(
     `INSERT INTO org.legal_entity (group_id, legal_name, registration_number, vat_number)
      VALUES (access.current_group_id(), $1, $2, $3) RETURNING id`,
-    [body.legalName, body.registrationNumber ?? null, body.vatNumber ?? null],
+    [body.legalName, body.registrationNumber, body.vatNumber ?? null],
   );
   return row!;
 }

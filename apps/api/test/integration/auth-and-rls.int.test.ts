@@ -95,12 +95,15 @@ describe('each person sees their own world', () => {
     const me = body as Me;
     expect(me.person.givenName).toBe('Anna');
     expect(me.roles).toEqual([]);
+    // Children the families tests enrolled at "test-" schools may be there too.
     expect(
-      me.children.map((child) => [
-        child.givenName,
-        child.enrolments.map((e) => e.school.code),
-        child.capabilities.pay,
-      ]),
+      me.children
+        .filter((child) => child.enrolments.every((e) => !e.school.code.startsWith('test-')))
+        .map((child) => [
+          child.givenName,
+          child.enrolments.map((e) => e.school.code),
+          child.capabilities.pay,
+        ]),
     ).toEqual([
       ['Boris', ['school-c'], true],
       ['Mila', ['school-a'], true],
