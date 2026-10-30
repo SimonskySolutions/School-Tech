@@ -10,6 +10,7 @@ names=(
   pg_reporting_password pg_backup_password
   redis_queue_password redis_health_password redis_admin_password
   pg_keycloak_password keycloak_admin_password keycloak_web_client_secret keycloak_dev_user_password
+  keycloak_provisioning_client_secret
   web_session_secret dev_payments_secret
 )
 

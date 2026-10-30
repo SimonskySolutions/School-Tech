@@ -97,6 +97,11 @@ describe('API configuration', () => {
     ).toThrow(/pythagoras-dev-tests is a development-only client/);
   });
 
+  it('refuses temporary passwords for new accounts in production', () => {
+    expect(() => load({ NODE_ENV: 'production' })).toThrow(/ACCOUNT_SETUP: temporary passwords/);
+    expect(() => load({ NODE_ENV: 'production', ACCOUNT_SETUP: 'email' })).not.toThrow(/ACCOUNT_SETUP/);
+  });
+
   it('rejects an invalid port', () => {
     expect(() => load({ PORT: '70000' })).toThrow(/PORT/);
   });

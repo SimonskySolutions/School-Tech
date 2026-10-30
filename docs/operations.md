@@ -119,7 +119,9 @@ All accounts share one generated password, stored in `secrets/keycloak_dev_user_
 | `teodora.marinova@pythagoras.test` | Parent, request pending | Nothing until a principal verifies the relationship |
 | `unlinked@pythagoras.test` | None | Signs in to Keycloak, but has no person record: the platform must refuse it |
 
-The realm file `infra/keycloak/realm/pythagoras-realm.json` is a development realm: it contains these users and the `pythagoras-dev-tests` password-grant client. It is imported only when the realm does not exist yet; to reload it after editing, remove the realm in the admin console (or reset the `keycloak` database) and restart Keycloak.
+The realm file `infra/keycloak/realm/pythagoras-realm.json` is a development realm: it contains these users and the `pythagoras-dev-tests` password-grant client. It is imported only when the realm does not exist yet; after editing it, run `bash scripts/keycloak-reload-realm.sh` (deletes the realm and restarts Keycloak, which imports it again; synthetic users keep their ids, accounts created since are removed).
+
+**Accounts for new people (ADR 0016).** A group administrator creates a registered person's sign-in account with `POST /admin/people/<person id>/account`. The API uses the `pythagoras-provisioning` service account (secret `secrets/keycloak_provisioning_client_secret`, from `scripts/dev-secrets.sh`). In development the answer contains a one-time temporary password, which the person must change at first sign-in; it is shown only once. Production must set `ACCOUNT_SETUP=email` and configure SMTP in the realm (M7). If the API log says `PROVISIONING_CLIENT_SECRET not set`, accounts cannot be created.
 
 ## Payments
 

@@ -15,9 +15,10 @@ import { MeController } from './people/me.controller';
 import { SchoolLifeController } from './school-life/school-life.controller';
 import { ReportsController } from './reporting/reports.controller';
 import { OnboardingController } from './onboarding/onboarding.controller';
+import { AccountsModule } from './accounts/accounts.module';
 
 @Module({
-  imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule],
+  imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule, AccountsModule],
   controllers: [
     HealthController,
     MeController,

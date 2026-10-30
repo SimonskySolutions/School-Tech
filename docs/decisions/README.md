@@ -19,3 +19,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0013](0013-api-data-access-and-auth.md) | API data access and authentication | Accepted |
 | [0014](0014-web-sessions.md) | Web sign-in and sessions | Accepted |
 | [0015](0015-gateway-images-ci.md) | Gateway, production images and continuous integration | Accepted |
+| [0016](0016-accounts-for-new-people.md) | Sign-in accounts for people an administrator registers | Accepted |

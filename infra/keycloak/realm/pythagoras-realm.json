@@ -91,6 +91,21 @@
       "serviceAccountsEnabled": false
     },
     {
+      "clientId": "pythagoras-provisioning",
+      "name": "Pythagoras account provisioning",
+      "description": "Service account the API uses to create sign-in accounts for people an administrator registers. May create, find and update users only.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_PROVISIONING_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true
+    },
+    {
       "clientId": "pythagoras-dev-tests",
       "name": "DEVELOPMENT ONLY - automated tests",
       "description": "Password grant for automated tests against synthetic users. Must not exist in production.",
@@ -119,6 +134,7 @@
     }
   ],
   "users": [
+    { "username": "service-account-pythagoras-provisioning", "enabled": true, "serviceAccountClientId": "pythagoras-provisioning", "clientRoles": { "realm-management": ["manage-users", "view-users", "query-users"] } },
     { "id": "f1000000-0000-7000-8000-000000000001", "username": "ceo@pythagoras.test", "email": "ceo@pythagoras.test", "firstName": "Elena", "lastName": "Petrova", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000002", "username": "admin@pythagoras.test", "email": "admin@pythagoras.test", "firstName": "Georgi", "lastName": "Dimitrov", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },
     { "id": "f1000000-0000-7000-8000-000000000003", "username": "finance@pythagoras.test", "email": "finance@pythagoras.test", "firstName": "Maria", "lastName": "Koleva", "enabled": true, "emailVerified": true, "credentials": [{ "type": "password", "value": "${KC_DEV_USER_PASSWORD}", "temporary": false }] },

@@ -54,6 +54,19 @@ const schema = z
     // one is generated per process when unset.
     DEV_PAYMENTS_SECRET: z.string().min(32).optional(),
     DEV_PAYMENTS_PUBLIC_URL: z.url().default('http://api.pythagoras.localhost:53000'),
+
+    // M3.2: sign-in accounts for people an administrator registers, created
+    // through Keycloak's admin API by a service account that may manage users only.
+    KEYCLOAK_ADMIN_URL: z.url().default('http://keycloak:8080'),
+    KEYCLOAK_REALM: z
+      .string()
+      .regex(/^[a-z0-9-]{1,64}$/)
+      .default('pythagoras'),
+    PROVISIONING_CLIENT_ID: z.string().min(1).default('pythagoras-provisioning'),
+    PROVISIONING_CLIENT_SECRET: z.string().min(16).optional(),
+    // How a new person sets their first password: a one-time temporary password
+    // shown to the administrator (development only), or Keycloak's e-mail.
+    ACCOUNT_SETUP: z.enum(['temporary_password', 'email']).default('temporary_password'),
   })
   .superRefine((env, ctx) => {
     const production = env.NODE_ENV === 'production';
@@ -96,6 +109,13 @@ const schema = z
         });
       }
     }
+    if (env.ACCOUNT_SETUP === 'temporary_password' && production) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ACCOUNT_SETUP'],
+        message: 'temporary passwords shown to administrators are for development only',
+      });
+    }
     if (env.PAYMENT_PROVIDER === 'development' && production) {
       ctx.addIssue({
         code: 'custom',
@@ -124,6 +144,7 @@ const FILE_BACKED = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'DEV_PAYMENTS_SECRET',
+  'PROVISIONING_CLIENT_SECRET',
 ] as const;
 
 /** Resolves NAME_FILE variables (Docker secrets) into NAME, then validates. */

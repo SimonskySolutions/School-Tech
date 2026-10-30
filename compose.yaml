@@ -137,6 +137,7 @@ services:
       - keycloak_admin_password
       - keycloak_web_client_secret
       - keycloak_dev_user_password
+      - keycloak_provisioning_client_secret
     volumes:
       - ./infra/keycloak/entrypoint.sh:/opt/pythagoras/keycloak-entrypoint.sh:ro
       - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
@@ -216,9 +217,12 @@ services:
       # No Stripe keys in development: the development payment provider (ADR 0010).
       PAYMENT_PROVIDER: development
       DEV_PAYMENTS_SECRET_FILE: /run/secrets/dev_payments_secret
+      # Creates sign-in accounts for registered people (M3.2).
+      PROVISIONING_CLIENT_SECRET_FILE: /run/secrets/keycloak_provisioning_client_secret
     secrets:
       - pg_api_password
       - dev_payments_secret
+      - keycloak_provisioning_client_secret
     volumes: *workspace-volumes
     ports:
       - "127.0.0.1:${API_HOST_PORT:-53001}:3000"
@@ -363,6 +367,8 @@ secrets:
     file: ./secrets/web_session_secret
   dev_payments_secret:
     file: ./secrets/dev_payments_secret
+  keycloak_provisioning_client_secret:
+    file: ./secrets/keycloak_provisioning_client_secret
 
 volumes:
   pg_data:

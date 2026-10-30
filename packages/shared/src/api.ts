@@ -280,3 +280,12 @@ export interface CreateStaffRequest {
   email: string;
   roleCode: 'principal' | 'school_admin' | 'teacher' | 'kitchen';
 }
+
+/** A sign-in account was created for a registered person (M3.2). */
+export interface CreatedAccountResponse {
+  personId: string;
+  username: string;
+  /** temporary_password: development only; the person must change it at first sign-in. */
+  setup: 'temporary_password' | 'email';
+  temporaryPassword: string | null;
+}
