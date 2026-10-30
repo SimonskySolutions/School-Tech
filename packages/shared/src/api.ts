@@ -340,9 +340,25 @@ export interface AddGuardianResponse {
 }
 
 /** Everything the set-up page shows for one school (M3.4). */
+/** A school's own website (M3.5): live together with the school. */
+export interface SchoolWebsite {
+  websiteId: string;
+  code: string;
+  status: 'draft' | 'live' | 'archived';
+  cmsKey: string | null;
+  hostnames: { hostname: string; status: string }[];
+}
+
+export interface CreatedWebsiteResponse extends SchoolWebsite {
+  existing: boolean;
+  /** Whether the website's space in the CMS was added, already there, or could not be reached (try again). */
+  cms: 'created' | 'existing' | 'unavailable' | 'not_configured';
+}
+
 export interface SchoolSetup {
   school: OnboardingOverview['schools'][number];
   billingEntityName: string;
+  website: SchoolWebsite | null;
   serviceDefinitions: OnboardingOverview['serviceDefinitions'];
   offerings: {
     id: string;

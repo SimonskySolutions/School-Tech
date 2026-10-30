@@ -1,6 +1,6 @@
 import { lexicalHTMLField } from '@payloadcms/richtext-lexical';
 import type { CollectionConfig } from 'payload';
-import { publishedOrEditor, signedIn } from './access';
+import { contentEditor, publishedOrEditor } from './access';
 
 export const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -14,9 +14,9 @@ export const Pages: CollectionConfig = {
   versions: { drafts: true, maxPerDoc: 25 },
   access: {
     read: publishedOrEditor,
-    create: signedIn,
-    update: signedIn,
-    delete: signedIn,
+    create: contentEditor,
+    update: contentEditor,
+    delete: contentEditor,
   },
   fields: [
     { name: 'title', type: 'text', required: true, maxLength: 200 },

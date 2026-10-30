@@ -70,7 +70,7 @@ export async function seedDevelopment(payload: Payload): Promise<void> {
     });
   }
 
-  const users = await payload.count({ collection: 'users' });
+  const users = await payload.count({ collection: 'users', where: { role: { not_equals: 'platform' } } });
   if (users.totalDocs === 0) {
     const passwordFile = process.env.CMS_DEV_EDITOR_PASSWORD_FILE;
     if (!passwordFile) return;

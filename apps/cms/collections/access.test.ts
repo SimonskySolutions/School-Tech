@@ -1,6 +1,14 @@
 import type { Access } from 'payload';
 import { describe, expect, it } from 'vitest';
-import { adminsOnly, isAdmin, publishedOrEditor, selfOrAdmin, signedIn } from './access';
+import {
+  adminOrPlatform,
+  adminsOnly,
+  contentEditor,
+  isAdmin,
+  publishedOrEditor,
+  selfOrAdmin,
+  signedIn,
+} from './access';
 import { SLUG } from './pages';
 
 const as = (user: object | null) => ({ req: { user } }) as unknown as Parameters<Access>[0];
@@ -24,6 +32,16 @@ describe('website CMS access', () => {
     expect(isAdmin(null)).toBe(false);
     expect(adminsOnly(as(editor))).toBe(false);
     expect(adminsOnly(as(admin))).toBe(true);
+  });
+
+  it("lets the platform's service account add websites but never edit content", () => {
+    const platform = { id: 2, role: 'platform' };
+    expect(adminOrPlatform(as(platform))).toBe(true);
+    expect(adminOrPlatform(as(editor))).toBe(false);
+    expect(contentEditor(as(platform))).toBe(false);
+    expect(contentEditor(as(editor))).toBe(true);
+    expect(contentEditor(as(null))).toBe(false);
+    expect(publishedOrEditor(as(platform))).toEqual({ _status: { equals: 'published' } });
   });
 
   it('lets an editor see only their own account', () => {

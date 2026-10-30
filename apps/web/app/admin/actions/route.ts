@@ -26,6 +26,7 @@ const ACTIONS: Record<string, (form: Form, id: string) => { path: string; body?:
   'add-sessions': (form, id) => ({ path: `/admin/schools/${id}/sessions`, body: sessionsBody(form) }),
   'add-staff': (form, id) => ({ path: `/admin/schools/${id}/staff`, body: staffBody(form) }),
   activate: (_form, id) => ({ path: `/admin/schools/${id}/activate` }),
+  'create-website': (_form, id) => ({ path: `/admin/schools/${id}/website` }),
 };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

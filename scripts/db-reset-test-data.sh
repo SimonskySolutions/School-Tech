@@ -10,6 +10,19 @@ export MSYS_NO_PATHCONV=1
 
 docker compose exec -T -u postgres postgres psql -X -q -d pythagoras -f /opt/pythagoras/db/seeds/reset-test-data.sql
 
+# The test schools' websites in the CMS (keys "test-…"), with their pages.
+# Skipped until the CMS has created its tables.
+docker compose exec -T -u postgres postgres psql -X -q -v ON_ERROR_STOP=1 -d pythagoras_cms <<'SQL'
+DO $$
+BEGIN
+  IF to_regclass('public.websites') IS NOT NULL THEN
+    DELETE FROM _pages_v WHERE version_tenant_id IN (SELECT id FROM websites WHERE key LIKE 'test-%');
+    DELETE FROM pages WHERE tenant_id IN (SELECT id FROM websites WHERE key LIKE 'test-%');
+    DELETE FROM websites WHERE key LIKE 'test-%';
+  END IF;
+END $$;
+SQL
+
 # Sign-in accounts the tests created for those people (user names "test-…").
 docker compose exec -T keycloak bash -c '
   kcadm=/opt/keycloak/bin/kcadm.sh

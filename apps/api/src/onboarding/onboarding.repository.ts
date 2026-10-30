@@ -7,6 +7,7 @@ import {
   type OnboardingOverview,
   type PersonId,
   type SchoolSetup,
+  type SchoolWebsite,
   type SchoolId,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
@@ -293,7 +294,78 @@ export async function activateSchool(
   });
   if (missing.length > 0) throw new OnboardingRejected(409, `not ready: ${missing.join('; ')}`);
   await tx.query(`UPDATE org.school SET status = 'active' WHERE id = $1`, [target.id]);
+  // The school's own website goes live with it.
+  await tx.query(
+    `UPDATE org.website SET status = 'live'
+      WHERE status = 'draft'
+        AND id IN (SELECT website_id FROM org.website_school WHERE school_id = $1 AND is_primary_website_for_school)`,
+    [target.id],
+  );
   return schoolView(await school(tx, target.id));
+}
+
+async function websiteOf(tx: PersonTransaction, schoolId: string): Promise<SchoolWebsite | null> {
+  const [row] = await tx.query<{
+    id: string;
+    code: string;
+    status: SchoolWebsite['status'];
+    cms_tenant_key: string | null;
+    hostnames: { hostname: string; status: string }[];
+  }>(
+    `SELECT w.id, w.code, w.status, w.cms_tenant_key,
+            coalesce((SELECT json_agg(json_build_object('hostname', d.hostname, 'status', d.status) ORDER BY d.is_primary DESC, d.hostname)
+                        FROM org.website_domain d WHERE d.website_id = w.id), '[]') AS hostnames
+       FROM org.website_school ws JOIN org.website w ON w.id = ws.website_id
+      WHERE ws.school_id = $1 AND ws.is_primary_website_for_school`,
+    [schoolId],
+  );
+  return row
+    ? {
+        websiteId: row.id,
+        code: row.code,
+        status: row.status,
+        cmsKey: row.cms_tenant_key,
+        hostnames: row.hostnames,
+      }
+    : null;
+}
+
+/**
+ * Gives a school its own website (or returns the one it has): code and CMS key
+ * are the school's code; outside production it answers at once on
+ * <code>.<devDomain>. It goes live with the school.
+ */
+export async function createWebsite(
+  tx: PersonTransaction,
+  schoolId: string,
+  devDomain: string | null,
+): Promise<{ website: SchoolWebsite; existing: boolean; name: string }> {
+  const target = await school(tx, schoolId);
+  const existing = await websiteOf(tx, target.id);
+  if (existing) return { website: existing, existing: true, name: target.name };
+
+  const [created] = await tx.query<{ id: string }>(
+    `INSERT INTO org.website (group_id, code, name, purpose, default_locale, cms_tenant_key, status)
+     SELECT access.current_group_id(), s.code, s.name, 'school', s.default_locale, s.code,
+            CASE WHEN s.status = 'active' THEN 'live' ELSE 'draft' END
+       FROM org.school s WHERE s.id = $1
+     RETURNING id`,
+    [target.id],
+  );
+  await tx.query(
+    `INSERT INTO org.website_school (website_id, school_id, group_id, is_primary_website_for_school)
+     VALUES ($1, $2, access.current_group_id(), true)`,
+    [created!.id, target.id],
+  );
+  if (devDomain) {
+    // Local development addresses need no proof of ownership (.localhost and .test only, ADR 0011).
+    await tx.query(
+      `INSERT INTO org.website_domain (website_id, group_id, hostname, is_primary, verification_method, status, verified_at)
+       VALUES ($1, access.current_group_id(), $2, true, 'local_development', 'verified', now())`,
+      [created!.id, `${target.code}.${devDomain}`],
+    );
+  }
+  return { website: (await websiteOf(tx, target.id))!, existing: false, name: target.name };
 }
 
 /** One school with its offerings, calendars and staff, for the set-up page. */
@@ -358,6 +430,7 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
   return {
     school: schoolView(target),
     billingEntityName: company?.legal_name ?? '',
+    website: await websiteOf(tx, target.id),
     serviceDefinitions,
     offerings: offerings.map((row) => ({
       id: row.id,

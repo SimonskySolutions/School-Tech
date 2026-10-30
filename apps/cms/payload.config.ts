@@ -3,10 +3,11 @@ import { postgresAdapter } from '@payloadcms/db-postgres';
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant';
 import { lexicalEditor } from '@payloadcms/richtext-lexical';
 import { buildConfig } from 'payload';
-import { isAdmin } from './collections/access';
+import { isAdmin, isPlatform } from './collections/access';
 import { Pages } from './collections/pages';
 import { Users } from './collections/users';
 import { Websites } from './collections/websites';
+import { ensurePlatformAccount } from './platform';
 import { seedDevelopment } from './seed';
 
 // The website CMS (ADR 0017): its own database (pythagoras_cms) and role
@@ -54,13 +55,16 @@ export default buildConfig({
     multiTenantPlugin({
       tenantsSlug: 'websites',
       collections: { pages: {} },
-      userHasAccessToAllTenants: (user) => isAdmin(user),
+      // The platform's account must see every website to add a new one; its own
+      // rules still keep it from content and drafts.
+      userHasAccessToAllTenants: (user) => isAdmin(user) || isPlatform(user),
     }),
   ],
   graphQL: { disable: true },
   telemetry: false,
   typescript: { autoGenerate: false },
   onInit: async (payload) => {
+    await ensurePlatformAccount(payload);
     if (development) await seedDevelopment(payload);
   },
 });

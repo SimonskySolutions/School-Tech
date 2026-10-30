@@ -67,6 +67,16 @@ const schema = z
     // How a new person sets their first password: a one-time temporary password
     // shown to the administrator (development only), or Keycloak's e-mail.
     ACCOUNT_SETUP: z.enum(['temporary_password', 'email']).default('temporary_password'),
+
+    // M3.5: a school's website gets its space in the CMS through the CMS's
+    // platform service account (ADR 0017), and, outside production, a local
+    // address under this domain at once (real domains are verified, M3.6).
+    CMS_INTERNAL_URL: z.url().default('http://cms:3000'),
+    CMS_PLATFORM_API_KEY: z.string().min(16).optional(),
+    WEBSITE_DEV_DOMAIN: z
+      .string()
+      .regex(/^([a-z0-9-]+\.)*(localhost|test)$/, 'must end in .localhost or .test')
+      .default('pythagoras.localhost'),
   })
   .superRefine((env, ctx) => {
     const production = env.NODE_ENV === 'production';
@@ -145,6 +155,7 @@ const FILE_BACKED = [
   'STRIPE_WEBHOOK_SECRET',
   'DEV_PAYMENTS_SECRET',
   'PROVISIONING_CLIENT_SECRET',
+  'CMS_PLATFORM_API_KEY',
 ] as const;
 
 /** Resolves NAME_FILE variables (Docker secrets) into NAME, then validates. */

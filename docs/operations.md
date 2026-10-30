@@ -103,6 +103,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - School and group websites: `http://school-a.pythagoras.localhost:53000` (also `school-b`, `school-c`, and `pythagoras.localhost` for the group). They show the website's published CMS pages, or a start page built from the platform when there is none.
 - The CMS admin: `http://cms.pythagoras.localhost:53000/admin`, user `editor@pythagoras.test` with the development users' password (`secrets/keycloak_dev_user_password`). The development seed creates the four websites as tenants and School A's start page; drafts are never shown on the websites.
 - The CMS has its own database `pythagoras_cms` (role `pyth_cms`, secret `secrets/pg_cms_password`) and session secret (`secrets/cms_payload_secret`). If you add the CMS to an existing installation: `bash scripts/dev-secrets.sh`, `docker compose up -d --force-recreate postgres`, `bash scripts/db-bootstrap.sh`, then `docker compose up -d cms`.
+- A new school's website: on the school's set-up page, "Create the school's website". It answers on `http://<school code>.pythagoras.localhost:53000` once the school is active. The API adds its space in the CMS with the platform key (`secrets/cms_platform_api_key`, shared by the API and the CMS).
 - The CMS log shows many `watch error … No such file or directory` lines from the development file watcher; they are harmless.
 
 ## Development data and accounts

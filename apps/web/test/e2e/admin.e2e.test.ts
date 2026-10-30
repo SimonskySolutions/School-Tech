@@ -138,12 +138,30 @@ describe('setting up a school in the web app', () => {
     expect(setup).toContain('Vera Principal (Principal, ' + email + '): can sign in');
     expect(setup).not.toContain(password);
 
+    // The school's website: created now, offline until the school is live.
+    const siteHost = `test-${run}-web.pythagoras.localhost`;
+    const website = await act(browser, { action: 'create-website', back, school_id: schoolId });
+    setup = await page(browser, website.headers.get('location')!);
+    expect(setup).toContain('Website created.');
+    expect(setup).toContain('Goes live when the school is activated');
+    expect(setup).toContain(`${siteHost} (verified)`);
+    const visit = () => fetch('http://web:3000/', { headers: { 'x-forwarded-host': `${siteHost}:53000` } });
+    expect((await visit()).status).toBe(404);
+
     // Ready: activate.
     expect(activateDisabled(setup)).toBe(false);
     const activated = await act(browser, { action: 'activate', back, school_id: schoolId });
     const live = await page(browser, activated.headers.get('location')!);
     expect(live).toContain('The school is live');
     expect(live).toContain('Status: active.');
+    expect(live).toContain(`href="http://${siteHost}:53000"`);
+
+    // Its website now answers, with the start page built from the platform.
+    const site = await visit();
+    expect(site.status).toBe(200);
+    const html = await site.text();
+    expect(html).toContain('data-testid="default-page"');
+    expect(html).toContain(`Welcome to School W ${run}.`);
   });
 
   it('keeps principals out and refuses forms from other sites', async () => {

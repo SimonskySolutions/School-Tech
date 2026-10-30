@@ -15,6 +15,11 @@ Every school, and the group, has a public website (the brief names Payload). Add
 - **Public pages are rendered by the web app.** For a request on a website host, `apps/web` resolves the host with `org.resolve_hostname` (only verified domains of live websites, ADR 0011) and reads that tenant's published pages from the CMS REST API over the internal network. Drafts are never served: the public read rule in Payload returns published versions only. Website hosts are served by `apps/web`; the CMS admin has its own host (`cms.pythagoras.localhost` in development).
 - **Editors' sign-in.** In M3.5 editors use Payload's own accounts, created by an administrator (a seeded development editor). Before production, editors sign in through Keycloak (OpenID Connect) so staff have one account and leavers are removed in one place; this is an open item, not built yet.
 
+## As built (M3.5, 2026-10-30)
+
+- A school's website is created by a group administrator from the school's set-up page. Its code and CMS key are the school's code; outside production it answers at once on `<code>.pythagoras.localhost` (a `local_development` domain, which the database allows only for `.localhost` and `.test`). It is a draft while the school is, and goes live when the school is activated.
+- The website's tenant in the CMS is added by the API as the CMS's **platform service account**, which signs in with an API key (secret `cms_platform_api_key`). Its role may add websites and nothing else: it cannot create, change or delete pages, delete websites, see drafts or see other accounts. The account is ensured at every CMS start, so rotating the key is a restart. The step is idempotent and runs outside the database transaction; repeating the request repairs a missed step.
+
 ## Consequences
 
 - One more service, database and backup target: `scripts/db-backup.sh` must include `pythagoras_cms` before production (M8), and the restore check must cover it.

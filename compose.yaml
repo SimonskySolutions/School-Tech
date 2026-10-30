@@ -222,10 +222,13 @@ services:
       DEV_PAYMENTS_SECRET_FILE: /run/secrets/dev_payments_secret
       # Creates sign-in accounts for registered people (M3.2).
       PROVISIONING_CLIENT_SECRET_FILE: /run/secrets/keycloak_provisioning_client_secret
+      # Adds a school's website to the CMS (M3.5).
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
     secrets:
       - pg_api_password
       - dev_payments_secret
       - keycloak_provisioning_client_secret
+      - cms_platform_api_key
     volumes: *workspace-volumes
     ports:
       - "127.0.0.1:${API_HOST_PORT:-53001}:3000"
@@ -312,11 +315,14 @@ services:
       PAYLOAD_SECRET_FILE: /run/secrets/cms_payload_secret
       # Development only: the seeded administrator editor@pythagoras.test uses the dev users' password.
       CMS_DEV_EDITOR_PASSWORD_FILE: /run/secrets/keycloak_dev_user_password
+      # The platform's service account adds a school's website here (ADR 0017).
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
       NEXT_TELEMETRY_DISABLED: "1"
     secrets:
       - pg_cms_password
       - cms_payload_secret
       - keycloak_dev_user_password
+      - cms_platform_api_key
     volumes: *workspace-volumes
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/websites?limit=1').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
@@ -395,6 +401,8 @@ secrets:
     file: ./secrets/pg_cms_password
   cms_payload_secret:
     file: ./secrets/cms_payload_secret
+  cms_platform_api_key:
+    file: ./secrets/cms_platform_api_key
   keycloak_admin_password:
     file: ./secrets/keycloak_admin_password
   keycloak_web_client_secret:

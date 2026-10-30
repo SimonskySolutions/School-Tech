@@ -115,7 +115,8 @@ export const DONE: Record<string, string> = {
   'add-offering': 'Offering added with its first price.',
   'add-sessions': 'Calendar added.',
   'add-staff': 'Staff member registered. Create their sign-in account when they are ready.',
-  activate: 'The school is live: parents and staff can now see it.',
+  activate: 'The school is live: parents and staff can now see it, and so is its website.',
+  'create-website': 'Website created. Editors can add its pages in the CMS.',
 };
 
 /** The address to go back to, never anywhere outside the set-up pages. */

@@ -43,7 +43,10 @@ DELETE FROM catalog.price_version
 DELETE FROM catalog.policy_version
  WHERE offering_id IN (SELECT id FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school));
 DELETE FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school);
-DELETE FROM org.website_school WHERE school_id IN (SELECT id FROM test_school);
+DELETE FROM org.website_domain WHERE website_id IN (SELECT id FROM org.website WHERE code LIKE 'test-%');
+DELETE FROM org.website_school
+ WHERE school_id IN (SELECT id FROM test_school) OR website_id IN (SELECT id FROM org.website WHERE code LIKE 'test-%');
+DELETE FROM org.website WHERE code LIKE 'test-%';
 DELETE FROM org.school WHERE id IN (SELECT id FROM test_school);
 DELETE FROM org.legal_entity e
  WHERE e.legal_name LIKE 'Test company %' AND NOT EXISTS (SELECT 1 FROM org.school s WHERE s.default_billing_entity_id = e.id);

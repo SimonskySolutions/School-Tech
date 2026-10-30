@@ -7,17 +7,23 @@ import {
   Get,
   HttpCode,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
+  Res,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { type OnboardingOverview } from '@pythagoras/shared';
+import { type CreatedWebsiteResponse, type OnboardingOverview } from '@pythagoras/shared';
+import { type Response } from 'express';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { asHttpError } from '../common/database-errors';
+import { ENV } from '../config/config.module';
+import { type Env } from '../config/env';
 import { Database, type PersonTransaction } from '../database/database';
+import { CMS_WEBSITES, type CmsWebsites } from './cms-websites';
 import {
   activateSchool,
   createBillingEntity,
@@ -25,6 +31,7 @@ import {
   createSchool,
   createSessions,
   createStaff,
+  createWebsite,
   OnboardingRejected,
   overview,
   schoolSetup,
@@ -106,7 +113,13 @@ function parse<T>(schema: z.ZodType<T>, body: unknown): T {
  */
 @Controller('admin')
 export class OnboardingController {
-  constructor(@Inject(Database) private readonly database: Database) {}
+  private readonly logger = new Logger(OnboardingController.name);
+
+  constructor(
+    @Inject(Database) private readonly database: Database,
+    @Inject(ENV) private readonly env: Env,
+    @Inject(CMS_WEBSITES) private readonly cms: CmsWebsites | null,
+  ) {}
 
   @Get('onboarding')
   overview(@CurrentPrincipal() principal: Principal): Promise<OnboardingOverview> {
@@ -171,6 +184,34 @@ export class OnboardingController {
   ) {
     const data = parse(staffSchema, body);
     return this.run(principal, (tx) => createStaff(tx, schoolId, principal.personId, data));
+  }
+
+  /** The school's own website: created once, live with the school, with its space in the CMS. */
+  @Post('schools/:schoolId/website')
+  async website(
+    @CurrentPrincipal() principal: Principal,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<CreatedWebsiteResponse> {
+    // Real domains are added and verified separately (M3.6); a local address only outside production.
+    const devDomain = this.env.NODE_ENV === 'production' ? null : this.env.WEBSITE_DEV_DOMAIN;
+    const { website, existing, name } = await this.run(
+      principal,
+      (tx) => createWebsite(tx, schoolId, devDomain),
+      'a website with this code already exists',
+    );
+    response.status(existing ? 200 : 201);
+    let cms: CreatedWebsiteResponse['cms'] = 'not_configured';
+    if (this.cms && website.cmsKey) {
+      // Outside the database transaction; asking again later repairs a missed step.
+      cms = await this.cms.ensureWebsite(website.cmsKey, name).catch((error: unknown) => {
+        this.logger.warn(
+          `CMS website ${website.cmsKey}: ${error instanceof Error ? error.message : 'unknown'}`,
+        );
+        return 'unavailable' as const;
+      });
+    }
+    return { ...website, existing, cms };
   }
 
   @Post('schools/:schoolId/activate')

@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload';
-import { adminsOnly } from './access';
+import { adminOrPlatform, adminsOnly } from './access';
 
 /**
  * One tenant per website. `key` is the platform's org.website.cms_tenant_key,
@@ -11,7 +11,7 @@ export const Websites: CollectionConfig = {
   access: {
     // A website's name and key are public, like the website itself.
     read: () => true,
-    create: adminsOnly,
+    create: adminOrPlatform,
     update: adminsOnly,
     delete: adminsOnly,
   },

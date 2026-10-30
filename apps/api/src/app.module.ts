@@ -18,6 +18,9 @@ import { OnboardingController } from './onboarding/onboarding.controller';
 import { AccountsModule } from './accounts/accounts.module';
 import { FamiliesController } from './families/families.controller';
 import { SitesController } from './org/sites.controller';
+import { CMS_WEBSITES, CmsWebsitesClient } from './onboarding/cms-websites';
+import { ENV } from './config/config.module';
+import { type Env } from './config/env';
 
 @Module({
   imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule, AccountsModule],
@@ -36,6 +39,16 @@ import { SitesController } from './org/sites.controller';
     OnboardingController,
     FamiliesController,
   ],
-  providers: [CheckoutService],
+  providers: [
+    CheckoutService,
+    {
+      provide: CMS_WEBSITES,
+      inject: [ENV],
+      useFactory: (env: Env) =>
+        env.CMS_PLATFORM_API_KEY
+          ? new CmsWebsitesClient(env.CMS_INTERNAL_URL, env.CMS_PLATFORM_API_KEY)
+          : null,
+    },
+  ],
 })
 export class AppModule {}

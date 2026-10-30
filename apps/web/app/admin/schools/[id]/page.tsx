@@ -33,8 +33,10 @@ export default async function SchoolSetupPage({
   if (result.kind === 'signed-out') redirect('/auth/sign-in');
   if (result.kind === 'not-found') notFound();
   if (result.kind !== 'ok') redirect('/admin/schools');
-  const { school, billingEntityName, serviceDefinitions, offerings, staff } = result.value;
+  const { school, billingEntityName, serviceDefinitions, offerings, staff, website } = result.value;
   const back = `/admin/schools/${school.id}`;
+  // Development addresses go through the gateway's port; production uses HTTPS on the default port.
+  const devPort = new URL(config.APP_URL).port ? `:${new URL(config.APP_URL).port}` : '';
   const bookable = serviceDefinitions.filter(
     (service) => service.kind === 'lunch' || service.kind === 'activity',
   );
@@ -73,6 +75,38 @@ export default async function SchoolSetupPage({
           </form>
         </section>
       ) : null}
+
+      <section aria-labelledby="website" data-testid="website">
+        <h2 id="website">Website</h2>
+        {website ? (
+          <>
+            <p>
+              {`${website.status === 'live' ? 'Live' : 'Goes live when the school is activated'}. Edit its pages in the CMS (website ${website.cmsKey ?? website.code}).`}
+            </p>
+            <ul>
+              {website.hostnames.map((entry) => (
+                <li key={entry.hostname}>
+                  {website.status === 'live' && entry.status === 'verified' ? (
+                    <a href={`http://${entry.hostname}${devPort}`}>{entry.hostname}</a>
+                  ) : (
+                    `${entry.hostname} (${entry.status})`
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <form method="post" action="/admin/actions">
+            <input type="hidden" name="action" value="create-website" />
+            <input type="hidden" name="school_id" value={school.id} />
+            <input type="hidden" name="back" value={back} />
+            <p>The school has no website yet. Its address will be based on its code, {school.code}.</p>
+            <button type="submit" data-testid="create-website">
+              Create the school&apos;s website
+            </button>
+          </form>
+        )}
+      </section>
 
       <section aria-labelledby="offerings">
         <h2 id="offerings">Offerings and prices</h2>

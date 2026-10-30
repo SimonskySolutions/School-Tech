@@ -10,6 +10,8 @@ export const Users: CollectionConfig = {
     maxLoginAttempts: 5,
     lockTime: 15 * 60 * 1000,
     cookies: { sameSite: 'Strict' },
+    // Only the platform's service account uses a key; people sign in with a password.
+    useAPIKey: true,
   },
   access: {
     read: selfOrAdmin,
@@ -28,6 +30,7 @@ export const Users: CollectionConfig = {
       options: [
         { label: 'Administrator (all websites, editors)', value: 'admin' },
         { label: 'Editor (assigned websites)', value: 'editor' },
+        { label: 'Platform service (adds websites only)', value: 'platform' },
       ],
       // Only an administrator can make someone an administrator.
       access: { update: ({ req }) => isAdmin(req.user), create: ({ req }) => isAdmin(req.user) },
