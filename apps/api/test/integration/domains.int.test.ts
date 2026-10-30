@@ -1,4 +1,5 @@
 import { type SchoolSetup, type WebsiteDomain } from '@pythagoras/shared';
+import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SystemDatabase } from '../../src/database/system-database';
 import { verifyDomains } from '../../src/worker/domain-verification';
@@ -170,5 +171,77 @@ describe('verification by the worker', () => {
     );
     expect(again.body.status).toBe('pending');
     expect((await allowed(other.body.hostname)).status).toBe(404);
+  });
+});
+
+describe('the daily re-check of a verified domain', () => {
+  let worker: Client;
+  const none = () => Promise.resolve([] as string[][]);
+  const record = (name: string) =>
+    Promise.resolve(
+      name === added.instructions?.name || name === `_pythagoras-verify.${domain}` ? [[value]] : [],
+    );
+  let value: string;
+  const entry = async () => (await setup()).website!.hostnames.find((d) => d.hostname === domain)!;
+  /** Makes the domain due for its daily check, and optionally its record missing for longer. */
+  const age = (missingDays?: number) =>
+    worker.query(
+      `UPDATE org.website_domain SET last_checked_at = now() - interval '25 hours'
+         ${missingDays === undefined ? '' : `, missing_since = now() - make_interval(days => ${missingDays})`}
+        WHERE hostname = $1`,
+      [domain],
+    );
+
+  beforeAll(async () => {
+    worker = new Client({
+      host: 'postgres',
+      database: 'pythagoras',
+      user: 'pyth_worker',
+      password: secret('pg_worker_password'),
+    });
+    await worker.connect();
+    const { rows } = await worker.query<{ verification_token: string }>(
+      'SELECT verification_token FROM org.website_domain WHERE hostname = $1',
+      [domain],
+    );
+    value = `pythagoras-site-verification=${rows[0]!.verification_token}`;
+  });
+
+  afterAll(async () => {
+    await worker.end();
+  });
+
+  it('keeps serving the domain when the record goes missing, and warns with a date', async () => {
+    await age();
+    await verifyDomains(system, none);
+    const now = await entry();
+    expect(now.status).toBe('verified');
+    expect(now.missingSince).not.toBeNull();
+    expect(Date.parse(now.stopsAt!) - Date.parse(now.missingSince!)).toBe(3 * 86_400_000);
+    expect(now.instructions?.name).toBe(`_pythagoras-verify.${domain}`);
+    expect((await allowed(domain)).status).toBe(200);
+  });
+
+  it('clears the warning when the record is back in time', async () => {
+    await age();
+    await verifyDomains(system, record);
+    expect(await entry()).toMatchObject({ status: 'verified', missingSince: null, instructions: null });
+  });
+
+  it('stops the domain after the grace period, and serves it again once proven again', async () => {
+    await age();
+    await verifyDomains(system, none);
+    await age(4);
+    const result = await verifyDomains(system, none);
+    expect(result.lost).toBeGreaterThanOrEqual(1);
+    expect((await entry()).status).toBe('failed');
+    expect((await allowed(domain)).status).toBe(404);
+    expect((await resolve(domain)).status).toBe(404);
+
+    const failed = await entry();
+    await post(tokens.admin!, `/admin/schools/${schoolId}/website/domains/${failed.id}/check`);
+    await verifyDomains(system, record);
+    expect(await entry()).toMatchObject({ status: 'verified', missingSince: null });
+    expect((await allowed(domain)).status).toBe(200);
   });
 });

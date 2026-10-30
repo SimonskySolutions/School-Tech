@@ -359,7 +359,10 @@ export interface WebsiteDomain {
   status: 'pending' | 'verified' | 'failed' | 'disabled';
   method: 'dns_txt' | 'http_token' | 'local_development';
   lastCheckedAt: string | null;
-  /** The DNS record the school must create, while the domain is not verified yet. */
+  /** A verified domain whose record a daily re-check did not find: when that started, and when the domain stops. */
+  missingSince: string | null;
+  stopsAt: string | null;
+  /** The DNS record the school must create (or put back), while it is needed. */
   instructions: { type: 'TXT'; name: string; value: string } | null;
 }
 

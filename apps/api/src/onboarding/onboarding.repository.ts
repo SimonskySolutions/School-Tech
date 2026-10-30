@@ -11,7 +11,7 @@ import {
   type SchoolId,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
-import { dnsInstructions, newToken } from '../org/domains';
+import { dnsInstructions, GRACE_DAYS, newToken } from '../org/domains';
 import { missingForActivation, schoolDays, weeklyDays } from './calendar';
 
 // Adding a school is data, not code (M3, db/tests/12_fourth_school.sql). Every
@@ -312,6 +312,7 @@ interface DomainRow {
   method: SchoolWebsite['hostnames'][number]['method'];
   token: string | null;
   last_checked_at: string | null;
+  missing_since: string | null;
 }
 
 function domainView(row: DomainRow): SchoolWebsite['hostnames'][number] {
@@ -321,15 +322,20 @@ function domainView(row: DomainRow): SchoolWebsite['hostnames'][number] {
     status: row.status,
     method: row.method,
     lastCheckedAt: row.last_checked_at,
+    missingSince: row.missing_since,
+    stopsAt: row.missing_since
+      ? new Date(Date.parse(row.missing_since) + GRACE_DAYS * 86_400_000).toISOString()
+      : null,
     instructions:
-      row.method === 'dns_txt' && row.status !== 'verified' && row.token
+      row.method === 'dns_txt' && row.token && (row.status !== 'verified' || row.missing_since)
         ? dnsInstructions(row.hostname, row.token)
         : null,
   };
 }
 
 const DOMAIN_COLUMNS = `id, hostname, status, verification_method AS method, verification_token AS token,
-  to_char(last_checked_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_checked_at`;
+  to_char(last_checked_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_checked_at,
+  to_char(missing_since, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS missing_since`;
 
 async function websiteOf(tx: PersonTransaction, schoolId: string): Promise<SchoolWebsite | null> {
   const [row] = await tx.query<{
@@ -393,7 +399,7 @@ export async function requestDomainCheck(
     throw new OnboardingRejected(422, 'development addresses need no check');
   }
   const [row] = await tx.query<DomainRow>(
-    `UPDATE org.website_domain SET status = 'pending', last_checked_at = NULL
+    `UPDATE org.website_domain SET status = 'pending', last_checked_at = NULL, missing_since = NULL
       WHERE id = $1 AND status IN ('pending', 'failed')
       RETURNING ${DOMAIN_COLUMNS}`,
     [domainId],

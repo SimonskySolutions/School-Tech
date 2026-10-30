@@ -54,7 +54,7 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
       return { affected: await expireReservations(database) };
     case 'org.verify-domains': {
       const result = await verifyDomains(database);
-      return { affected: result.verified + result.gaveUp };
+      return { affected: result.verified + result.gaveUp + result.lost };
     }
     default:
       throw new Error(`unknown maintenance job: ${job}`);

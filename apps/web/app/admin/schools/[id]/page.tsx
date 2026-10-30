@@ -108,10 +108,16 @@ export default async function SchoolSetupPage({
                   )}
                   {entry.instructions ? (
                     <div style={{ margin: '0.25rem 0 0.75rem' }}>
-                      <p style={{ margin: 0 }}>
-                        To prove the school owns this domain, add this record at its DNS provider. It is
-                        checked every few minutes; the website answers on the domain once it is found.
-                      </p>
+                      {entry.missingSince && entry.stopsAt ? (
+                        <p role="alert" data-testid="record-missing" style={{ margin: 0, color: '#9b1c1c' }}>
+                          {`The DNS record below has not been found since ${entry.missingSince.slice(0, 10)}. Put it back before ${entry.stopsAt.slice(0, 10)}, or the website stops answering on this domain. Verified domains are checked once a day.`}
+                        </p>
+                      ) : (
+                        <p style={{ margin: 0 }}>
+                          To prove the school owns this domain, add this record at its DNS provider. It is
+                          checked every few minutes; the website answers on the domain once it is found.
+                        </p>
+                      )}
                       <table style={{ borderCollapse: 'collapse' }}>
                         <tbody>
                           <tr>
@@ -134,13 +140,15 @@ export default async function SchoolSetupPage({
                           </tr>
                         </tbody>
                       </table>
-                      <form method="post" action="/admin/actions">
-                        <input type="hidden" name="action" value="check-domain" />
-                        <input type="hidden" name="school_id" value={school.id} />
-                        <input type="hidden" name="domain_id" value={entry.id} />
-                        <input type="hidden" name="back" value={back} />
-                        <button type="submit">Check again now</button>
-                      </form>
+                      {entry.status !== 'verified' ? (
+                        <form method="post" action="/admin/actions">
+                          <input type="hidden" name="action" value="check-domain" />
+                          <input type="hidden" name="school_id" value={school.id} />
+                          <input type="hidden" name="domain_id" value={entry.id} />
+                          <input type="hidden" name="back" value={back} />
+                          <button type="submit">Check again now</button>
+                        </form>
+                      ) : null}
                     </div>
                   ) : null}
                 </li>

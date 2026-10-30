@@ -13,6 +13,10 @@ export const VALUE_PREFIX = 'pythagoras-site-verification=';
 export const CHECK_EVERY_MINUTES = 5;
 export const GIVE_UP_AFTER_DAYS = 14;
 
+/** Verified domains are checked again this often; a record missing longer than the grace period stops the domain. */
+export const RECHECK_EVERY_HOURS = 24;
+export const GRACE_DAYS = 3;
+
 const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 
 export class DomainProblem extends Error {}
