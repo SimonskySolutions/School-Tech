@@ -1,4 +1,5 @@
 import { type SystemDatabase } from '../database/system-database';
+import { verifyDomains } from './domain-verification';
 import { expireReservations } from './reservations';
 
 // Scheduled housekeeping, run by the "maintenance" queue. Each job calls one
@@ -23,6 +24,12 @@ export const MAINTENANCE_SCHEDULES = [
     jobName: 'commerce.expire-reservations',
     pattern: '* * * * *',
   },
+  {
+    // Real website domains become verified once their DNS record is found (ADR 0018).
+    id: 'domain-verification',
+    jobName: 'org.verify-domains',
+    pattern: '* * * * *',
+  },
 ] as const;
 
 export type MaintenanceJob = (typeof MAINTENANCE_SCHEDULES)[number]['jobName'];
@@ -45,6 +52,10 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
     }
     case 'commerce.expire-reservations':
       return { affected: await expireReservations(database) };
+    case 'org.verify-domains': {
+      const result = await verifyDomains(database);
+      return { affected: result.verified + result.gaveUp };
+    }
     default:
       throw new Error(`unknown maintenance job: ${job}`);
   }

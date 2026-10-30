@@ -161,6 +161,15 @@ The API image also runs the worker: `docker run pythagoras-api node dist/worker/
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the code checks, builds both images, and runs every suite against the full stack on each push and on pull requests into `Dev` and `main` (ADR 0015).
 
+### Real domains for school websites (ADR 0018)
+
+On the school's set-up page, an administrator adds the domain (for example `www.school-d.bg`) and gives the school's IT contact two DNS changes:
+
+1. **Proof of control:** the TXT record shown on the page, name `_pythagoras-verify.<domain>`, value `pythagoras-site-verification=<token>`.
+2. **Pointing the domain at the platform:** an A/AAAA record (or a CNAME) for the domain to the production gateway.
+
+The worker checks pending domains every minute (each at most every five minutes) and marks the domain verified when the TXT record is found; "Check again now" asks for the next run. After 14 days without the record a domain becomes "failed"; fix the record and check again. Once verified, and the school's website is live, the website answers on the domain and the gateway obtains its HTTPS certificate on the first visit. The TXT record can stay; it is not checked again yet.
+
 ### Production gateway
 
 `infra/gateway/Caddyfile.production` serves HTTPS. It needs `ACME_EMAIL`, `AUTH_HOST` and `API_HOST`, and DNS records pointing the identity, API and every school domain at the gateway host, with ports 80 and 443 open for certificate issuance. School domains get certificates only once the platform lists them as verified domains of a live website.

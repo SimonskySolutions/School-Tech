@@ -15,6 +15,13 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const grid = { display: 'grid', gap: '0.5rem', maxWidth: '30rem' } as const;
 
+const DOMAIN_STATUS: Record<string, string> = {
+  pending: 'waiting for the DNS record',
+  verified: 'verified',
+  failed: 'not verified in 14 days: check the record, then check again',
+  disabled: 'disabled',
+};
+
 /** Setting up one school: offerings and prices, calendars, staff, activation (M3.4). */
 export default async function SchoolSetupPage({
   params,
@@ -83,17 +90,72 @@ export default async function SchoolSetupPage({
             <p>
               {`${website.status === 'live' ? 'Live' : 'Goes live when the school is activated'}. Edit its pages in the CMS (website ${website.cmsKey ?? website.code}).`}
             </p>
-            <ul>
+            <ul data-testid="domains">
               {website.hostnames.map((entry) => (
-                <li key={entry.hostname}>
+                <li key={entry.id} data-testid={`domain-${entry.hostname}`}>
                   {website.status === 'live' && entry.status === 'verified' ? (
-                    <a href={`http://${entry.hostname}${devPort}`}>{entry.hostname}</a>
+                    <a
+                      href={
+                        entry.method === 'local_development'
+                          ? `http://${entry.hostname}${devPort}`
+                          : `https://${entry.hostname}`
+                      }
+                    >
+                      {entry.hostname}
+                    </a>
                   ) : (
-                    `${entry.hostname} (${entry.status})`
+                    `${entry.hostname} (${DOMAIN_STATUS[entry.status] ?? entry.status})`
                   )}
+                  {entry.instructions ? (
+                    <div style={{ margin: '0.25rem 0 0.75rem' }}>
+                      <p style={{ margin: 0 }}>
+                        To prove the school owns this domain, add this record at its DNS provider. It is
+                        checked every few minutes; the website answers on the domain once it is found.
+                      </p>
+                      <table style={{ borderCollapse: 'collapse' }}>
+                        <tbody>
+                          <tr>
+                            <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Type</th>
+                            <td>
+                              <code>{entry.instructions.type}</code>
+                            </td>
+                          </tr>
+                          <tr>
+                            <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Name</th>
+                            <td>
+                              <code data-testid="dns-name">{entry.instructions.name}</code>
+                            </td>
+                          </tr>
+                          <tr>
+                            <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Value</th>
+                            <td>
+                              <code data-testid="dns-value">{entry.instructions.value}</code>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <form method="post" action="/admin/actions">
+                        <input type="hidden" name="action" value="check-domain" />
+                        <input type="hidden" name="school_id" value={school.id} />
+                        <input type="hidden" name="domain_id" value={entry.id} />
+                        <input type="hidden" name="back" value={back} />
+                        <button type="submit">Check again now</button>
+                      </form>
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
+            <form method="post" action="/admin/actions" data-testid="add-domain" style={grid}>
+              <input type="hidden" name="action" value="add-domain" />
+              <input type="hidden" name="school_id" value={school.id} />
+              <input type="hidden" name="back" value={back} />
+              <label>
+                Add the school&apos;s own domain{' '}
+                <input name="hostname" required maxLength={253} placeholder="www.school-d.bg" />
+              </label>
+              <button type="submit">Add the domain</button>
+            </form>
           </>
         ) : (
           <form method="post" action="/admin/actions">

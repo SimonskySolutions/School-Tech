@@ -145,6 +145,19 @@ describe('setting up a school in the web app', () => {
     expect(setup).toContain('Website created.');
     expect(setup).toContain('Goes live when the school is activated');
     expect(setup).toContain(`${siteHost} (verified)`);
+    // A real domain waits for its DNS record; the page says exactly which one.
+    const realDomain = `www.test-${run}-web.pythagoras-schools.bg`;
+    const addedDomain = await act(browser, {
+      action: 'add-domain',
+      back,
+      school_id: schoolId,
+      hostname: realDomain,
+    });
+    setup = await page(browser, addedDomain.headers.get('location')!);
+    expect(setup).toContain('Domain added.');
+    expect(setup).toContain(`${realDomain} (waiting for the DNS record)`);
+    expect(setup).toContain(`_pythagoras-verify.${realDomain}`);
+    expect(setup).toMatch(/data-testid="dns-value">pythagoras-site-verification=[A-Za-z0-9_-]{32}</);
     const visit = () => fetch('http://web:3000/', { headers: { 'x-forwarded-host': `${siteHost}:53000` } });
     expect((await visit()).status).toBe(404);
 

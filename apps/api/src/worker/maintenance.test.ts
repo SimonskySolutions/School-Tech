@@ -51,6 +51,7 @@ describe('maintenance jobs', () => {
       'audit-partitions',
       'inbound-payload-purge',
       'reservation-expiry',
+      'domain-verification',
     ]);
   });
 });

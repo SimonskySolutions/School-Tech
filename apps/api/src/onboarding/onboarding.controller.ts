@@ -23,9 +23,11 @@ import { asHttpError } from '../common/database-errors';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
 import { Database, type PersonTransaction } from '../database/database';
+import { DomainProblem, normaliseDomain } from '../org/domains';
 import { CMS_WEBSITES, type CmsWebsites } from './cms-websites';
 import {
   activateSchool,
+  addDomain,
   createBillingEntity,
   createOffering,
   createSchool,
@@ -34,6 +36,7 @@ import {
   createWebsite,
   OnboardingRejected,
   overview,
+  requestDomainCheck,
   schoolSetup,
 } from './onboarding.repository';
 
@@ -212,6 +215,40 @@ export class OnboardingController {
       });
     }
     return { ...website, existing, cms };
+  }
+
+  /** A real domain for the school's website: pending until the worker finds its DNS record (M3.6). */
+  @Post('schools/:schoolId/website/domains')
+  @HttpCode(201)
+  domain(
+    @CurrentPrincipal() principal: Principal,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Body() body: unknown,
+  ) {
+    const { hostname } = parse(z.object({ hostname: z.string().max(260) }), body);
+    let domain: string;
+    try {
+      domain = normaliseDomain(hostname);
+    } catch (error) {
+      if (error instanceof DomainProblem) throw new BadRequestException(error.message);
+      throw error;
+    }
+    return this.run(
+      principal,
+      (tx) => addDomain(tx, schoolId, domain),
+      'this domain is already used by a website',
+    );
+  }
+
+  /** Check a pending or failed domain again on the worker's next run. */
+  @Post('schools/:schoolId/website/domains/:domainId/check')
+  @HttpCode(200)
+  checkDomain(
+    @CurrentPrincipal() principal: Principal,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('domainId', new ParseUUIDPipe()) domainId: string,
+  ) {
+    return this.run(principal, (tx) => requestDomainCheck(tx, schoolId, domainId));
   }
 
   @Post('schools/:schoolId/activate')

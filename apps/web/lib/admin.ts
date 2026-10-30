@@ -117,6 +117,8 @@ export const DONE: Record<string, string> = {
   'add-staff': 'Staff member registered. Create their sign-in account when they are ready.',
   activate: 'The school is live: parents and staff can now see it, and so is its website.',
   'create-website': 'Website created. Editors can add its pages in the CMS.',
+  'add-domain': 'Domain added. Create the DNS record shown below; the domain is verified once it is found.',
+  'check-domain': 'The domain will be checked again within a minute.',
 };
 
 /** The address to go back to, never anywhere outside the set-up pages. */

@@ -119,6 +119,7 @@ describe('worker', () => {
       'audit-partitions': '0 3 1 * *',
       'inbound-payload-purge': '30 3 * * *',
       'reservation-expiry': '* * * * *',
+      'domain-verification': '* * * * *',
     });
   });
 

@@ -346,7 +346,18 @@ export interface SchoolWebsite {
   code: string;
   status: 'draft' | 'live' | 'archived';
   cmsKey: string | null;
-  hostnames: { hostname: string; status: string }[];
+  hostnames: WebsiteDomain[];
+}
+
+/** One address a website answers on (M3.6). Real domains wait for proof of ownership. */
+export interface WebsiteDomain {
+  id: string;
+  hostname: string;
+  status: 'pending' | 'verified' | 'failed' | 'disabled';
+  method: 'dns_txt' | 'http_token' | 'local_development';
+  lastCheckedAt: string | null;
+  /** The DNS record the school must create, while the domain is not verified yet. */
+  instructions: { type: 'TXT'; name: string; value: string } | null;
 }
 
 export interface CreatedWebsiteResponse extends SchoolWebsite {

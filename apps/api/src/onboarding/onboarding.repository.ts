@@ -11,6 +11,7 @@ import {
   type SchoolId,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
+import { dnsInstructions, newToken } from '../org/domains';
 import { missingForActivation, schoolDays, weeklyDays } from './calendar';
 
 // Adding a school is data, not code (M3, db/tests/12_fourth_school.sql). Every
@@ -304,30 +305,100 @@ export async function activateSchool(
   return schoolView(await school(tx, target.id));
 }
 
+interface DomainRow {
+  id: string;
+  hostname: string;
+  status: SchoolWebsite['hostnames'][number]['status'];
+  method: SchoolWebsite['hostnames'][number]['method'];
+  token: string | null;
+  last_checked_at: string | null;
+}
+
+function domainView(row: DomainRow): SchoolWebsite['hostnames'][number] {
+  return {
+    id: row.id,
+    hostname: row.hostname,
+    status: row.status,
+    method: row.method,
+    lastCheckedAt: row.last_checked_at,
+    instructions:
+      row.method === 'dns_txt' && row.status !== 'verified' && row.token
+        ? dnsInstructions(row.hostname, row.token)
+        : null,
+  };
+}
+
+const DOMAIN_COLUMNS = `id, hostname, status, verification_method AS method, verification_token AS token,
+  to_char(last_checked_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_checked_at`;
+
 async function websiteOf(tx: PersonTransaction, schoolId: string): Promise<SchoolWebsite | null> {
   const [row] = await tx.query<{
     id: string;
     code: string;
     status: SchoolWebsite['status'];
     cms_tenant_key: string | null;
-    hostnames: { hostname: string; status: string }[];
   }>(
-    `SELECT w.id, w.code, w.status, w.cms_tenant_key,
-            coalesce((SELECT json_agg(json_build_object('hostname', d.hostname, 'status', d.status) ORDER BY d.is_primary DESC, d.hostname)
-                        FROM org.website_domain d WHERE d.website_id = w.id), '[]') AS hostnames
+    `SELECT w.id, w.code, w.status, w.cms_tenant_key
        FROM org.website_school ws JOIN org.website w ON w.id = ws.website_id
       WHERE ws.school_id = $1 AND ws.is_primary_website_for_school`,
     [schoolId],
   );
-  return row
-    ? {
-        websiteId: row.id,
-        code: row.code,
-        status: row.status,
-        cmsKey: row.cms_tenant_key,
-        hostnames: row.hostnames,
-      }
-    : null;
+  if (!row) return null;
+  const domains = await tx.query<DomainRow>(
+    `SELECT ${DOMAIN_COLUMNS} FROM org.website_domain WHERE website_id = $1 ORDER BY is_primary DESC, hostname`,
+    [row.id],
+  );
+  return {
+    websiteId: row.id,
+    code: row.code,
+    status: row.status,
+    cmsKey: row.cms_tenant_key,
+    hostnames: domains.map(domainView),
+  };
+}
+
+/**
+ * Adds a real domain to a school's website (M3.6). It is pending until the
+ * worker finds the DNS record with its token; nothing routes to it before.
+ */
+export async function addDomain(
+  tx: PersonTransaction,
+  schoolId: string,
+  hostname: string,
+): Promise<SchoolWebsite['hostnames'][number]> {
+  const target = await school(tx, schoolId);
+  const website = await websiteOf(tx, target.id);
+  if (!website) throw new OnboardingRejected(409, "create the school's website first");
+  const [row] = await tx.query<DomainRow>(
+    `INSERT INTO org.website_domain (website_id, group_id, hostname, verification_method, verification_token, status)
+     VALUES ($1, access.current_group_id(), $2, 'dns_txt', $3, 'pending')
+     RETURNING ${DOMAIN_COLUMNS}`,
+    [website.websiteId, hostname, newToken()],
+  );
+  return domainView(row!);
+}
+
+/** Asks the worker to check a domain on its next run (a failed one is tried again). */
+export async function requestDomainCheck(
+  tx: PersonTransaction,
+  schoolId: string,
+  domainId: string,
+): Promise<SchoolWebsite['hostnames'][number]> {
+  const target = await school(tx, schoolId);
+  const website = await websiteOf(tx, target.id);
+  const domain = website?.hostnames.find((entry) => entry.id === domainId);
+  if (!website || !domain) throw new OnboardingRejected(404, "no such domain on this school's website");
+  if (domain.status === 'verified') return domain;
+  if (domain.method === 'local_development') {
+    throw new OnboardingRejected(422, 'development addresses need no check');
+  }
+  const [row] = await tx.query<DomainRow>(
+    `UPDATE org.website_domain SET status = 'pending', last_checked_at = NULL
+      WHERE id = $1 AND status IN ('pending', 'failed')
+      RETURNING ${DOMAIN_COLUMNS}`,
+    [domainId],
+  );
+  return row ? domainView(row) : domain;
 }
 
 /**

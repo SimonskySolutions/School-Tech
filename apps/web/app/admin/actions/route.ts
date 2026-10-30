@@ -27,6 +27,15 @@ const ACTIONS: Record<string, (form: Form, id: string) => { path: string; body?:
   'add-staff': (form, id) => ({ path: `/admin/schools/${id}/staff`, body: staffBody(form) }),
   activate: (_form, id) => ({ path: `/admin/schools/${id}/activate` }),
   'create-website': (_form, id) => ({ path: `/admin/schools/${id}/website` }),
+  'add-domain': (form, id) => ({
+    path: `/admin/schools/${id}/website/domains`,
+    body: { hostname: text(form, 'hostname') },
+  }),
+  'check-domain': (form, id) => {
+    const domainId = text(form, 'domain_id');
+    if (!UUID.test(domainId)) throw new FormProblem('no such domain');
+    return { path: `/admin/schools/${id}/website/domains/${domainId}/check` };
+  },
 };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

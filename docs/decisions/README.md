@@ -21,3 +21,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0015](0015-gateway-images-ci.md) | Gateway, production images and continuous integration | Accepted |
 | [0016](0016-accounts-for-new-people.md) | Sign-in accounts for people an administrator registers | Accepted |
 | [0017](0017-websites-with-payload.md) | School websites with Payload CMS | Accepted |
+| [0018](0018-real-domains.md) | Real domains for school websites | Accepted |
