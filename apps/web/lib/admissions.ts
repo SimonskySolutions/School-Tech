@@ -1,4 +1,6 @@
 import {
+  APPLICATION_NOTE_KINDS,
+  type ApplicationNoteKind,
   type ApplicationRequestBody,
   type ApplicationStatus,
   type IntakeRequestBody,
@@ -198,13 +200,52 @@ export function splitName(name: string | null): { givenName: string; familyName:
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   submitted: 'Submitted',
   under_review: 'Under review',
+  waitlisted: 'On the waiting list',
+  offered: 'Place offered',
+  accepted: 'Place accepted',
+  declined: 'Offer declined',
+  expired: 'Offer expired',
+  rejected: 'Not offered a place',
   withdrawn: 'Withdrawn',
 };
+
+export const APPLICATION_NOTE_LABELS: Record<ApplicationNoteKind, string> = {
+  note: 'Note',
+  interview: 'Interview',
+  assessment: 'Assessment',
+};
+
+/** Applications that no longer hold or wait for a place. */
+export const isFinished = (status: ApplicationStatus) =>
+  status === 'withdrawn' || status === 'rejected' || status === 'declined' || status === 'expired';
+
+/** The day an offer must be answered by. */
+export function offerBody(form: Form): { answerBy: string } {
+  const answerBy = text(form, 'answer_by');
+  if (!DAY.test(answerBy)) throw new FormProblem('give the date the family must answer by');
+  return { answerBy };
+}
+
+export function applicationNoteBody(form: Form): { kind: ApplicationNoteKind; body: string } {
+  const kind = text(form, 'kind');
+  if (!(APPLICATION_NOTE_KINDS as readonly string[]).includes(kind))
+    throw new FormProblem('choose what kind of note');
+  const body = text(form, 'body');
+  if (!body) throw new FormProblem('write the note');
+  if (body.length > 4000) throw new FormProblem('a note has at most 4000 characters');
+  return { kind: kind as ApplicationNoteKind, body };
+}
 
 export const APPLICATION_DONE: Record<string, string> = {
   applied: 'Application sent to the school.',
   withdrawn: 'Application withdrawn.',
   reviewed: 'Taken into review.',
+  offered: 'Place offered.',
+  waitlisted: 'Put on the waiting list.',
+  rejected: 'Marked as not offered a place.',
+  noted: 'Note added.',
+  accepted: 'Place accepted. The school will be in touch about the next steps.',
+  declined: 'Offer declined.',
   'intake-opened': 'Intake opened.',
   'intake-closed': 'Intake closed.',
 };

@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { APPLICATION_DONE, APPLICATION_STATUS_LABELS } from '../../../lib/admissions';
+import { APPLICATION_NOTE_KINDS } from '@pythagoras/shared';
+import {
+  APPLICATION_DONE,
+  APPLICATION_NOTE_LABELS,
+  APPLICATION_STATUS_LABELS,
+  isFinished,
+} from '../../../lib/admissions';
 import { fetchSchoolApplications } from '../../../lib/api-client';
 import { formatDay } from '../../../lib/school-life';
 import { currentSession, runtime } from '../../../lib/server';
@@ -72,7 +78,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
               <Link href={`/admissions/applications?intakeId=${intake.id}`}>
                 {`${intake.school.name}, grade ${intake.grade}, ${intake.schoolYear}`}
               </Link>
-              {`: ${intake.places} places, ${intake.applications.live} applications · ${intake.status === 'open' ? `open ${formatDay(intake.opensOn)} to ${formatDay(intake.closesOn)}` : 'closed'}`}
+              {`: ${intake.places} places, ${intake.free} free · ${intake.applications.live} applications, ${intake.applications.offered} offered, ${intake.applications.accepted} accepted, ${intake.applications.waitlisted} waiting · ${intake.status === 'open' ? `open ${formatDay(intake.opensOn)} to ${formatDay(intake.closesOn)}` : 'closed'}`}
               {intake.status === 'open' ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
                   <input type="hidden" name="action" value="close-intake" />
@@ -158,12 +164,85 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
               </li>
             </ul>
             {application.message ? <blockquote>{application.message}</blockquote> : null}
-            {application.status === 'submitted' ? (
-              <form method="post" action={action}>
-                <input type="hidden" name="action" value="review" />
+            {application.offerExpiresAt ? (
+              <p>{`Offer open until ${new Date(application.offerExpiresAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' })}`}</p>
+            ) : null}
+            {application.waitlistPosition ? (
+              <p>{`Number ${application.waitlistPosition} on the waiting list`}</p>
+            ) : null}
+            {application.notes.length > 0 ? (
+              <ul data-testid="application-notes">
+                {application.notes.map((note, index) => (
+                  <li key={index}>
+                    {`${APPLICATION_NOTE_LABELS[note.kind]}${note.author ? `, ${note.author}` : ''}, ${when(note.createdAt)}: ${note.body ?? '(erased)'}`}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {application.status === 'submitted' ? (
+                <form method="post" action={action}>
+                  <input type="hidden" name="action" value="review" />
+                  <input type="hidden" name="application_id" value={application.id} />
+                  <button type="submit" data-testid="review">
+                    Take into review
+                  </button>
+                </form>
+              ) : null}
+              {['submitted', 'under_review', 'waitlisted'].includes(application.status) ? (
+                <>
+                  <form method="post" action={action}>
+                    <input type="hidden" name="action" value="offer" />
+                    <input type="hidden" name="application_id" value={application.id} />
+                    <label>
+                      Answer by <input name="answer_by" type="date" required />
+                    </label>{' '}
+                    <button type="submit" data-testid="offer">
+                      Offer a place
+                    </button>
+                  </form>
+                  {application.status !== 'waitlisted' ? (
+                    <form method="post" action={action}>
+                      <input type="hidden" name="action" value="waitlist" />
+                      <input type="hidden" name="application_id" value={application.id} />
+                      <button type="submit" data-testid="waitlist">
+                        Waiting list
+                      </button>
+                    </form>
+                  ) : null}
+                  <form method="post" action={action}>
+                    <input type="hidden" name="action" value="reject" />
+                    <input type="hidden" name="application_id" value={application.id} />
+                    <button type="submit" data-testid="reject">
+                      No place
+                    </button>
+                  </form>
+                </>
+              ) : null}
+            </div>
+            {!isFinished(application.status) ? (
+              <form
+                method="post"
+                action={action}
+                style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem', marginTop: '0.5rem' }}
+              >
+                <input type="hidden" name="action" value="note" />
                 <input type="hidden" name="application_id" value={application.id} />
-                <button type="submit" data-testid="review">
-                  Take into review
+                <label>
+                  Kind{' '}
+                  <select name="kind" defaultValue="interview">
+                    {APPLICATION_NOTE_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {APPLICATION_NOTE_LABELS[kind]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Note (staff only) <textarea name="body" required rows={2} maxLength={4000} />
+                </label>
+                <button type="submit" data-testid="add-application-note">
+                  Add the note
                 </button>
               </form>
             ) : null}

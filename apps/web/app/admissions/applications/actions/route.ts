@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { FormProblem, text } from '../../../../lib/admin';
-import { intakeBody } from '../../../../lib/admissions';
+import { applicationNoteBody, intakeBody, offerBody } from '../../../../lib/admissions';
 import { writeApi } from '../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../lib/server';
 
@@ -38,6 +38,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       call = { path: '/admissions/intakes', body: intakeBody(form), done: 'intake-opened' };
     } else if (action === 'close-intake') {
       call = { path: `/admissions/intakes/${id('intake_id')}/close`, done: 'intake-closed' };
+    } else if (action === 'offer') {
+      call = {
+        path: `/admissions/applications/${id('application_id')}/offer`,
+        body: offerBody(form),
+        done: 'offered',
+      };
+    } else if (action === 'waitlist' || action === 'reject') {
+      const decision = action === 'waitlist' ? 'waitlisted' : 'rejected';
+      call = {
+        path: `/admissions/applications/${id('application_id')}/decision`,
+        body: { decision },
+        done: decision,
+      };
+    } else if (action === 'note') {
+      call = {
+        path: `/admissions/applications/${id('application_id')}/notes`,
+        body: applicationNoteBody(form),
+        done: 'noted',
+      };
     } else if (action === 'review') {
       call = { path: `/admissions/applications/${id('application_id')}/review`, done: 'reviewed' };
     } else {

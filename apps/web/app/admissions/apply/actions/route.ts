@@ -30,6 +30,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (action === 'apply') {
       call = { path: '/admissions/applications', body: applicationBody(form), done: 'applied' };
+    } else if (action === 'accept' || action === 'decline') {
+      const applicationId = text(form, 'application_id');
+      if (!UUID.test(applicationId)) return outcome({ error: 'no such application' });
+      call = {
+        path: `/admissions/applications/${applicationId}/answer`,
+        body: { accept: action === 'accept' },
+        done: action === 'accept' ? 'accepted' : 'declined',
+      };
     } else if (action === 'withdraw') {
       const applicationId = text(form, 'application_id');
       if (!UUID.test(applicationId)) return outcome({ error: 'no such application' });

@@ -17,6 +17,17 @@ function fakeDatabase(result: Record<string, number>) {
 }
 
 describe('maintenance jobs', () => {
+  it('expires admission offers past their deadline every minute', async () => {
+    const { database, calls } = fakeDatabase({ expired: 2 });
+    expect(await runMaintenance(database, 'admissions.expire-offers')).toEqual({ affected: 2 });
+    expect(calls).toEqual([
+      { actor: 'worker:offer-expiry', sql: 'SELECT admissions.expire_offers() AS expired' },
+    ]);
+    expect(
+      MAINTENANCE_SCHEDULES.find((schedule) => schedule.jobName === 'admissions.expire-offers')?.pattern,
+    ).toBe('* * * * *');
+  });
+
   it('creates audit partitions three months ahead', async () => {
     const { database, calls } = fakeDatabase({ created: 1 });
     expect(await runMaintenance(database, 'audit.ensure-partitions')).toEqual({ affected: 1 });
@@ -47,11 +58,13 @@ describe('maintenance jobs', () => {
 
   it('schedules only the jobs that need no human approval', () => {
     // Retention deletions wait for policies approved by the data protection officer (ADR 0006).
+    // Offer expiry only applies the deadline staff set on each offer (M5.3).
     expect(MAINTENANCE_SCHEDULES.map((schedule) => schedule.id)).toEqual([
       'audit-partitions',
       'inbound-payload-purge',
       'reservation-expiry',
       'domain-verification',
+      'offer-expiry',
     ]);
   });
 });

@@ -118,6 +118,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - A family that only sent an inquiry has no sign-in yet: on the inquiry, "Invite to apply" creates the parent's record and account. In development the next page shows a one-time temporary password to pass on by phone; production needs the e-mail set-up (`ACCOUNT_SETUP=email`, SMTP in M7). If the address is already known to the group nothing is created; a group administrator links the family by hand.
 - The seeded grade 1 intake at School A closes 90 days after the seed first ran; reseeding a fresh database moves it.
 
+### Offers and the waiting list (M5.3)
+
+- On `/admissions/applications` staff offer a place with the date the family must answer by (the offer runs to the end of that day, school time), put an application on the waiting list, or mark it as not offered a place. Staff notes on an application are never shown to the family.
+- An intake never has more offers out than places; when every place is offered or accepted, put further applications on the waiting list.
+- The family accepts or declines on "Apply for a place". The worker expires unanswered offers every minute (job `admissions.expire-offers`); a declined, expired or withdrawn place goes straight to the first on the waiting list, who has 14 days to answer. Closing the intake stops these automatic offers.
+- No e-mail tells a family about an offer yet (M7): contact them yourself when you offer a place.
+
 ### The School Life day (M4.8)
 
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.

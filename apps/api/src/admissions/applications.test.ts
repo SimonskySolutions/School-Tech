@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { applicationSchema, intakeSchema, inviteSchema } from './applications.controller';
+import {
+  answerSchema,
+  applicationNoteSchema,
+  applicationSchema,
+  decisionSchema,
+  intakeSchema,
+  inviteSchema,
+  offerSchema,
+} from './applications.controller';
 
 const INTAKE = 'db000000-0000-7000-8000-0000000000a1';
 const NOTICE = 'd9000000-0000-7000-8000-000000000001';
@@ -50,5 +58,17 @@ describe('applications', () => {
     expect(intakeSchema.safeParse({ ...intake, places: 0 }).success).toBe(false);
     expect(intakeSchema.safeParse({ ...intake, closesOn: '2026-10-01' }).success).toBe(false);
     expect(inviteSchema.safeParse({ givenName: 'Vera', familyName: '' }).success).toBe(false);
+  });
+});
+
+describe('offers and decisions', () => {
+  it('takes an answer date, known decisions, a yes or no, and staff note kinds', () => {
+    expect(offerSchema.safeParse({ answerBy: '2026-11-15' }).success).toBe(true);
+    expect(offerSchema.safeParse({ answerBy: 'next week' }).success).toBe(false);
+    expect(decisionSchema.safeParse({ decision: 'waitlisted' }).success).toBe(true);
+    expect(decisionSchema.safeParse({ decision: 'offered' }).success).toBe(false);
+    expect(answerSchema.safeParse({ accept: 'yes' }).success).toBe(false);
+    expect(applicationNoteSchema.safeParse({ kind: 'interview', body: 'Calm' }).success).toBe(true);
+    expect(applicationNoteSchema.safeParse({ kind: 'gossip', body: 'x' }).success).toBe(false);
   });
 });

@@ -990,7 +990,18 @@ export interface SchoolInquiries {
 
 /** Admissions M5.2 (ADR 0027): intakes and applications. */
 export type IntakeStatus = 'open' | 'closed';
-export type ApplicationStatus = 'submitted' | 'under_review' | 'withdrawn';
+export type ApplicationStatus =
+  | 'submitted'
+  | 'under_review'
+  | 'waitlisted'
+  | 'offered'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  | 'rejected'
+  | 'withdrawn';
+export const APPLICATION_NOTE_KINDS = ['note', 'interview', 'assessment'] as const;
+export type ApplicationNoteKind = (typeof APPLICATION_NOTE_KINDS)[number];
 
 export interface Intake {
   id: string;
@@ -1017,6 +1028,10 @@ export interface FamilyAdmissions {
     childName: string | null;
     status: ApplicationStatus;
     submittedAt: string;
+    /** While an offer is open: the end of the day it must be answered by. */
+    offerExpiresAt: string | null;
+    /** On the waiting list: 1 for the next to be offered a place. */
+    waitlistPosition: number | null;
   }[];
   notice: { id: string; version: number; text: string } | null;
 }
@@ -1034,7 +1049,11 @@ export interface ApplicationRequestBody {
 /** What admissions staff see at their schools. */
 export interface SchoolApplications {
   schools: { id: SchoolId; name: string }[];
-  intakes: (Intake & { applications: { live: number; withdrawn: number } })[];
+  intakes: (Intake & {
+    applications: { live: number; withdrawn: number; offered: number; accepted: number; waitlisted: number };
+    /** Places not offered or accepted. */
+    free: number;
+  })[];
   applications: {
     id: string;
     school: { id: SchoolId; name: string };
@@ -1045,6 +1064,10 @@ export interface SchoolApplications {
     message: string | null;
     noticeVersion: number;
     submittedAt: string;
+    offerExpiresAt: string | null;
+    waitlistPosition: number | null;
+    /** Assessment and interview notes: admissions staff only. */
+    notes: { kind: ApplicationNoteKind; author: string | null; body: string | null; createdAt: string }[];
   }[];
 }
 

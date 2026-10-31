@@ -120,7 +120,13 @@ describe('worker', () => {
       'inbound-payload-purge': '30 3 * * *',
       'reservation-expiry': '* * * * *',
       'domain-verification': '* * * * *',
+      'offer-expiry': '* * * * *',
     });
+  });
+
+  it('may expire admission offers, as its job does', async () => {
+    const { rows } = await worker.query<{ expired: number }>('SELECT admissions.expire_offers() AS expired');
+    expect(rows[0]!.expired).toBeGreaterThanOrEqual(0);
   });
 
   it('keeps audit-log partitions ready for the next three months', async () => {

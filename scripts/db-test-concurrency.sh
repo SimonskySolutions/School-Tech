@@ -177,3 +177,54 @@ rm -f "$first" "$second"
 
 $ok || exit 1
 echo "ok - two families racing for the last item in stock: one holds it, the other waited ${waited}s and was refused"
+
+# The same race for the last place of an intake (M5.3): two admissions staff
+# offer it to two different applications at the same moment.
+psql_su >/dev/null 2>&1 <<SQL
+BEGIN;
+INSERT INTO admissions.privacy_notice (id, group_id, version, notice_text, news_consent_text)
+VALUES ('9a000000-0000-7000-8000-0000000000c7', 'a0000000-0000-7000-8000-000000000001', 1,
+        repeat('Synthetic admissions notice. ', 3), 'News about open days (synthetic)');
+INSERT INTO admissions.intake (id, group_id, school_id, school_year, grade, places, opens_on, closes_on)
+VALUES ('9b000000-0000-7000-8000-0000000000c7', 'a0000000-0000-7000-8000-000000000001', '5c000000-0000-7000-8000-00000000000a',
+        '2027/28', '1', 1, current_date - 1, current_date + 30);
+INSERT INTO admissions.application (id, group_id, school_id, intake_id, applicant_person_id, child_given_name, child_family_name, child_birth_date, notice_id) VALUES
+  ('9c000000-0000-7000-8000-0000000000c1', 'a0000000-0000-7000-8000-000000000001', '5c000000-0000-7000-8000-00000000000a',
+   '9b000000-0000-7000-8000-0000000000c7', '20000000-0000-7000-8000-000000000001', 'Ana', 'Race', DATE '2021-01-01', '9a000000-0000-7000-8000-0000000000c7'),
+  ('9c000000-0000-7000-8000-0000000000c2', 'a0000000-0000-7000-8000-000000000001', '5c000000-0000-7000-8000-00000000000a',
+   '9b000000-0000-7000-8000-0000000000c7', '20000000-0000-7000-8000-000000000002', 'Bea', 'Race', DATE '2021-01-01', '9a000000-0000-7000-8000-0000000000c7');
+COMMIT;
+SQL
+
+offer() {
+  cat <<SQL
+BEGIN;
+SELECT test.as_person('$1');
+SELECT admissions.make_offer('$2', current_date + 7);
+$3
+COMMIT;
+SQL
+}
+first=$(mktemp); second=$(mktemp)
+# The principal of School A and the group administrator (see _fixtures.sql).
+offer 10000000-0000-7000-8000-000000000003 9c000000-0000-7000-8000-0000000000c1 'SELECT pg_sleep(3);' | psql_su >"$first" 2>&1 &
+first_pid=$!
+sleep 1
+started=$(date +%s)
+set +e
+offer 10000000-0000-7000-8000-000000000008 9c000000-0000-7000-8000-0000000000c2 '' | psql_su >"$second" 2>&1
+second_status=$?
+waited=$(( $(date +%s) - started ))
+wait "$first_pid"; first_status=$?
+set -e
+
+offers=$(psql_su -tAc "SELECT count(*) FROM admissions.application WHERE intake_id = '9b000000-0000-7000-8000-0000000000c7' AND status = 'offered'")
+ok=true
+[[ $first_status -eq 0 ]] || { echo "not ok - the first offer should be made"; cat "$first"; ok=false; }
+[[ $second_status -ne 0 ]] && grep -q "no place left in this intake" "$second" || { echo "not ok - the second offer should be refused"; cat "$second"; ok=false; }
+(( waited >= 1 )) || { echo "not ok - the second offer should have waited for the first (waited ${waited}s)"; ok=false; }
+[[ "$offers" == "1" ]] || { echo "not ok - expected exactly one offer, found $offers"; ok=false; }
+rm -f "$first" "$second"
+
+$ok || exit 1
+echo "ok - two offers racing for the last place of an intake: one made, the other waited ${waited}s and was refused"

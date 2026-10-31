@@ -14,6 +14,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  APPLICATION_NOTE_KINDS,
   type CreatedAccountResponse,
   type FamilyAdmissions,
   type SchoolApplications,
@@ -23,10 +24,14 @@ import { ACCOUNT_DIRECTORY, type AccountDirectory, AccountExists } from '../acco
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import {
+  addApplicationNote,
+  answerOffer,
   closeIntake,
+  decideApplication,
   familyAdmissions,
   inviteApplicant,
   linkApplicantLogin,
+  makeOffer,
   openIntake,
   reviewApplication,
   schoolApplications,
@@ -65,6 +70,13 @@ export const intakeSchema = z
   })
   .refine((body) => body.closesOn >= body.opensOn, { message: 'an intake closes after it opens' });
 export const inviteSchema = z.object({ givenName: name, familyName: name });
+export const offerSchema = z.object({ answerBy: day });
+export const decisionSchema = z.object({ decision: z.enum(['waitlisted', 'rejected']) });
+export const answerSchema = z.object({ accept: z.boolean() });
+export const applicationNoteSchema = z.object({
+  kind: z.enum(APPLICATION_NOTE_KINDS),
+  body: z.string().trim().min(1).max(4000),
+});
 const listSchema = z.object({ intakeId: z.uuid().optional() });
 
 /** Intakes, applications and invitations to apply (M5.2, ADR 0027). */
@@ -99,6 +111,18 @@ export class AdmissionsController {
     return run(this.database, principal, (tx) => withdrawApplication(tx, applicationId));
   }
 
+  /** The parent who applied accepts or declines an offer. */
+  @Post('applications/:applicationId/answer')
+  @HttpCode(200)
+  answer(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+    @Body() body: unknown,
+  ) {
+    const { accept } = parse(answerSchema, body);
+    return run(this.database, principal, (tx) => answerOffer(tx, applicationId, accept));
+  }
+
   /** Admissions staff: intakes and applications at their schools. */
   @Get('applications')
   applications(
@@ -123,6 +147,39 @@ export class AdmissionsController {
     @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
   ) {
     return run(this.database, principal, (tx) => reviewApplication(tx, applicationId));
+  }
+
+  @Post('applications/:applicationId/offer')
+  @HttpCode(200)
+  offer(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+    @Body() body: unknown,
+  ) {
+    const { answerBy } = parse(offerSchema, body);
+    return run(this.database, principal, (tx) => makeOffer(tx, applicationId, answerBy));
+  }
+
+  @Post('applications/:applicationId/decision')
+  @HttpCode(200)
+  decide(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+    @Body() body: unknown,
+  ) {
+    const { decision } = parse(decisionSchema, body);
+    return run(this.database, principal, (tx) => decideApplication(tx, applicationId, decision));
+  }
+
+  @Post('applications/:applicationId/notes')
+  @HttpCode(201)
+  note(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(applicationNoteSchema, body);
+    return run(this.database, principal, (tx) => addApplicationNote(tx, applicationId, data.kind, data.body));
   }
 
   @Post('intakes')

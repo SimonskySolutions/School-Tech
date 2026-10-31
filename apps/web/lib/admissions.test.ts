@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { FormProblem } from './admin';
 import {
   applicationBody,
+  applicationNoteBody,
+  isFinished,
+  offerBody,
   closeBody,
   inquiryBody,
   intakeBody,
@@ -132,5 +135,23 @@ describe('applications in the portal', () => {
     expect(splitName('Ana Maria Popova')).toEqual({ givenName: 'Ana Maria', familyName: 'Popova' });
     expect(splitName('Cher')).toEqual({ givenName: 'Cher', familyName: '' });
     expect(() => inviteBody(form({ given_name: 'Cher', family_name: '' }))).toThrow(FormProblem);
+  });
+});
+
+describe('offers in the portal', () => {
+  it('reads the answer date and staff notes, and knows which applications are finished', () => {
+    expect(offerBody(form({ answer_by: '2026-11-15' }))).toEqual({ answerBy: '2026-11-15' });
+    expect(() => offerBody(form({ answer_by: '' }))).toThrow(FormProblem);
+    expect(applicationNoteBody(form({ kind: 'assessment', body: 'Reads fluently' }))).toEqual({
+      kind: 'assessment',
+      body: 'Reads fluently',
+    });
+    expect(() => applicationNoteBody(form({ kind: 'note', body: '' }))).toThrow(FormProblem);
+    expect(
+      ['declined', 'expired', 'rejected', 'withdrawn'].every((status) => isFinished(status as 'declined')),
+    ).toBe(true);
+    expect(
+      ['submitted', 'waitlisted', 'offered', 'accepted'].some((status) => isFinished(status as 'offered')),
+    ).toBe(false);
   });
 });

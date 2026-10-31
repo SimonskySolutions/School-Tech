@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { APPLICATION_DONE, APPLICATION_STATUS_LABELS } from '../../../lib/admissions';
+import { APPLICATION_DONE, APPLICATION_STATUS_LABELS, isFinished } from '../../../lib/admissions';
 import { fetchFamilyAdmissions } from '../../../lib/api-client';
 import { formatDay } from '../../../lib/school-life';
 import { currentSession, runtime } from '../../../lib/server';
@@ -11,6 +11,15 @@ export const dynamic = 'force-dynamic';
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const field = { display: 'grid', gap: '0.25rem' } as const;
+
+/** The last day to answer: the offer runs to the end of it, school time. */
+const answerBy = (expiresAt: string) =>
+  new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Sofia',
+  }).format(new Date(new Date(expiresAt).getTime() - 1000));
 
 /**
  * A signed-in parent applies for a place (M5.2, ADR 0027): for one of their
@@ -64,8 +73,26 @@ export default async function ApplyPage({ searchParams }: { searchParams: Search
         <ul>
           {view.applications.map((application) => (
             <li key={application.id} data-testid={`application-${application.id}`}>
-              {`${application.childName ?? 'Your child'}: ${application.school.name}, grade ${application.intake.grade}, ${application.intake.schoolYear} · ${APPLICATION_STATUS_LABELS[application.status]}`}
-              {application.status !== 'withdrawn' ? (
+              {`${application.childName ?? 'Your child'}: ${application.school.name}, grade ${application.intake.grade}, ${application.intake.schoolYear} · ${APPLICATION_STATUS_LABELS[application.status]}${application.offerExpiresAt ? `, answer by ${answerBy(application.offerExpiresAt)}` : ''}${application.waitlistPosition ? ` (number ${application.waitlistPosition})` : ''}`}
+              {application.status === 'offered' ? (
+                <>
+                  <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                    <input type="hidden" name="action" value="accept" />
+                    <input type="hidden" name="application_id" value={application.id} />
+                    <button type="submit" data-testid="accept">
+                      Accept the place
+                    </button>
+                  </form>
+                  <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                    <input type="hidden" name="action" value="decline" />
+                    <input type="hidden" name="application_id" value={application.id} />
+                    <button type="submit" data-testid="decline">
+                      Decline
+                    </button>
+                  </form>
+                </>
+              ) : null}
+              {!isFinished(application.status) ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
                   <input type="hidden" name="action" value="withdraw" />
                   <input type="hidden" name="application_id" value={application.id} />

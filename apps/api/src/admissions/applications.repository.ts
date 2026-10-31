@@ -1,4 +1,5 @@
 import {
+  type ApplicationNoteKind,
   type ApplicationRequestBody,
   type ApplicationStatus,
   type FamilyAdmissions,
@@ -71,10 +72,13 @@ export async function familyAdmissions(tx: PersonTransaction): Promise<FamilyAdm
     child_family: string | null;
     status: ApplicationStatus;
     submitted_at: Date;
+    offer_expires_at: Date | null;
+    waitlist_position: number | null;
   }>(
     `SELECT a.id, a.school_id, s.name AS school_name, a.intake_id, it.school_year, it.grade,
             coalesce(p.given_name, a.child_given_name) AS child_given, coalesce(p.family_name, a.child_family_name) AS child_family,
-            a.status, a.submitted_at
+            a.status, a.submitted_at, CASE WHEN a.status = 'offered' THEN a.offer_expires_at END AS offer_expires_at,
+            CASE WHEN a.status = 'waitlisted' THEN admissions.waitlist_position(a.id) END AS waitlist_position
        FROM admissions.application a
        JOIN admissions.intake it ON it.id = a.intake_id
        JOIN org.school s ON s.id = a.school_id
@@ -96,6 +100,8 @@ export async function familyAdmissions(tx: PersonTransaction): Promise<FamilyAdm
       childName: fullName(row.child_given, row.child_family),
       status: row.status,
       submittedAt: row.submitted_at.toISOString(),
+      offerExpiresAt: row.offer_expires_at?.toISOString() ?? null,
+      waitlistPosition: row.waitlist_position,
     })),
     notice: notice ? { id: notice.id, version: notice.version, text: notice.notice_text } : null,
   };
@@ -154,10 +160,16 @@ export async function schoolApplications(
       WHERE group_id = access.current_group_id() AND status = 'active' AND access.has_permission('admissions.manage', id)
       ORDER BY name`,
   );
-  const intakes = await tx.query<IntakeRow & { live: number; withdrawn: number }>(
+  const intakes = await tx.query<
+    IntakeRow & { live: number; withdrawn: number; offered: number; accepted: number; waitlisted: number }
+  >(
     `SELECT ${INTAKE_COLUMNS},
-            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status <> 'withdrawn') AS live,
-            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'withdrawn') AS withdrawn
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id
+                AND a.status NOT IN ('withdrawn', 'rejected', 'declined', 'expired')) AS live,
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'withdrawn') AS withdrawn,
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'offered') AS offered,
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'accepted') AS accepted,
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'waitlisted') AS waitlisted
        FROM admissions.intake it JOIN org.school s ON s.id = it.school_id
       WHERE access.has_permission('admissions.manage', it.school_id)
       ORDER BY it.status, s.name, it.school_year, it.grade`,
@@ -181,13 +193,17 @@ export async function schoolApplications(
     message: string | null;
     notice_version: number;
     submitted_at: Date;
+    offer_expires_at: Date | null;
+    waitlist_position: number | null;
   }>(
     `SELECT a.id, a.school_id, s.name AS school_name, a.intake_id, it.school_year, it.grade, a.status,
             coalesce(c.given_name, a.child_given_name) AS child_given, coalesce(c.family_name, a.child_family_name) AS child_family,
             to_char(coalesce(c.date_of_birth, a.child_birth_date), 'YYYY-MM-DD') AS birth_date,
             a.student_person_id IS NOT NULL AS known, a.current_school,
             ap.given_name AS applicant_given, ap.family_name AS applicant_family, ap.email AS applicant_email,
-            a.message, n.version AS notice_version, a.submitted_at
+            a.message, n.version AS notice_version, a.submitted_at,
+            CASE WHEN a.status = 'offered' THEN a.offer_expires_at END AS offer_expires_at,
+            CASE WHEN a.status = 'waitlisted' THEN admissions.waitlist_position(a.id) END AS waitlist_position
        FROM admissions.application a
        JOIN admissions.intake it ON it.id = a.intake_id
        JOIN org.school s ON s.id = a.school_id
@@ -195,15 +211,38 @@ export async function schoolApplications(
        LEFT JOIN people.person c ON c.id = a.student_person_id
        LEFT JOIN people.person ap ON ap.id = a.applicant_person_id
       WHERE access.has_permission('admissions.manage', a.school_id) AND ($1::uuid IS NULL OR a.intake_id = $1)
-      ORDER BY a.status = 'withdrawn', a.submitted_at
+      ORDER BY a.status IN ('withdrawn', 'rejected', 'declined', 'expired'), a.submitted_at
       LIMIT 500`,
     [intakeId],
   );
+  const notes = applications.length
+    ? await tx.query<{
+        application_id: string;
+        kind: ApplicationNoteKind;
+        author_given: string | null;
+        author_family: string | null;
+        body: string | null;
+        created_at: Date;
+      }>(
+        `SELECT n.application_id, n.kind, p.given_name AS author_given, p.family_name AS author_family, n.body, n.created_at
+           FROM admissions.application_note n LEFT JOIN people.person p ON p.id = n.author_person_id
+          WHERE n.application_id = ANY ($1::uuid[])
+          ORDER BY n.created_at`,
+        [applications.map((row) => row.id)],
+      )
+    : [];
   return {
     schools,
     intakes: intakes.map((row) => ({
       ...intakeOf(row),
-      applications: { live: row.live, withdrawn: row.withdrawn },
+      applications: {
+        live: row.live,
+        withdrawn: row.withdrawn,
+        offered: row.offered,
+        accepted: row.accepted,
+        waitlisted: row.waitlisted,
+      },
+      free: Math.max(0, row.places - row.offered - row.accepted),
     })),
     applications: applications.map((row) => ({
       id: row.id,
@@ -220,8 +259,54 @@ export async function schoolApplications(
       message: row.message,
       noticeVersion: row.notice_version,
       submittedAt: row.submitted_at.toISOString(),
+      offerExpiresAt: row.offer_expires_at?.toISOString() ?? null,
+      waitlistPosition: row.waitlist_position,
+      notes: notes
+        .filter((note) => note.application_id === row.id)
+        .map((note) => ({
+          kind: note.kind,
+          author: fullName(note.author_given, note.author_family),
+          body: note.body,
+          createdAt: note.created_at.toISOString(),
+        })),
     })),
   };
+}
+
+export async function makeOffer(tx: PersonTransaction, applicationId: string, answerBy: string) {
+  await tx.query('SELECT admissions.make_offer($1, $2::date)', [applicationId, answerBy]);
+  return { status: 'offered' as const };
+}
+
+export async function decideApplication(
+  tx: PersonTransaction,
+  applicationId: string,
+  decision: 'waitlisted' | 'rejected',
+) {
+  await tx.query('SELECT admissions.decide_application($1, $2)', [applicationId, decision]);
+  return { status: decision };
+}
+
+export async function answerOffer(tx: PersonTransaction, applicationId: string, accept: boolean) {
+  const [row] = await tx.query<{ status: 'accepted' | 'declined' }>(
+    'SELECT admissions.answer_offer($1, $2) AS status',
+    [applicationId, accept],
+  );
+  return { status: row!.status };
+}
+
+export async function addApplicationNote(
+  tx: PersonTransaction,
+  applicationId: string,
+  kind: ApplicationNoteKind,
+  body: string,
+) {
+  const [row] = await tx.query<{ id: string }>('SELECT admissions.add_application_note($1, $2, $3) AS id', [
+    applicationId,
+    kind,
+    body,
+  ]);
+  return { id: row!.id };
 }
 
 /** Invites an inquiry's sender to apply: the parent's person record, created once (ADR 0027). */
