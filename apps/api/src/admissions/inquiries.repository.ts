@@ -33,6 +33,7 @@ const DATABASE_REFUSALS: Record<string, [InquiriesRejected['status'], string]> =
   PY024: [409, 'no place left in this intake; put the application on the waiting list'],
   PY025: [409, 'the offer has expired'],
   '22007': [422, 'the answer date is in the past'],
+  '23P01': [409, 'the child is already enrolled at this school for those dates'],
   '23505': [
     409,
     'already there: one application per child and intake, and none to the school the child attends',

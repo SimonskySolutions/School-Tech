@@ -4,6 +4,7 @@ import {
   applicationNoteSchema,
   applicationSchema,
   decisionSchema,
+  enrolSchema,
   intakeSchema,
   inviteSchema,
   offerSchema,
@@ -70,5 +71,17 @@ describe('offers and decisions', () => {
     expect(answerSchema.safeParse({ accept: 'yes' }).success).toBe(false);
     expect(applicationNoteSchema.safeParse({ kind: 'interview', body: 'Calm' }).success).toBe(true);
     expect(applicationNoteSchema.safeParse({ kind: 'gossip', body: 'x' }).success).toBe(false);
+  });
+});
+
+describe('the enrolment hand-off', () => {
+  it('takes the first school day, an optional class and a known relationship', () => {
+    expect(
+      enrolSchema.safeParse({ startDate: '2027-09-15', classLabel: '1A', relationship: 'mother' }).success,
+    ).toBe(true);
+    expect(enrolSchema.safeParse({ startDate: '2027-09-15' }).success).toBe(true);
+    expect(enrolSchema.safeParse({ startDate: '15.09.2027' }).success).toBe(false);
+    expect(enrolSchema.safeParse({ startDate: '2027-09-15', relationship: 'neighbour' }).success).toBe(false);
+    expect(enrolSchema.safeParse({ startDate: '2027-09-15', grade: '1' }).success).toBe(false);
   });
 });

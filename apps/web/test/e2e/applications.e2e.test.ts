@@ -109,7 +109,8 @@ describe('a family that attends applies for a place', () => {
     const hristo = (await signIn('hristo.georgiev@pythagoras.test', PASSWORD)).browser;
     const theirs = await open(hristo, '/admissions/apply');
     expect(theirs).not.toContain('Boris Ivanov');
-    expect(theirs).toContain('You have not applied yet.');
+    // Hristo may have applied in other test files; he never sees Anna's applications.
+    expect(theirs).not.toContain('Nia Ivanova');
   });
 
   it('lets the principal of School A review it and open an intake, and nobody else', async () => {

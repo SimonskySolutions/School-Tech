@@ -128,7 +128,7 @@ describe('an intake with one place', () => {
     expect(after).toContain(`School A, grade ${grade}, 2028/29`);
     expect(after).toMatch(
       new RegExp(
-        `grade ${grade}, 2028/29</a>: 1 places, 0 free · 2 applications, 1 offered, 0 accepted, 1 waiting`,
+        `grade ${grade}, 2028/29</a>: 1 places, 0 free · 2 applications, 1 offered, 0 accepted, 0 enrolled, 1 waiting`,
       ),
     );
     expect(after).toContain('Interview, Petar Nikolov, ');
@@ -175,7 +175,7 @@ describe('an intake with one place', () => {
     );
     expect(await open(principal, '/admissions/applications')).toMatch(
       new RegExp(
-        `grade ${grade}, 2028/29</a>: 1 places, 0 free · 1 applications, 0 offered, 1 accepted, 0 waiting`,
+        `grade ${grade}, 2028/29</a>: 1 places, 0 free · 1 applications, 0 offered, 1 accepted, 0 enrolled, 0 waiting`,
       ),
     );
   });

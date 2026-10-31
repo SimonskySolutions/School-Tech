@@ -996,6 +996,7 @@ export type ApplicationStatus =
   | 'waitlisted'
   | 'offered'
   | 'accepted'
+  | 'enrolled'
   | 'declined'
   | 'expired'
   | 'rejected'
@@ -1050,7 +1051,14 @@ export interface ApplicationRequestBody {
 export interface SchoolApplications {
   schools: { id: SchoolId; name: string }[];
   intakes: (Intake & {
-    applications: { live: number; withdrawn: number; offered: number; accepted: number; waitlisted: number };
+    applications: {
+      live: number;
+      withdrawn: number;
+      offered: number;
+      accepted: number;
+      enrolled: number;
+      waitlisted: number;
+    };
     /** Places not offered or accepted. */
     free: number;
   })[];
@@ -1069,6 +1077,23 @@ export interface SchoolApplications {
     /** Assessment and interview notes: admissions staff only. */
     notes: { kind: ApplicationNoteKind; author: string | null; body: string | null; createdAt: string }[];
   }[];
+}
+
+export const GUARDIAN_RELATIONSHIPS = [
+  'mother',
+  'father',
+  'parent',
+  'legal_guardian',
+  'foster_carer',
+  'other',
+] as const;
+export type GuardianRelationshipKind = (typeof GUARDIAN_RELATIONSHIPS)[number];
+
+/** Staff enrol an accepted application (M5.4). The relationship is needed for a child new to the group. */
+export interface EnrolRequestBody {
+  startDate: string;
+  classLabel?: string;
+  relationship?: GuardianRelationshipKind;
 }
 
 export interface IntakeRequestBody {

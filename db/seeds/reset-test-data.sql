@@ -30,7 +30,19 @@ DELETE FROM people.family_request WHERE subject LIKE '%(integration test)' OR su
 DELETE FROM people.family_request_message
  WHERE request_id = 'd8000000-0000-7000-8000-0000000000a1' AND id <> 'd8100000-0000-7000-8000-0000000000a1';
 UPDATE people.family_request SET status = 'open', closed_at = NULL WHERE id = 'd8000000-0000-7000-8000-0000000000a1';
+-- Enrolments the tests made from applications, with the children the hand-off
+-- created (seeded people all have ids starting c1000000-) and their guardians.
+CREATE TEMP TABLE enrolled_application ON COMMIT DROP AS
+  SELECT enrolment_id, student_person_id FROM admissions.application WHERE status = 'enrolled';
+CREATE TEMP TABLE enrolled_child ON COMMIT DROP AS
+  SELECT student_person_id AS id FROM enrolled_application
+   WHERE student_person_id::text NOT LIKE 'c1000000-0000-7000-8000-%';
+DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_application);
+DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
+DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
+DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
 -- Applications and intakes the tests made, and the seeded intake open again.
+DELETE FROM admissions.application_note;
 DELETE FROM admissions.application;
 DELETE FROM admissions.intake WHERE id <> 'db000000-0000-7000-8000-0000000000a1';
 UPDATE admissions.intake SET status = 'open' WHERE id = 'db000000-0000-7000-8000-0000000000a1';

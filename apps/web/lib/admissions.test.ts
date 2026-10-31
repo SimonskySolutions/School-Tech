@@ -3,6 +3,7 @@ import { FormProblem } from './admin';
 import {
   applicationBody,
   applicationNoteBody,
+  enrolBody,
   isFinished,
   offerBody,
   closeBody,
@@ -153,5 +154,23 @@ describe('offers in the portal', () => {
     expect(
       ['submitted', 'waitlisted', 'offered', 'accepted'].some((status) => isFinished(status as 'offered')),
     ).toBe(false);
+  });
+});
+
+describe('the enrolment hand-off in the portal', () => {
+  it('asks the relationship for a new child only', () => {
+    expect(
+      enrolBody(form({ start_date: '2027-09-15', class_label: '1A', relationship: 'mother' }), true),
+    ).toEqual({
+      startDate: '2027-09-15',
+      classLabel: '1A',
+      relationship: 'mother',
+    });
+    expect(enrolBody(form({ start_date: '2027-09-15', relationship: 'mother' }), false)).toEqual({
+      startDate: '2027-09-15',
+    });
+    expect(() => enrolBody(form({ start_date: '2027-09-15' }), true)).toThrow('related');
+    expect(() => enrolBody(form({ start_date: '' }), false)).toThrow(FormProblem);
+    expect(isFinished('enrolled')).toBe(true);
   });
 });

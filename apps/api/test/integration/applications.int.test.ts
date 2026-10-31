@@ -45,7 +45,10 @@ describe('applying for a place', () => {
         takingApplications: true,
       }),
     );
-    expect(family.children.map((child) => child.name).sort()).toEqual(['Boris Ivanov', 'Mila Ivanova']);
+    // Other test files may give Anna another child (the enrolment hand-off); these two are always hers.
+    expect(family.children.map((child) => child.name)).toEqual(
+      expect.arrayContaining(['Boris Ivanov', 'Mila Ivanova']),
+    );
     expect(family.notice?.version).toBeGreaterThan(0);
   });
 
@@ -128,7 +131,10 @@ describe('applying for a place', () => {
     expect(mine.find((application) => application.id === borisApplication)!.status).toBe('under_review');
     expect(mine.find((application) => application.id === niaApplication)!.status).toBe('withdrawn');
     const hristo = (await get<FamilyAdmissions>('/admissions/family', tokens['hristo.georgiev']!)).body;
-    expect(hristo.applications).toEqual([]);
+    // Hristo may have applications of his own from other test files; never Anna's.
+    expect(
+      hristo.applications.some((application) => [borisApplication, niaApplication].includes(application.id)),
+    ).toBe(false);
   });
 });
 

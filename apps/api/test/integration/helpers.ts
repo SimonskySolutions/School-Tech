@@ -146,3 +146,54 @@ export const passwordGrant = (username: string, password: string) =>
       password,
     }),
   });
+
+/**
+ * A family of its own for tests that change a family (M5.4): an inquiry from
+ * the School A website, the principal's invitation, and the first sign-in.
+ * Its address starts with "test-", so the reset removes the Keycloak user.
+ */
+export async function invitedParent(
+  principalToken: string,
+  label: string,
+): Promise<{ token: string; email: string }> {
+  const email = `test-${Date.now().toString(36)}-${label.toLowerCase()}@pythagoras.test`;
+  const host = 'school-a.pythagoras.localhost';
+  const form = (await (await fetch(`${API}/sites/inquiry-form?host=${host}`)).json()) as {
+    schools: { id: string }[];
+    notice: { id: string };
+  };
+  await fetch(`${API}/sites/inquiries`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      host,
+      schoolId: form.schools[0]!.id,
+      noticeId: form.notice.id,
+      parentName: `${label} Invited (integration test)`,
+      email,
+      newsConsent: false,
+    }),
+  });
+  const { body } = await get<{ inquiries: { id: string; email: string | null }[] }>(
+    '/admissions/inquiries',
+    principalToken,
+  );
+  const inquiry = body.inquiries.find((candidate) => candidate.email === email)!;
+  const invited = await post(principalToken, `/admissions/inquiries/${inquiry.id}/invite`, {
+    givenName: label,
+    familyName: 'Test',
+  });
+  if (invited.status !== 201) throw new Error(`invitation answered ${invited.status}`);
+  const admin = await keycloakAdmin();
+  const [user] = (await (await admin(`/users?username=${encodeURIComponent(email)}&exact=true`)).json()) as {
+    id: string;
+  }[];
+  const password = `Chosen-${Date.now().toString(36)}-Passw0rd`;
+  await admin(`/users/${user!.id}`, { method: 'PUT', body: JSON.stringify({ requiredActions: [] }) });
+  await admin(`/users/${user!.id}/reset-password`, {
+    method: 'PUT',
+    body: JSON.stringify({ type: 'password', value: password, temporary: false }),
+  });
+  const grant = await passwordGrant(email, password);
+  return { token: ((await grant.json()) as { access_token: string }).access_token, email };
+}

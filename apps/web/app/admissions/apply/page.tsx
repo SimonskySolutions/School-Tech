@@ -92,6 +92,14 @@ export default async function ApplyPage({ searchParams }: { searchParams: Search
                   </form>
                 </>
               ) : null}
+              {application.status === 'enrolled' ? (
+                <>
+                  {' · '}
+                  <Link href="/services" data-testid="book-services">
+                    Book lunch and clubs
+                  </Link>
+                </>
+              ) : null}
               {!isFinished(application.status) ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
                   <input type="hidden" name="action" value="withdraw" />

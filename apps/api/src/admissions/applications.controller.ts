@@ -16,6 +16,7 @@ import {
 import {
   APPLICATION_NOTE_KINDS,
   type CreatedAccountResponse,
+  GUARDIAN_RELATIONSHIPS,
   type FamilyAdmissions,
   type SchoolApplications,
 } from '@pythagoras/shared';
@@ -28,6 +29,7 @@ import {
   answerOffer,
   closeIntake,
   decideApplication,
+  enrolApplication,
   familyAdmissions,
   inviteApplicant,
   linkApplicantLogin,
@@ -73,6 +75,11 @@ export const inviteSchema = z.object({ givenName: name, familyName: name });
 export const offerSchema = z.object({ answerBy: day });
 export const decisionSchema = z.object({ decision: z.enum(['waitlisted', 'rejected']) });
 export const answerSchema = z.object({ accept: z.boolean() });
+export const enrolSchema = z.strictObject({
+  startDate: day,
+  classLabel: optional(40),
+  relationship: z.enum(GUARDIAN_RELATIONSHIPS).optional(),
+});
 export const applicationNoteSchema = z.object({
   kind: z.enum(APPLICATION_NOTE_KINDS),
   body: z.string().trim().min(1).max(4000),
@@ -158,6 +165,18 @@ export class AdmissionsController {
   ) {
     const { answerBy } = parse(offerSchema, body);
     return run(this.database, principal, (tx) => makeOffer(tx, applicationId, answerBy));
+  }
+
+  /** The hand-off: an accepted place becomes an enrolment, exactly once. */
+  @Post('applications/:applicationId/enrol')
+  @HttpCode(200)
+  enrol(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(enrolSchema, body);
+    return run(this.database, principal, (tx) => enrolApplication(tx, applicationId, data));
   }
 
   @Post('applications/:applicationId/decision')

@@ -2,6 +2,7 @@ import {
   type ApplicationNoteKind,
   type ApplicationRequestBody,
   type ApplicationStatus,
+  type EnrolRequestBody,
   type FamilyAdmissions,
   type Intake,
   type IntakeRequestBody,
@@ -161,7 +162,14 @@ export async function schoolApplications(
       ORDER BY name`,
   );
   const intakes = await tx.query<
-    IntakeRow & { live: number; withdrawn: number; offered: number; accepted: number; waitlisted: number }
+    IntakeRow & {
+      live: number;
+      withdrawn: number;
+      offered: number;
+      accepted: number;
+      enrolled: number;
+      waitlisted: number;
+    }
   >(
     `SELECT ${INTAKE_COLUMNS},
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id
@@ -169,6 +177,7 @@ export async function schoolApplications(
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'withdrawn') AS withdrawn,
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'offered') AS offered,
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'accepted') AS accepted,
+            (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'enrolled') AS enrolled,
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'waitlisted') AS waitlisted
        FROM admissions.intake it JOIN org.school s ON s.id = it.school_id
       WHERE access.has_permission('admissions.manage', it.school_id)
@@ -240,9 +249,10 @@ export async function schoolApplications(
         withdrawn: row.withdrawn,
         offered: row.offered,
         accepted: row.accepted,
+        enrolled: row.enrolled,
         waitlisted: row.waitlisted,
       },
-      free: Math.max(0, row.places - row.offered - row.accepted),
+      free: Math.max(0, row.places - row.offered - row.accepted - row.enrolled),
     })),
     applications: applications.map((row) => ({
       id: row.id,
@@ -271,6 +281,15 @@ export async function schoolApplications(
         })),
     })),
   };
+}
+
+/** The hand-off (M5.4): the child enrolled, a new child's record and guardian created. */
+export async function enrolApplication(tx: PersonTransaction, applicationId: string, body: EnrolRequestBody) {
+  const [row] = await tx.query<{ id: string }>(
+    'SELECT admissions.enrol_application($1, $2::date, $3, $4) AS id',
+    [applicationId, body.startDate, body.classLabel ?? null, body.relationship ?? null],
+  );
+  return { status: 'enrolled' as const, studentId: row!.id };
 }
 
 export async function makeOffer(tx: PersonTransaction, applicationId: string, answerBy: string) {

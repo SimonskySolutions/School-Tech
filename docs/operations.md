@@ -125,6 +125,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - The family accepts or declines on "Apply for a place". The worker expires unanswered offers every minute (job `admissions.expire-offers`); a declined, expired or withdrawn place goes straight to the first on the waiting list, who has 14 days to answer. Closing the intake stops these automatic offers.
 - No e-mail tells a family about an offer yet (M7): contact them yourself when you offer a place.
 
+### Enrolling an accepted place (M5.4)
+
+- When a family accepts, "Enrol the child" appears on the application: give the first school day and, if you like, the class. For a child new to our schools, say how the parent is related; the parent then becomes the child's guardian, verified by you, and the child's record is created from the application.
+- A child enrolled from a future date appears among the family's children, but services at the new school can be booked only from that date.
+- An enrolment cannot be undone from the admissions page, and no page withdraws or corrects an enrolment yet; until one exists, a mistaken enrolment is corrected in the database by an administrator.
+
 ### The School Life day (M4.8)
 
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.

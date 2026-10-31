@@ -1,5 +1,8 @@
 import {
   APPLICATION_NOTE_KINDS,
+  type EnrolRequestBody,
+  GUARDIAN_RELATIONSHIPS,
+  type GuardianRelationshipKind,
   type ApplicationNoteKind,
   type ApplicationRequestBody,
   type ApplicationStatus,
@@ -203,6 +206,7 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   waitlisted: 'On the waiting list',
   offered: 'Place offered',
   accepted: 'Place accepted',
+  enrolled: 'Enrolled',
   declined: 'Offer declined',
   expired: 'Offer expired',
   rejected: 'Not offered a place',
@@ -215,9 +219,39 @@ export const APPLICATION_NOTE_LABELS: Record<ApplicationNoteKind, string> = {
   assessment: 'Assessment',
 };
 
-/** Applications that no longer hold or wait for a place. */
+/** Applications that need nothing more: enrolled, or no longer holding or waiting for a place. */
 export const isFinished = (status: ApplicationStatus) =>
-  status === 'withdrawn' || status === 'rejected' || status === 'declined' || status === 'expired';
+  status === 'enrolled' ||
+  status === 'withdrawn' ||
+  status === 'rejected' ||
+  status === 'declined' ||
+  status === 'expired';
+
+export const RELATIONSHIP_LABELS: Record<GuardianRelationshipKind, string> = {
+  mother: 'Mother',
+  father: 'Father',
+  parent: 'Parent',
+  legal_guardian: 'Legal guardian',
+  foster_carer: 'Foster carer',
+  other: 'Other',
+};
+
+/** The hand-off form: the start date, an optional class, and for a new child the parent's relationship. */
+export function enrolBody(form: Form, newChild: boolean): EnrolRequestBody {
+  const startDate = text(form, 'start_date');
+  if (!DAY.test(startDate)) throw new FormProblem('give the first school day');
+  const classLabel = text(form, 'class_label');
+  if (classLabel.length > 40) throw new FormProblem('a class has at most 40 characters');
+  const relationship = text(form, 'relationship');
+  if (newChild && !(GUARDIAN_RELATIONSHIPS as readonly string[]).includes(relationship)) {
+    throw new FormProblem('say how the parent is related to the child');
+  }
+  return {
+    startDate,
+    ...(classLabel ? { classLabel } : {}),
+    ...(newChild ? { relationship: relationship as GuardianRelationshipKind } : {}),
+  };
+}
 
 /** The day an offer must be answered by. */
 export function offerBody(form: Form): { answerBy: string } {
@@ -244,6 +278,7 @@ export const APPLICATION_DONE: Record<string, string> = {
   waitlisted: 'Put on the waiting list.',
   rejected: 'Marked as not offered a place.',
   noted: 'Note added.',
+  enrolled: 'Enrolled. The family can now book services for the child.',
   accepted: 'Place accepted. The school will be in touch about the next steps.',
   declined: 'Offer declined.',
   'intake-opened': 'Intake opened.',

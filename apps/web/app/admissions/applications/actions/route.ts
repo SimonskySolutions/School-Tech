@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { FormProblem, text } from '../../../../lib/admin';
-import { applicationNoteBody, intakeBody, offerBody } from '../../../../lib/admissions';
+import { applicationNoteBody, enrolBody, intakeBody, offerBody } from '../../../../lib/admissions';
 import { writeApi } from '../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../lib/server';
 
@@ -50,6 +50,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         path: `/admissions/applications/${id('application_id')}/decision`,
         body: { decision },
         done: decision,
+      };
+    } else if (action === 'enrol') {
+      call = {
+        path: `/admissions/applications/${id('application_id')}/enrol`,
+        body: enrolBody(form, text(form, 'new_child') === 'yes'),
+        done: 'enrolled',
       };
     } else if (action === 'note') {
       call = {

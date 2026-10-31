@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { APPLICATION_NOTE_KINDS } from '@pythagoras/shared';
+import { APPLICATION_NOTE_KINDS, GUARDIAN_RELATIONSHIPS } from '@pythagoras/shared';
 import {
   APPLICATION_DONE,
   APPLICATION_NOTE_LABELS,
   APPLICATION_STATUS_LABELS,
   isFinished,
+  RELATIONSHIP_LABELS,
 } from '../../../lib/admissions';
 import { fetchSchoolApplications } from '../../../lib/api-client';
 import { formatDay } from '../../../lib/school-life';
@@ -78,7 +79,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
               <Link href={`/admissions/applications?intakeId=${intake.id}`}>
                 {`${intake.school.name}, grade ${intake.grade}, ${intake.schoolYear}`}
               </Link>
-              {`: ${intake.places} places, ${intake.free} free · ${intake.applications.live} applications, ${intake.applications.offered} offered, ${intake.applications.accepted} accepted, ${intake.applications.waitlisted} waiting · ${intake.status === 'open' ? `open ${formatDay(intake.opensOn)} to ${formatDay(intake.closesOn)}` : 'closed'}`}
+              {`: ${intake.places} places, ${intake.free} free · ${intake.applications.live} applications, ${intake.applications.offered} offered, ${intake.applications.accepted} accepted, ${intake.applications.enrolled} enrolled, ${intake.applications.waitlisted} waiting · ${intake.status === 'open' ? `open ${formatDay(intake.opensOn)} to ${formatDay(intake.closesOn)}` : 'closed'}`}
               {intake.status === 'open' ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
                   <input type="hidden" name="action" value="close-intake" />
@@ -178,6 +179,41 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {application.status === 'accepted' ? (
+              <form
+                method="post"
+                action={action}
+                style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem' }}
+              >
+                <input type="hidden" name="action" value="enrol" />
+                <input type="hidden" name="application_id" value={application.id} />
+                <input type="hidden" name="new_child" value={application.child.known ? 'no' : 'yes'} />
+                <label>
+                  First school day <input name="start_date" type="date" required />
+                </label>
+                <label>
+                  Class (optional) <input name="class_label" maxLength={40} />
+                </label>
+                {application.child.known ? null : (
+                  <label>
+                    {`${application.applicant.name ?? 'The parent'} is the child's `}
+                    <select name="relationship" required defaultValue="">
+                      <option value="" disabled>
+                        Choose
+                      </option>
+                      {GUARDIAN_RELATIONSHIPS.map((relationship) => (
+                        <option key={relationship} value={relationship}>
+                          {RELATIONSHIP_LABELS[relationship].toLowerCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <button type="submit" data-testid="enrol">
+                  Enrol the child
+                </button>
+              </form>
             ) : null}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {application.status === 'submitted' ? (
