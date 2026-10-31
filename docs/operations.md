@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Trips and consent (ADR 0023)
+
+- Setting up a trip: add a trip offering on the school's set-up page, write its consent wording there ("Consent wording"), then add a "One day (trips)" calendar with the date, times, place and number of places. Without wording the trip cannot be booked. Changing the wording makes a new version: guardians give permission again before booking; places already booked stay.
+- Guardians read the wording and give permission under "Trips" next to each child, with an emergency contact for the day; only a guardian with the consent capability can. Withdrawing before the trip cancels a paid place and the payment becomes credit within a minute; while a payment is open the withdrawal waits.
+- Staff see who is coming at `/school-life/trips`: class, permission, emergency contact and, for School Life, principals and kitchens, dietary and health needs (every view is in the access log). A permission given on paper is recorded through the API (`POST /school-life/trips/:sessionId/permissions`, staff with `consent.manage`); there is no page for it yet.
+
 ### Individual lessons (ADR 0022)
 
 - Selling lessons: on the school's set-up page add a lessons offering with the price "per package of lessons" and the number of lessons (1 for single lessons). Parents buy packages on the booking page.

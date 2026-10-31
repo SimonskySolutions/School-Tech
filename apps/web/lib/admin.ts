@@ -113,15 +113,22 @@ export function sessionsBody(form: Form) {
     capacity,
     location: optional(form, 'location'),
     schedule:
-      text(form, 'pattern') === 'weekly'
+      text(form, 'pattern') === 'once'
         ? {
-            type: 'weekly',
-            weekday: Number(text(form, 'weekday')),
+            type: 'once',
+            date: text(form, 'from'),
             startTime: text(form, 'start_time'),
             endTime: text(form, 'end_time'),
-            ...common,
           }
-        : { type: 'school_days', ...common },
+        : text(form, 'pattern') === 'weekly'
+          ? {
+              type: 'weekly',
+              weekday: Number(text(form, 'weekday')),
+              startTime: text(form, 'start_time'),
+              endTime: text(form, 'end_time'),
+              ...common,
+            }
+          : { type: 'school_days', ...common },
   };
 }
 
@@ -158,6 +165,8 @@ export const DONE: Record<string, string> = {
   'create-school': 'School created as a draft. Add offerings, calendars and a principal, then activate it.',
   'add-offering': 'Offering added with its first price.',
   'set-eligibility': 'Saved who may take it. Bookings already made stay.',
+  'set-trip-consent':
+    'New consent wording saved. Guardians must give permission again before booking; places already booked stay.',
   'add-sessions': 'Calendar added.',
   'add-staff': 'Staff member registered. Create their sign-in account when they are ready.',
   activate: 'The school is live: parents and staff can now see it, and so is its website.',
@@ -174,4 +183,13 @@ export function backTo(path: string, outcome: { done?: string; error?: string; e
   if (outcome.error) query.set('error', outcome.error.slice(0, 300));
   if (outcome.extra) query.set('extra', outcome.extra);
   return `${safe}?${query}`;
+}
+
+/** The consent wording of a trip (ADR 0023). */
+export function tripConsentBody(form: Form): { text: string } {
+  const wording = text(form, 'wording');
+  if (wording.length < 10 || wording.length > 5000) {
+    throw new FormProblem('the consent wording has 10 to 5000 characters');
+  }
+  return { text: wording };
 }

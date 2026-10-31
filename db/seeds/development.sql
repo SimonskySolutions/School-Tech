@@ -150,6 +150,7 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000003', :G, 'robotics', 'activity', 'Robotics club'),
   ('d1000000-0000-7000-8000-000000000005', :G, 'debate',   'activity', 'Debate club'),
   ('d1000000-0000-7000-8000-000000000006', :G, 'piano',    'lesson',   'Piano lessons'),
+  ('d1000000-0000-7000-8000-000000000007', :G, 'museum',   'trip',     'Museum visit'),
   ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
 ON CONFLICT (id) DO NOTHING;
 
@@ -162,6 +163,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000c3', :G, :SC, 'd1000000-0000-7000-8000-000000000003', :CO, 'robotics', 'Robotics club, School C', 'published'),
   ('d2000000-0000-7000-8000-0000000000a5', :G, :SA, 'd1000000-0000-7000-8000-000000000005', :CO, 'debate',   'Debate club, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a6', :G, :SA, 'd1000000-0000-7000-8000-000000000006', :CO, 'piano',    'Piano lessons, School A (5 lessons)', 'published'),
+  ('d2000000-0000-7000-8000-0000000000a7', :G, :SA, 'd1000000-0000-7000-8000-000000000007', :CO, 'museum',   'Museum visit, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
@@ -176,6 +178,7 @@ FROM (VALUES
   ('d2000000-0000-7000-8000-0000000000a2',  6000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000c3',  8000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a5',  5000, 'per_term'),
+  ('d2000000-0000-7000-8000-0000000000a7',  1500, 'one_off'),
   ('d2000000-0000-7000-8000-0000000000a4', 45000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000b4', 42000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000c4', 48000, 'per_month')
@@ -198,6 +201,24 @@ SELECT :G, o.id, 'booking_and_cancellation', 1,
 FROM catalog.school_offering o
 WHERE o.group_id = :G AND o.code IN ('lunch', 'chess', 'robotics', 'debate')
   AND NOT EXISTS (SELECT 1 FROM catalog.policy_version p WHERE p.offering_id = o.id);
+
+-- A trip (M4.4): the consent wording guardians agree to, and the day itself,
+-- ten days from when the seed runs. Synthetic text.
+INSERT INTO catalog.policy_version (group_id, offering_id, kind, version, terms_text, valid_from)
+SELECT :G, 'd2000000-0000-7000-8000-0000000000a7', 'trip_consent', 1,
+       'I give permission for my child to take part in the museum visit with School A, travelling by coach with school staff, '
+       || 'and for staff to seek emergency medical treatment if I cannot be reached. (Synthetic example wording.)',
+       TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia'
+WHERE NOT EXISTS (SELECT 1 FROM catalog.policy_version
+                   WHERE offering_id = 'd2000000-0000-7000-8000-0000000000a7' AND kind = 'trip_consent');
+INSERT INTO scheduling.session (group_id, school_id, offering_id, starts_at, ends_at, location_label, capacity, booking_cutoff_at, cancellation_cutoff_at)
+SELECT :G, :SA, 'd2000000-0000-7000-8000-0000000000a7',
+       ((current_date + 10) + TIME '09:00') AT TIME ZONE 'Europe/Sofia',
+       ((current_date + 10) + TIME '13:00') AT TIME ZONE 'Europe/Sofia',
+       'National History Museum (synthetic)', 25,
+       ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia',
+       ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia'
+WHERE NOT EXISTS (SELECT 1 FROM scheduling.session WHERE offering_id = 'd2000000-0000-7000-8000-0000000000a7');
 
 -- Lessons (M4.3): a piano teacher and the music room at School A. The teacher
 -- teaches on Tuesdays and Thursdays 14:00-17:00; the room is free on school

@@ -81,6 +81,10 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={`/children/${child.id}/lessons`} data-testid="child-lessons-link">
                   Lessons
                 </Link>
+                {' · '}
+                <Link href={`/children/${child.id}/trips`} data-testid="child-trips-link">
+                  Trips
+                </Link>
               </li>
             ))}
           </ul>
@@ -150,6 +154,11 @@ function Home({ view }: { view: HomeView }) {
             <li>
               <a href="/school-life/menus" data-testid="menus-link">
                 Lunch menus
+              </a>
+            </li>
+            <li>
+              <a href="/school-life/trips" data-testid="trips-link">
+                Trips: who is coming
               </a>
             </li>
             {view.lessonSchools.map((school) => (

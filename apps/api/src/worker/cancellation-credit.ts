@@ -7,13 +7,24 @@ import { type OutboxJobData } from './outbox-relay';
 // Delivery is at least once, so the line is locked and an existing credit for
 // it means the work is already done; a unique index backs that up.
 
-const payloadSchema = z.object({ order_line_id: z.uuid() });
+const payloadSchema = z.object({
+  order_line_id: z.uuid(),
+  // Absent on cancellations by the school (M2.8); trips add a withdrawn permission (ADR 0023).
+  // A fixed code, never free text: the outbox refuses keys that may carry personal data.
+  cause: z.enum(['cancelled_by_school', 'consent_withdrawn']).optional(),
+});
+
+const CAUSES = {
+  cancelled_by_school: 'Cancelled by the school',
+  consent_withdrawn: 'Trip permission withdrawn',
+} as const;
 
 export type CreditOutcome = 'issued' | 'already-credited' | 'nothing-paid';
 
 export async function issueCancellationCredit(
   tx: SystemTransaction,
   orderLineId: string,
+  cause: keyof typeof CAUSES = 'cancelled_by_school',
 ): Promise<CreditOutcome> {
   const [line] = await tx.query<{
     id: string;
@@ -59,7 +70,7 @@ export async function issueCancellationCredit(
       line.payer_person_id,
       line.currency,
       amount,
-      `Cancelled by the school: ${line.description}`.slice(0, 500),
+      `${CAUSES[cause]}: ${line.description}`.slice(0, 500),
       line.id,
     ],
   );
@@ -79,9 +90,9 @@ export async function issueCancellationCredit(
 /** The "events" queue handler for commerce.order_line.cancelled. */
 export function cancellationCreditHandler(database: SystemDatabase) {
   return async (event: OutboxJobData): Promise<void> => {
-    const { order_line_id } = payloadSchema.parse(event.payload);
+    const { order_line_id, cause } = payloadSchema.parse(event.payload);
     await database.withSystem('worker:cancellation-credit', (tx) =>
-      issueCancellationCredit(tx, order_line_id),
+      issueCancellationCredit(tx, order_line_id, cause),
     );
   };
 }

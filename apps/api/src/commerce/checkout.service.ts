@@ -5,6 +5,7 @@ import { type Principal } from '../auth/principal';
 import {
   findBookableOfferings,
   findEligibilityProblems,
+  findTripPermissions,
   findOpenSessions,
   findStudentWithSchools,
   type OfferingRow,
@@ -125,6 +126,20 @@ export class CheckoutService {
         throw new CheckoutRejected(
           422,
           `${found.student.given_name} cannot take ${refused.name}: ${problems.get(refused.id)}`,
+        );
+      }
+      // Trips need a guardian's permission first; the booking trigger checks it again (ADR 0023).
+      const trips = offerings.filter((offering) => offering.kind === 'trip');
+      const permitted = await findTripPermissions(
+        tx,
+        studentId,
+        trips.map((trip) => trip.id),
+      );
+      const unpermitted = trips.find((trip) => !permitted.has(trip.id));
+      if (unpermitted) {
+        throw new CheckoutRejected(
+          409,
+          `${unpermitted.name} needs a guardian's permission for ${found.student.given_name} first`,
         );
       }
       offeringsByStudent.set(studentId, new Map(offerings.map((offering) => [offering.id, offering])));

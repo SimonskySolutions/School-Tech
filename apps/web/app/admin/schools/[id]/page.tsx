@@ -44,8 +44,8 @@ export default async function SchoolSetupPage({
   const back = `/admin/schools/${school.id}`;
   // Development addresses go through the gateway's port; production uses HTTPS on the default port.
   const devPort = new URL(config.APP_URL).port ? `:${new URL(config.APP_URL).port}` : '';
-  const bookable = serviceDefinitions.filter(
-    (service) => service.kind === 'lunch' || service.kind === 'activity' || service.kind === 'lesson',
+  const bookable = serviceDefinitions.filter((service) =>
+    ['lunch', 'activity', 'lesson', 'trip'].includes(service.kind),
   );
 
   return (
@@ -195,7 +195,33 @@ export default async function SchoolSetupPage({
                   <Link href={`/schools/${school.id}/lessons`}>Teachers, rooms and lesson times</Link>
                 </>
               ) : null}
-              {offering.kind === 'activity' || offering.kind === 'lesson' ? (
+              {offering.kind === 'trip' ? (
+                <details data-testid={`trip-consent-${offering.id}`}>
+                  <summary>
+                    {offering.tripConsent
+                      ? `Consent wording (version ${offering.tripConsent.version})`
+                      : 'Consent wording: not written yet, so the trip cannot be booked'}
+                  </summary>
+                  <form method="post" action="/admin/actions" style={grid}>
+                    <input type="hidden" name="action" value="set-trip-consent" />
+                    <input type="hidden" name="school_id" value={school.id} />
+                    <input type="hidden" name="offering_id" value={offering.id} />
+                    <input type="hidden" name="back" value={back} />
+                    <label>
+                      What guardians agree to{' '}
+                      <textarea
+                        name="wording"
+                        rows={5}
+                        cols={60}
+                        maxLength={5000}
+                        defaultValue={offering.tripConsent?.text ?? ''}
+                      />
+                    </label>
+                    <button type="submit">Save as a new version</button>
+                  </form>
+                </details>
+              ) : null}
+              {offering.kind === 'activity' || offering.kind === 'lesson' || offering.kind === 'trip' ? (
                 <details data-testid={`eligibility-${offering.id}`}>
                   <summary>{`Who may take it: ${describeEligibility(offering.eligibility) ?? 'every child at the school'}`}</summary>
                   <form method="post" action="/admin/actions" style={grid}>
@@ -281,6 +307,7 @@ export default async function SchoolSetupPage({
               <select name="pattern" defaultValue="school_days">
                 <option value="school_days">Every school day (lunch)</option>
                 <option value="weekly">Once a week (clubs)</option>
+                <option value="once">One day (trips): the From date and the times</option>
               </select>
             </label>
             <label>

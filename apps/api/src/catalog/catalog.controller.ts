@@ -15,6 +15,7 @@ import {
   findEligibilityProblems,
   findOpenSessions,
   findStudentWithSchools,
+  findTripPermissions,
   isPackage,
   pickSessions,
 } from './catalog.repository';
@@ -53,6 +54,11 @@ export class CatalogController {
           };
         }),
       );
+      const permitted = await findTripPermissions(
+        tx,
+        studentId,
+        offerings.filter((o) => o.kind === 'trip').map((o) => o.id),
+      );
       const lunchIds = new Set(offerings.filter((o) => o.kind === 'lunch').map((o) => o.id));
       const menus = await dishesBySession(
         tx,
@@ -79,6 +85,7 @@ export class CatalogController {
           },
           pickSessions: pickSessions(offering.kind, offering.price_unit),
           package: isPackage(offering.price_unit) ? { lessons: offering.package_size ?? 1 } : null,
+          consent: offering.kind === 'trip' ? { given: permitted.has(offering.id) } : null,
           eligibility: {
             rules: eligibilityFromDatabase(offering.eligibility),
             problem: problems.get(offering.id) ?? null,

@@ -9,6 +9,7 @@ import {
   schoolBody,
   sessionsBody,
   staffBody,
+  tripConsentBody,
 } from './admin';
 
 const form = (fields: Record<string, string>) => ({ get: (name: string) => fields[name] ?? null });
@@ -165,5 +166,29 @@ describe('package prices', () => {
     );
     expect(() => offeringBody(form(base))).toThrow(FormProblem);
     expect(() => offeringBody(form({ ...base, package_size: '0' }))).toThrow(FormProblem);
+  });
+});
+
+describe('trips on the set-up page', () => {
+  it('makes a one-day calendar from the first date and the times', () => {
+    expect(
+      sessionsBody(
+        form({
+          offering_id: 'trip',
+          capacity: '25',
+          pattern: 'once',
+          from: '2026-11-12',
+          start_time: '09:00',
+          end_time: '13:00',
+        }),
+      ).schedule,
+    ).toEqual({ type: 'once', date: '2026-11-12', startTime: '09:00', endTime: '13:00' });
+  });
+
+  it('takes consent wording of 10 to 5000 characters', () => {
+    expect(tripConsentBody(form({ wording: 'I agree to the museum visit.' }))).toEqual({
+      text: 'I agree to the museum visit.',
+    });
+    expect(() => tripConsentBody(form({ wording: 'ok' }))).toThrow(FormProblem);
   });
 });

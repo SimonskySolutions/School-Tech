@@ -11,7 +11,7 @@ export interface StudentRow {
 
 export interface OfferingRow {
   id: string;
-  kind: 'lunch' | 'activity' | 'lesson';
+  kind: 'lunch' | 'activity' | 'lesson' | 'trip';
   name: string;
   school_id: string;
   school_name: string;
@@ -38,7 +38,7 @@ export interface SessionRow {
 }
 
 /** Bookable kinds in the family portal. Tuition is invoiced by staff. */
-export const BOOKABLE_KINDS = ['lunch', 'activity', 'lesson'] as const;
+export const BOOKABLE_KINDS = ['lunch', 'activity', 'lesson', 'trip'] as const;
 
 /** Lesson packages are bought without choosing slots; the slots are booked afterwards (ADR 0022). */
 export const isPackage = (priceUnit: string) => priceUnit === 'per_package';
@@ -140,4 +140,21 @@ export async function findEligibilityProblems(
     [studentId, offerings.map((o) => o.id), offerings.map((o) => o.firstDay)],
   );
   return new Map(rows.flatMap((row) => (row.problem ? [[row.offering_id, row.problem] as const] : [])));
+}
+
+/** Trips for which the child has a permission to the wording in force (ADR 0023). */
+export async function findTripPermissions(
+  tx: PersonTransaction,
+  studentId: string,
+  offeringIds: readonly string[],
+): Promise<Set<string>> {
+  if (offeringIds.length === 0) return new Set();
+  const rows = await tx.query<{ offering_id: string }>(
+    `SELECT DISTINCT s.offering_id
+       FROM scheduling.trip_permission tp JOIN scheduling.session s ON s.id = tp.session_id
+      WHERE tp.student_person_id = $1 AND tp.status = 'given' AND s.offering_id = ANY ($2::uuid[])
+        AND tp.policy_version_id = catalog.current_trip_consent(s.offering_id)`,
+    [studentId, offeringIds],
+  );
+  return new Set(rows.map((row) => row.offering_id));
 }

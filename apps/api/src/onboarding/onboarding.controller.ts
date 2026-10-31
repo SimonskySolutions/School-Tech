@@ -89,6 +89,12 @@ const sessionsSchema = z.object({
       closed: z.array(day).max(400).optional(),
     }),
     z.object({
+      type: z.literal('once'),
+      date: day,
+      startTime: time,
+      endTime: time,
+    }),
+    z.object({
       type: z.literal('weekly'),
       weekday: z.number().int().min(1).max(7),
       startTime: time,

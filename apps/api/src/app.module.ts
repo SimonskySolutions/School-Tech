@@ -3,6 +3,11 @@ import { AuthModule } from './auth/auth.module';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
+import {
+  StudentTripsController,
+  TripConsentController,
+  TripParticipantsController,
+} from './trips/trips.controller';
 import { CheckoutController } from './commerce/checkout.controller';
 import { CheckoutService } from './commerce/checkout.service';
 import { ConfigModule } from './config/config.module';
@@ -37,6 +42,9 @@ import { type Env } from './config/env';
     DietaryReviewController,
     SchoolLessonsController,
     StudentLessonsController,
+    StudentTripsController,
+    TripConsentController,
+    TripParticipantsController,
     CheckoutController,
     WebhookController,
     DevCheckoutController,

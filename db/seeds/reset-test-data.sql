@@ -1,7 +1,8 @@
--- DEVELOPMENT ONLY - removes every order, booking, payment, credit and provider
--- event so purchase tests start from the seeded catalogue, and every school the
--- onboarding tests added (code starting "test-") with its offerings, sessions,
--- staff and students, and "Test company" billing entities. Refuses to run when
+-- DEVELOPMENT ONLY - removes every order, booking, trip permission, lesson
+-- package, payment, credit and provider event so purchase tests start from
+-- the seeded catalogue, and every school the onboarding tests added (code
+-- starting "test-") with its offerings, sessions, staff and students, and
+-- "Test company" billing entities. Refuses to run when
 -- the database holds anyone without a reserved .test address (that is, real
 -- people). Needs a superuser: the ledger is append-only, so its triggers are
 -- switched off for this one transaction, and session counters are reset.
@@ -19,6 +20,7 @@ DELETE FROM commerce.payment_allocation;
 DELETE FROM commerce.credit_application;
 DELETE FROM commerce.refund;
 DELETE FROM commerce.account_credit;
+DELETE FROM scheduling.trip_permission;
 DELETE FROM scheduling.package_entry;
 DELETE FROM scheduling.lesson_package;
 DELETE FROM scheduling.booking;

@@ -19,6 +19,8 @@ import {
   type StudentDietary,
   type StudentLessons,
   type StudentOfferings,
+  type StudentTrips,
+  type TripParticipants,
 } from '@pythagoras/shared';
 
 // Server-side calls from the web app to the API, with the signed-in person's
@@ -197,3 +199,9 @@ export const fetchSchoolLessons = (
     `/schools/${encodeURIComponent(schoolId)}/lessons${range(from, 14)}`,
     accessToken,
   );
+
+export const fetchStudentTrips = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentTrips>(apiUrl, `/students/${encodeURIComponent(studentId)}/trips`, accessToken);
+
+export const fetchTripParticipants = (apiUrl: string, accessToken: string, from: string | null) =>
+  get<TripParticipants>(apiUrl, `/school-life/trips${range(from, 31)}`, accessToken);

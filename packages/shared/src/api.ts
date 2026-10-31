@@ -43,7 +43,7 @@ export interface StudentOfferings {
 
 export interface BookableOffering {
   id: string;
-  kind: 'lunch' | 'activity' | 'lesson';
+  kind: 'lunch' | 'activity' | 'lesson' | 'trip';
   name: string;
   school: { id: SchoolId; name: string };
   billingEntity: { id: string; name: string };
@@ -52,6 +52,8 @@ export interface BookableOffering {
   pickSessions: boolean;
   /** Lessons: bought as a package of this many lessons, then booked slot by slot (sessions is empty). */
   package: { lessons: number } | null;
+  /** Trips: a guardian's permission for the current wording is needed before booking (ADR 0023). */
+  consent: { given: boolean } | null;
   /** Who may take it, and why this child may not (null when they may). The database checks it again. */
   eligibility: { rules: EligibilityRules; problem: string | null };
   sessions: {
@@ -409,6 +411,7 @@ export interface CreateOfferingRequest {
 
 export type SessionSchedule =
   | { type: 'school_days'; from: string; to: string; closed?: string[] }
+  | { type: 'once'; date: string; startTime: string; endTime: string }
   | {
       type: 'weekly';
       weekday: number;
@@ -536,6 +539,8 @@ export interface SchoolSetup {
     status: string;
     price: { unitAmountMinor: number; currency: string; unit: string } | null;
     eligibility: EligibilityRules;
+    /** Trips: the consent wording in force. */
+    tripConsent: { version: number; text: string } | null;
     sessions: number;
     firstDate: string | null;
     lastDate: string | null;
@@ -623,4 +628,74 @@ export interface SchoolLessons {
   }[];
   offerings: { id: string; name: string; packageSize: number | null }[];
   slots: (LessonSlot & { booked: boolean; bookedFor: string | null })[];
+}
+
+/** A guardian's view of the upcoming trips at one child's schools (ADR 0023). */
+export interface StudentTrips {
+  student: { id: PersonId; givenName: string; familyName: string };
+  /** This guardian may give permission for the child. */
+  canConsent: boolean;
+  trips: {
+    sessionId: string;
+    offeringId: string;
+    name: string;
+    schoolName: string;
+    timeZone: string;
+    startsAt: string;
+    endsAt: string | null;
+    location: string | null;
+    available: number | null;
+    bookingCutoffAt: string | null;
+    price: { unitAmountMinor: number; currency: string } | null;
+    /** The wording a guardian agrees to; null until the school has written it. */
+    consent: { policyVersionId: string; wording: string } | null;
+    permission: {
+      id: string;
+      givenAt: string;
+      channel: 'family_portal' | 'paper' | 'in_person';
+      givenByMe: boolean;
+      emergencyContactName: string;
+      emergencyContactPhone: string;
+      /** Given to the wording in force now; otherwise it must be given again before booking. */
+      forCurrentWording: boolean;
+    } | null;
+    booking: 'reserved' | 'confirmed' | 'attended' | 'absent' | null;
+  }[];
+}
+
+export interface GiveTripPermissionRequest {
+  policyVersionId: string;
+  agree: true;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+}
+
+/** Trips for the school's staff, with who is coming. */
+export interface TripParticipants {
+  from: string;
+  days: number;
+  trips: {
+    sessionId: string;
+    name: string;
+    school: { id: SchoolId; name: string; timeZone: string };
+    startsAt: string;
+    endsAt: string | null;
+    location: string | null;
+    capacity: number | null;
+    booked: number;
+    awaitingPayment: number;
+    participants: {
+      studentName: string | null;
+      classLabel: string | null;
+      status: string;
+      permission: {
+        givenAt: string;
+        channel: 'family_portal' | 'paper' | 'in_person';
+        givenBy: string | null;
+      } | null;
+      emergencyContact: { name: string; phone: string } | null;
+      /** Only for staff who may read dietary and health needs. */
+      dietary: { kind: string; severity: string | null; description: string }[];
+    }[];
+  }[];
 }

@@ -110,6 +110,8 @@ function ChildOfferings({ child, allergens }: { child: StudentOfferings; allerge
       {child.offerings.map((offering) =>
         offering.package ? (
           <LessonPackage key={offering.id} studentId={child.student.id} offering={offering} />
+        ) : offering.consent ? (
+          <Trip key={offering.id} studentId={child.student.id} offering={offering} />
         ) : offering.pickSessions ? (
           <LunchDays
             key={offering.id}
@@ -236,6 +238,41 @@ function LessonPackage({ studentId, offering }: { studentId: string; offering: B
         </Link>
         . Cancel at least 24 hours before a lesson to get it back.
       </p>
+    </fieldset>
+  );
+}
+
+/** A trip needs a guardian's permission for its current wording before it can be booked (ADR 0023). */
+function Trip({ studentId, offering }: { studentId: string; offering: BookableOffering }) {
+  const session = offering.sessions[0];
+  const booked = session?.alreadyBooked ?? false;
+  const full = session ? !booked && session.available === 0 : false;
+  const problem = offering.eligibility.problem;
+  const needsPermission = !offering.consent!.given;
+  const unavailable = !session || booked || full || problem !== null || needsPermission;
+  return (
+    <fieldset data-testid="offering-trip">
+      <legend>{offering.name}</legend>
+      <label style={{ opacity: unavailable ? 0.6 : 1 }}>
+        <input type="checkbox" name="trip" value={`${studentId}|${offering.id}`} disabled={unavailable} />{' '}
+        {priceText(offering)}
+        {session?.startsAt ? `, ${activitySummary(offering)}` : ''}
+        {booked
+          ? ' (booked)'
+          : problem
+            ? ` (cannot be booked: ${problem})`
+            : full
+              ? ' (full)'
+              : !session
+                ? ' (no longer open)'
+                : ''}
+      </label>
+      {needsPermission && !booked ? (
+        <p data-testid="permission-needed" style={{ fontSize: '0.9em', margin: '0.25rem 0 0 1.5rem' }}>
+          A guardian&apos;s permission is needed first:{' '}
+          <Link href={`/children/${studentId}/trips`}>read the trip&apos;s details and give permission</Link>.
+        </p>
+      ) : null}
     </fieldset>
   );
 }

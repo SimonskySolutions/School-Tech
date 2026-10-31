@@ -11,6 +11,7 @@ import {
   sessionsBody,
   staffBody,
   text,
+  tripConsentBody,
 } from '../../../lib/admin';
 import { postAdmin, writeApi } from '../../../lib/api-client';
 import { currentSession, runtime } from '../../../lib/server';
@@ -34,6 +35,15 @@ const ACTIONS: Record<
       method: 'PUT',
       path: `/admin/schools/${id}/offerings/${offeringId}/eligibility`,
       body: eligibilityBody(form),
+    };
+  },
+  'set-trip-consent': (form, id) => {
+    const offeringId = text(form, 'offering_id');
+    if (!UUID.test(offeringId)) throw new FormProblem('no such offering');
+    return {
+      method: 'PUT',
+      path: `/admin/schools/${id}/offerings/${offeringId}/trip-consent`,
+      body: tripConsentBody(form),
     };
   },
   'add-sessions': (form, id) => ({ path: `/admin/schools/${id}/sessions`, body: sessionsBody(form) }),

@@ -77,6 +77,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
 
+Trips (ADR 0023): the consent wording is a `catalog.policy_version` of kind `trip_consent` (immutable, versioned); `scheduling.trip_permission` records a guardian's permission for one child and trip, pointing at the exact wording, with an emergency contact for the day. It is readable by the child's guardians and by staff with `bookings.read` or `consent.manage` at the school; the emergency contact is redacted in the audit log. A trip booking needs a given permission for the wording in force.
+
 Lessons (ADR 0022): teachers and rooms are `scheduling.resource` rows with weekly hours (`resource_availability`); a lesson slot is a session with capacity 1 whose resources are in `scheduling.session_resource`, where an exclusion constraint keeps a resource out of two overlapping live slots. A paid `per_package` line becomes a `scheduling.lesson_package`; its balance is the sum of the append-only `scheduling.package_entry` ledger (purchase, one entry per booking, one per lesson returned). Families see teacher and room display names, never staff person records; packages are visible to the child's guardians and to the school's staff with `bookings.read` or `finance.read`.
 
 Who may take an offering is `catalog.school_offering.eligibility` (`{"grades", "min_age", "max_age"}`, each optional; ADR 0021), checked on every new booking for that session's day. Attendance is marked only through `scheduling.mark_attendance`, with `attendance.mark` at the booking's school, once the session has started; the booking records who marked it and when.
@@ -107,6 +109,8 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY013` | The session has not started, so attendance cannot be marked yet |
 | `PY014` | The lesson package has no lessons left |
 | `PY015` | The slot is outside the teacher's or room's weekly hours, or the resource is no longer in use |
+| `PY016` | A trip needs a guardian's permission for its current wording first |
+| `PY017` | A trip permission cannot be withdrawn while a payment for the trip is open |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

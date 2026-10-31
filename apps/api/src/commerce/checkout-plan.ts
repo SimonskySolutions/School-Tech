@@ -110,7 +110,7 @@ export function planCheckout({
       for (const session of open) claim(seen, item.studentId, session.id);
       lines.push({
         ...base,
-        description: `${offering.name} (${open.length} sessions)`,
+        description: `${offering.name} (${open.length} ${open.length === 1 ? 'session' : 'sessions'})`,
         serviceDate: null,
         sessionId: null,
         bookingSessionIds: open.map((session) => session.id),

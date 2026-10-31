@@ -241,6 +241,34 @@ export async function createSessions(
   );
   if (!offering) throw new OnboardingRejected(404, 'no such offering at this school');
 
+  if (body.schedule.type === 'once') {
+    // One day out, for trips: booking and cancelling close 48 hours before it starts.
+    if (offering.kind !== 'trip') throw new OnboardingRejected(422, 'one-day calendars are for trips');
+    const { date, startTime, endTime } = body.schedule;
+    if (endTime <= startTime) throw new OnboardingRejected(422, 'a trip must end after it starts');
+    const once = await tx.query<{ id: string }>(
+      `INSERT INTO scheduling.session
+         (group_id, school_id, offering_id, starts_at, ends_at, capacity, location_label, booking_cutoff_at,
+          cancellation_cutoff_at)
+       SELECT access.current_group_id(), $2, $1, starts, ends, $4, $5, starts - interval '48 hours', starts - interval '48 hours'
+         FROM (SELECT ($3::date + $7::time) AT TIME ZONE $6 AS starts, ($3::date + $8::time) AT TIME ZONE $6 AS ends) t
+        WHERE starts > now()
+          AND NOT EXISTS (SELECT 1 FROM scheduling.session x WHERE x.offering_id = $1 AND x.starts_at = t.starts)
+       RETURNING id`,
+      [
+        offering.id,
+        target.id,
+        date,
+        body.capacity,
+        body.location ?? null,
+        target.time_zone,
+        startTime,
+        endTime,
+      ],
+    );
+    return { created: once.length, skipped: 1 - once.length };
+  }
+
   let dates: string[];
   try {
     dates =
@@ -497,11 +525,14 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
     currency: string | null;
     price_unit: string | null;
     eligibility: Record<string, unknown>;
+    trip_consent: { version: number; text: string } | null;
     sessions: number;
     first_date: string | null;
     last_date: string | null;
   }>(
     `SELECT o.id, o.name, d.kind, o.status, p.unit_amount_minor, p.currency, p.price_unit, o.eligibility,
+            (SELECT jsonb_build_object('version', w.version, 'text', w.terms_text) FROM catalog.policy_version w
+              WHERE w.id = catalog.current_trip_consent(o.id)) AS trip_consent,
             (SELECT count(*)::int FROM scheduling.session x WHERE x.offering_id = o.id) AS sessions,
             (SELECT to_char(min(coalesce(x.service_date, (x.starts_at AT TIME ZONE $2)::date)), 'YYYY-MM-DD')
                FROM scheduling.session x WHERE x.offering_id = o.id) AS first_date,
@@ -556,6 +587,7 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
               unit: row.price_unit!,
             },
       eligibility: eligibilityFromDatabase(row.eligibility),
+      tripConsent: row.trip_consent,
       sessions: row.sessions,
       firstDate: row.first_date,
       lastDate: row.last_date,

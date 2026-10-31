@@ -15,6 +15,8 @@ const MESSAGES: Record<string, () => HttpException> = {
   PY008: () => new ConflictException('a price changed; please review the basket again'),
   PY012: () => new UnprocessableEntityException('a child is not eligible for one of the chosen services'),
   PY013: () => new ConflictException('the session has not started yet'),
+  PY016: () => new ConflictException("a guardian's permission for the trip is needed first"),
+  PY017: () => new ConflictException('a payment for this trip is still open'),
   '23505': () => new ConflictException('already booked or already submitted'),
   '23503': () =>
     new UnprocessableEntityException('the request refers to something that does not belong together'),
