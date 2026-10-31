@@ -7,7 +7,13 @@ export interface HomeView {
   greeting: string;
   children: { id: string; name: string; places: string[] }[];
   /** studentsHref: the school's students page, for roles that can read enrolments there. */
-  schoolRoles: { role: string; school: string; studentsHref: string | null; lessonsHref: string | null }[];
+  schoolRoles: {
+    role: string;
+    school: string;
+    studentsHref: string | null;
+    lessonsHref: string | null;
+    uniformsHref: string | null;
+  }[];
   groupRoles: string[];
   groupSchools: string[];
   /** Kitchen counts and club registers; the API decides what each role sees there. */
@@ -73,6 +79,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       studentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/students` : null,
       // Every school role holds bookings.read or catalog.read there (access.role_permission).
       lessonsHref: `/schools/${role.school!.id}/lessons`,
+      uniformsHref: `/schools/${role.school!.id}/uniforms`,
     }));
 
   return {

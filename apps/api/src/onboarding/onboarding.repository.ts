@@ -572,7 +572,7 @@ export async function schoolSetup(tx: PersonTransaction, schoolId: string): Prom
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
        LEFT JOIN LATERAL (
          SELECT unit_amount_minor, currency, price_unit FROM catalog.price_version
-          WHERE offering_id = o.id AND valid_from <= now() AND (valid_until IS NULL OR valid_until > now())
+          WHERE offering_id = o.id AND variant_id IS NULL AND valid_from <= now() AND (valid_until IS NULL OR valid_until > now())
           ORDER BY valid_from DESC LIMIT 1
        ) p ON true
       WHERE o.school_id = $1

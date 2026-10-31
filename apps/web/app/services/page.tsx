@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {
   type Allergen,
   type BookableOffering,
+  type UniformProduct,
   describeEligibility,
   formatMoney,
   type StudentOfferings,
@@ -126,6 +127,9 @@ function ChildOfferings({ child, allergens }: { child: StudentOfferings; allerge
           <Activity key={offering.id} studentId={child.student.id} offering={offering} />
         ),
       )}
+      {child.uniforms.map((product) => (
+        <Uniform key={product.id} studentId={child.student.id} product={product} />
+      ))}
     </section>
   );
 }
@@ -319,6 +323,38 @@ function BusSeat({ studentId, offering }: { studentId: string; offering: Bookabl
           ))}
         </select>
       </label>
+    </fieldset>
+  );
+}
+
+/** A uniform product: how many of each size; what is left is shown and the API checks it again (ADR 0025). */
+function Uniform({ studentId, product }: { studentId: string; product: UniformProduct }) {
+  return (
+    <fieldset data-testid="offering-uniform">
+      <legend>{product.name}</legend>
+      <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
+        {product.variants.map((variant) => {
+          const label = [variant.size, variant.colour].filter(Boolean).join(', ') || variant.sku;
+          const most = Math.min(5, variant.available);
+          return (
+            <li key={variant.id} data-testid={`variant-${variant.sku}`} style={{ marginBottom: '0.25rem' }}>
+              <label style={{ opacity: most === 0 ? 0.6 : 1 }}>
+                {`${label} · ${formatMoney(variant.price.unitAmountMinor, variant.price.currency)} · ${
+                  most === 0 ? 'sold out' : `${variant.available} left`
+                } `}
+                <select name="uniform" defaultValue="" disabled={most === 0}>
+                  <option value="">0</option>
+                  {Array.from({ length: most }, (_, index) => (
+                    <option key={index} value={`${studentId}|${product.id}|${variant.id}|${index + 1}`}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
     </fieldset>
   );
 }

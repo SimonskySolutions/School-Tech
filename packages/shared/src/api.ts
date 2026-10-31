@@ -39,6 +39,25 @@ export interface MeResponse {
 export interface StudentOfferings {
   student: { id: PersonId; givenName: string; familyName: string };
   offerings: BookableOffering[];
+  /** Uniforms at the child's schools, by variant (ADR 0025). */
+  uniforms: UniformProduct[];
+}
+
+/** A uniform product with its variants, prices and free stock. */
+export interface UniformProduct {
+  id: string;
+  name: string;
+  school: { id: SchoolId; name: string };
+  billingEntity: { id: string; name: string };
+  variants: {
+    id: string;
+    sku: string;
+    size: string | null;
+    colour: string | null;
+    price: { unitAmountMinor: number; currency: string };
+    /** Items free to buy now (not held by other orders). */
+    available: number;
+  }[];
 }
 
 export interface BookableOffering {
@@ -73,8 +92,15 @@ export interface BookableOffering {
 }
 
 export interface CheckoutRequestBody {
-  /** stopId: the child's stop, for a transport seat. */
-  items: { studentId: string; offeringId: string; sessionIds?: string[]; stopId?: string }[];
+  /** stopId: the child's stop, for a transport seat; variantId and quantity: a uniform variant. */
+  items: {
+    studentId: string;
+    offeringId: string;
+    sessionIds?: string[];
+    stopId?: string;
+    variantId?: string;
+    quantity?: number;
+  }[];
 }
 
 export interface CheckoutResponse {
@@ -757,5 +783,41 @@ export interface TransportRuns {
       dropoffTime: string | null;
       children: { studentName: string | null; classLabel: string | null }[];
     }[];
+  }[];
+}
+
+/** A school's uniforms for staff: stock per variant and paid items to hand over (ADR 0025). */
+export interface SchoolUniforms {
+  school: { id: SchoolId; name: string };
+  /** catalog.manage: add variants and change stock. */
+  canManage: boolean;
+  /** bookings.manage: hand items over. */
+  canHandOver: boolean;
+  products: {
+    id: string;
+    name: string;
+    variants: {
+      id: string;
+      sku: string;
+      size: string | null;
+      colour: string | null;
+      price: { unitAmountMinor: number; currency: string } | null;
+      onHand: number;
+      reserved: number;
+      allocated: number;
+      free: number;
+      lowStock: boolean;
+      lowStockThreshold: number;
+      active: boolean;
+    }[];
+  }[];
+  awaitingHandOver: {
+    reservationId: string;
+    product: string;
+    variant: string;
+    quantity: number;
+    studentName: string | null;
+    classLabel: string | null;
+    paidAt: string | null;
   }[];
 }

@@ -21,6 +21,17 @@ DELETE FROM commerce.credit_application;
 DELETE FROM commerce.refund;
 DELETE FROM commerce.account_credit;
 DELETE FROM scheduling.trip_permission;
+-- Uniform stock: no orders hold anything any more; the store is what the
+-- ledger says once test deliveries, corrections and hand-overs are gone.
+DELETE FROM catalog.stock_movement
+ WHERE kind = 'handover' OR reason LIKE '%(integration test)' OR reason LIKE '%(e2e test)'
+    OR variant_id IN (SELECT id FROM catalog.product_variant WHERE sku LIKE 'TEST-%');
+DELETE FROM commerce.stock_reservation;
+DELETE FROM catalog.price_version WHERE variant_id IN (SELECT id FROM catalog.product_variant WHERE sku LIKE 'TEST-%');
+DELETE FROM catalog.product_variant WHERE sku LIKE 'TEST-%';
+UPDATE catalog.product_variant v
+   SET reserved = 0, allocated = 0,
+       on_hand = coalesce((SELECT sum(m.delta) FROM catalog.stock_movement m WHERE m.variant_id = v.id), 0);
 DELETE FROM scheduling.package_entry;
 DELETE FROM scheduling.lesson_package;
 DELETE FROM scheduling.booking;

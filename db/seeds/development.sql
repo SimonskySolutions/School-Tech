@@ -152,6 +152,7 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000006', :G, 'piano',    'lesson',   'Piano lessons'),
   ('d1000000-0000-7000-8000-000000000007', :G, 'museum',   'trip',     'Museum visit'),
   ('d1000000-0000-7000-8000-000000000008', :G, 'bus',      'transport', 'School bus'),
+  ('d1000000-0000-7000-8000-000000000009', :G, 'polo',     'uniform',  'School polo shirt'),
   ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
 ON CONFLICT (id) DO NOTHING;
 
@@ -166,6 +167,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000a6', :G, :SA, 'd1000000-0000-7000-8000-000000000006', :CO, 'piano',    'Piano lessons, School A (5 lessons)', 'published'),
   ('d2000000-0000-7000-8000-0000000000a7', :G, :SA, 'd1000000-0000-7000-8000-000000000007', :CO, 'museum',   'Museum visit, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a8', :G, :SA, 'd1000000-0000-7000-8000-000000000008', :CO, 'bus',      'School bus, route 1, School A', 'published'),
+  ('d2000000-0000-7000-8000-0000000000a9', :G, :SA, 'd1000000-0000-7000-8000-000000000009', :CO, 'polo',     'School polo shirt, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
@@ -222,6 +224,25 @@ SELECT :G, :SA, 'd2000000-0000-7000-8000-0000000000a7',
        ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia',
        ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia'
 WHERE NOT EXISTS (SELECT 1 FROM scheduling.session WHERE offering_id = 'd2000000-0000-7000-8000-0000000000a7');
+
+-- Uniforms (M4.6): the School A polo shirt in four sizes, each with its own
+-- price and stock. Size 140 has one left and 152 none, to show the limits.
+INSERT INTO catalog.product_variant (id, group_id, school_id, offering_id, sku, size, colour, low_stock_threshold, on_hand) VALUES
+  ('d6000000-0000-7000-8000-0000000000a1', :G, :SA, 'd2000000-0000-7000-8000-0000000000a9', 'POLO-NAVY-116', '116', 'Navy', 3, 10),
+  ('d6000000-0000-7000-8000-0000000000a2', :G, :SA, 'd2000000-0000-7000-8000-0000000000a9', 'POLO-NAVY-128', '128', 'Navy', 3, 10),
+  ('d6000000-0000-7000-8000-0000000000a3', :G, :SA, 'd2000000-0000-7000-8000-0000000000a9', 'POLO-NAVY-140', '140', 'Navy', 3, 1),
+  ('d6000000-0000-7000-8000-0000000000a4', :G, :SA, 'd2000000-0000-7000-8000-0000000000a9', 'POLO-NAVY-152', '152', 'Navy', 3, 0)
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO catalog.price_version (id, group_id, offering_id, variant_id, version, unit_amount_minor, vat_rate_bp, price_unit, valid_from)
+SELECT ('d7' || substr(v.id::text, 3))::uuid, :G, v.offering_id, v.id, 1, CASE WHEN v.size = '152' THEN 2800 ELSE 2500 END, 0, 'one_off',
+       TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia'
+FROM catalog.product_variant v WHERE v.offering_id = 'd2000000-0000-7000-8000-0000000000a9'
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO catalog.stock_movement (group_id, school_id, variant_id, kind, delta, reason)
+SELECT :G, :SA, v.id, 'delivery', v.on_hand, 'Opening stock (synthetic)'
+FROM catalog.product_variant v
+WHERE v.offering_id = 'd2000000-0000-7000-8000-0000000000a9' AND v.on_hand > 0
+  AND NOT EXISTS (SELECT 1 FROM catalog.stock_movement m WHERE m.variant_id = v.id);
 
 -- Transport (M4.5): route 1 to School A on school days, three stops, 20 seats
 -- for a term starting two weeks after the seed runs. Synthetic places and plate.

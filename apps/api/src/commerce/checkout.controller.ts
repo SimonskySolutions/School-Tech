@@ -27,6 +27,8 @@ const bodySchema = z.object({
         offeringId: z.uuid(),
         sessionIds: z.array(z.uuid()).max(60).optional(),
         stopId: z.uuid().optional(),
+        variantId: z.uuid().optional(),
+        quantity: z.number().int().min(1).max(5).optional(),
       }),
     )
     .min(1)

@@ -6,13 +6,18 @@ import { type BookableOffering, type CheckoutGroupView, type CheckoutRequestBody
 
 /**
  * Form values: "lunch" = student|offering|session; "activity", "package" (lessons) and "trip" =
- * student|offering; "transport" = student|offering|stop (the seat and the child's stop).
+ * student|offering; "transport" = student|offering|stop (the seat and the child's stop);
+ * "uniform" = student|offering|variant|quantity.
  */
 export function basketFromForm(
   entries: Iterable<[string, FormDataEntryValue]>,
 ): CheckoutRequestBody['items'] {
   const lunch = new Map<string, { studentId: string; offeringId: string; sessionIds: string[] }>();
   const activities = new Map<string, { studentId: string; offeringId: string; stopId?: string }>();
+  const uniforms = new Map<
+    string,
+    { studentId: string; offeringId: string; variantId: string; quantity: number }
+  >();
   for (const [name, raw] of entries) {
     if (typeof raw !== 'string') continue;
     const parts = raw.split('|');
@@ -28,9 +33,15 @@ export function basketFromForm(
     } else if (name === 'transport' && parts.length === 3) {
       const [studentId, offeringId, stopId] = parts as [string, string, string];
       activities.set(`${studentId}|${offeringId}`, { studentId, offeringId, stopId });
+    } else if (name === 'uniform' && parts.length === 4) {
+      const [studentId, offeringId, variantId, count] = parts as [string, string, string, string];
+      const quantity = Number(count);
+      if (Number.isInteger(quantity) && quantity >= 1 && quantity <= 5) {
+        uniforms.set(`${studentId}|${variantId}`, { studentId, offeringId, variantId, quantity });
+      }
     }
   }
-  return [...lunch.values(), ...activities.values()];
+  return [...lunch.values(), ...activities.values(), ...uniforms.values()];
 }
 
 export const CHECKOUT_ERRORS: Record<string, string> = {

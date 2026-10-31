@@ -55,6 +55,19 @@ const route = {
     { id: 'stop-2', position: 2, name: 'Closed', pickupTime: '07:40', dropoffTime: null, active: false },
   ],
 };
+const polo = {
+  offeringId: 'polo',
+  offeringName: 'Polo shirt',
+  schoolId: 'school-a',
+  billingEntityId: 'company-1',
+  billingEntityName: 'Testing Company',
+  label: '128, Navy',
+  priceVersionId: 'price-polo-128',
+  unitAmountMinor: 2500,
+  currency: 'EUR',
+  vatRateBp: 0,
+  free: 2,
+};
 const otherCompany = offering('other', {
   billing_entity_id: 'company-2',
   billing_entity_name: 'Second Company',
@@ -76,6 +89,7 @@ const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
       ['bus', [session('term', 'bus', null)]],
     ]),
     routesByOffering: new Map([['bus', route]]),
+    uniformsByStudent: new Map([['mila', new Map([['polo-128', polo]])]]),
   });
 
 const rejection = (run: () => unknown) => {
@@ -185,5 +199,35 @@ describe('planCheckout', () => {
     ]);
     expect(rejection(() => input([{ studentId: 'mila', offeringId: 'bus' }]))).toBe(422);
     expect(rejection(() => input([{ studentId: 'mila', offeringId: 'bus', stopId: 'stop-2' }]))).toBe(422);
+  });
+
+  it('sells uniform items as one line per variant with a quantity, holding that much stock', () => {
+    const [order] = input([{ studentId: 'mila', offeringId: 'polo', variantId: 'polo-128', quantity: 2 }]);
+    expect(order!.lines).toEqual([
+      expect.objectContaining({
+        description: 'Polo shirt, 128, Navy',
+        quantity: 2,
+        unitAmountMinor: 2500,
+        priceVersionId: 'price-polo-128',
+        bookingSessionIds: [],
+        stock: { variantId: 'polo-128', quantity: 2 },
+      }),
+    ]);
+    expect(order!.totalMinor).toBe(5000);
+  });
+
+  it('refuses more than is free, more than five, or a variant of another product', () => {
+    expect(
+      rejection(() => input([{ studentId: 'mila', offeringId: 'polo', variantId: 'polo-128', quantity: 3 }])),
+    ).toBe(409);
+    expect(
+      rejection(() => input([{ studentId: 'mila', offeringId: 'polo', variantId: 'polo-128', quantity: 6 }])),
+    ).toBe(422);
+    expect(rejection(() => input([{ studentId: 'mila', offeringId: 'chess', variantId: 'polo-128' }]))).toBe(
+      422,
+    );
+    expect(rejection(() => input([{ studentId: 'boris', offeringId: 'polo', variantId: 'polo-128' }]))).toBe(
+      422,
+    );
   });
 });

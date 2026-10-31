@@ -12,12 +12,13 @@ import {
   type SessionRow,
 } from '../catalog/catalog.repository';
 import { findRoutes } from '../transport/transport.repository';
+import { findUniformVariants } from '../uniforms/uniforms.repository';
 import { asHttpError } from '../common/database-errors';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
 import { Database, type PersonTransaction } from '../database/database';
 import { PAYMENT_PROVIDER, type PaymentProvider } from '../payments/provider';
-import { type BasketItem, CheckoutRejected, planCheckout } from './checkout-plan';
+import { type BasketItem, CheckoutRejected, planCheckout, type UniformVariant } from './checkout-plan';
 
 // Checkout (ADR 0008, 0010):
 //  1. One transaction as the parent: validate, create one order per billing
@@ -159,7 +160,39 @@ export class CheckoutService {
       [...offerings.values()].filter((o) => o.kind === 'transport').map((o) => o.id),
     );
     const routesByOffering = await findRoutes(tx, [...new Set(transportIds)]);
-    const planned = planCheckout({ items, offeringsByStudent, openSessionsByOffering, routesByOffering });
+    const uniformsByStudent = new Map<string, Map<string, UniformVariant>>();
+    for (const studentId of new Set(items.filter((item) => item.variantId).map((item) => item.studentId))) {
+      const found = await findStudentWithSchools(tx, studentId);
+      const rows = found ? await findUniformVariants(tx, found.schoolIds) : [];
+      uniformsByStudent.set(
+        studentId,
+        new Map(
+          rows.map((row) => [
+            row.variant_id,
+            {
+              offeringId: row.offering_id,
+              offeringName: row.offering_name,
+              schoolId: row.school_id,
+              billingEntityId: row.billing_entity_id,
+              billingEntityName: row.billing_entity_name,
+              label: [row.size, row.colour].filter(Boolean).join(', ') || row.sku,
+              priceVersionId: row.price_version_id,
+              unitAmountMinor: Number(row.unit_amount_minor),
+              currency: row.currency,
+              vatRateBp: row.vat_rate_bp,
+              free: row.free,
+            },
+          ]),
+        ),
+      );
+    }
+    const planned = planCheckout({
+      items,
+      offeringsByStudent,
+      openSessionsByOffering,
+      routesByOffering,
+      uniformsByStudent,
+    });
     const groupId = randomUUID();
     const expiresAt = new Date(Date.now() + this.env.CHECKOUT_TTL_MINUTES * 60_000);
     const [{ group_id: tenantGroupId } = { group_id: '' }] = await tx.query<{ group_id: string }>(
@@ -215,6 +248,24 @@ export class CheckoutService {
             line.unitAmountMinor * line.quantity,
           ],
         );
+        if (line.stock) {
+          // The variant row lock and its check hold the stock; not enough aborts the whole checkout.
+          await tx.query(
+            `INSERT INTO commerce.stock_reservation
+               (group_id, school_id, variant_id, order_line_id, student_person_id, quantity, status, reserved_until,
+                created_by_person_id)
+             VALUES ($1, $2, $3, $4, $5, $6, 'reserved', $7, app.current_person_id())`,
+            [
+              tenantGroupId,
+              line.schoolId,
+              line.stock.variantId,
+              lineId,
+              line.studentId,
+              line.stock.quantity,
+              expiresAt,
+            ],
+          );
+        }
         for (const sessionId of line.bookingSessionIds) {
           // The database holds the seat (row lock + capacity check); a full session aborts the whole checkout.
           await tx.query(

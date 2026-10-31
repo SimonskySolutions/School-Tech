@@ -28,3 +28,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0022](0022-individual-lessons.md) | Individual lessons: teachers, rooms, slots and packages | Accepted |
 | [0023](0023-trips-and-consent.md) | Trips and guardian consent | Accepted |
 | [0024](0024-transport-routes-and-seats.md) | Transport: routes, stops and seats for a term | Accepted |
+| [0025](0025-uniforms-and-stock.md) | Uniforms: variants, prices and stock | Accepted |

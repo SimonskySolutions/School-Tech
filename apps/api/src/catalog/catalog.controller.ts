@@ -9,6 +9,7 @@ import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import { dishesBySession } from '../school-life/menus';
 import { findRoutes } from '../transport/transport.repository';
+import { asProducts, findUniformVariants } from '../uniforms/uniforms.repository';
 import { eligibilityFromDatabase } from './eligibility';
 import {
   findBookableOfferings,
@@ -44,6 +45,7 @@ export class CatalogController {
           )
         : [];
       const booked = await findBookedSessionIds(tx, studentId);
+      const uniforms = asProducts(await findUniformVariants(tx, found.schoolIds));
       const problems = await findEligibilityProblems(
         tx,
         studentId,
@@ -111,6 +113,7 @@ export class CatalogController {
               menu: menus.get(session.id) ?? [],
             })),
         })),
+        uniforms,
       };
     });
   }

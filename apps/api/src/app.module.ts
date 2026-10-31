@@ -4,6 +4,7 @@ import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
 import { SchoolTransportController, TransportRunsController } from './transport/transport.controller';
+import { SchoolUniformsController } from './uniforms/uniforms.controller';
 import {
   StudentTripsController,
   TripConsentController,
@@ -45,6 +46,7 @@ import { type Env } from './config/env';
     StudentLessonsController,
     StudentTripsController,
     SchoolTransportController,
+    SchoolUniformsController,
     TransportRunsController,
     TripConsentController,
     TripParticipantsController,

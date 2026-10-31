@@ -241,7 +241,8 @@ export async function schoolLessons(
        FROM catalog.school_offering o
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
        LEFT JOIN LATERAL (SELECT package_size FROM catalog.price_version p
-                           WHERE p.offering_id = o.id AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
+                           WHERE p.offering_id = o.id AND p.variant_id IS NULL
+                             AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
                            ORDER BY p.valid_from DESC LIMIT 1) pv ON true
       WHERE o.school_id = $1 AND d.kind = 'lesson' AND o.status <> 'archived'
       ORDER BY o.name`,

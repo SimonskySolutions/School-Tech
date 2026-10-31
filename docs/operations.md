@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Uniforms (ADR 0025)
+
+- Setting up: add a uniform offering on the school's set-up page (its own price is not used), then on "Sizes, prices and stock" (`/schools/<id>/uniforms`) add each size or colour with its code and price, and take in a delivery to put it on sale.
+- Families choose how many of each size on the booking page; what is left is shown, and an unpaid order holds its items for 30 minutes.
+- Staff hand paid items over on the same page ("Paid, to hand over"), record deliveries and counted corrections (with a reason), and see sizes at or below their reorder level under "Low stock". A correction can never take the store below what is held for orders; every change is in the stock ledger (`catalog.stock_movement`).
+
 ### Transport (ADR 0024)
 
 - Setting up a route for a term: add a transport offering on the school's set-up page (priced per term), add "A whole term (transport)" calendar with the first and last day, the seats as places and the term's name in the Room field, then open "Route and stops" to set the vehicle and weekdays and add the stops in order. One route offering has one term; the next term is a new offering.

@@ -81,7 +81,8 @@ export function findBookableOfferings(
        JOIN org.legal_entity le ON le.id = o.billing_entity_id
        JOIN LATERAL (
               SELECT * FROM catalog.price_version p
-               WHERE p.offering_id = o.id AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
+               WHERE p.offering_id = o.id AND p.variant_id IS NULL
+                 AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
                ORDER BY p.valid_from DESC LIMIT 1) pv ON true
       WHERE o.school_id = ANY ($1::uuid[])
         AND o.status = 'published'

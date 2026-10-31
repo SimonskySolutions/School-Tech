@@ -45,7 +45,7 @@ export default async function SchoolSetupPage({
   // Development addresses go through the gateway's port; production uses HTTPS on the default port.
   const devPort = new URL(config.APP_URL).port ? `:${new URL(config.APP_URL).port}` : '';
   const bookable = serviceDefinitions.filter((service) =>
-    ['lunch', 'activity', 'lesson', 'trip', 'transport'].includes(service.kind),
+    ['lunch', 'activity', 'lesson', 'trip', 'transport', 'uniform'].includes(service.kind),
   );
 
   return (
@@ -189,6 +189,12 @@ export default async function SchoolSetupPage({
                   ? `${formatMoney(offering.price.unitAmountMinor, offering.price.currency)} ${PRICE_UNITS[offering.price.unit] ?? offering.price.unit}`
                   : 'no price'
               }; ${offering.sessions} sessions${offering.firstDate ? ` from ${offering.firstDate} to ${offering.lastDate}` : ''}`}
+              {offering.kind === 'uniform' ? (
+                <>
+                  {' · '}
+                  <Link href={`/schools/${school.id}/uniforms`}>Sizes, prices and stock</Link>
+                </>
+              ) : null}
               {offering.kind === 'transport' ? (
                 <>
                   {' · '}

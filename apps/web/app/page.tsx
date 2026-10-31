@@ -119,6 +119,14 @@ function Home({ view }: { view: HomeView }) {
                     </Link>
                   </>
                 ) : null}
+                {entry.uniformsHref ? (
+                  <>
+                    {' · '}
+                    <Link href={entry.uniformsHref} data-testid="uniforms-link">
+                      Uniforms
+                    </Link>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -170,6 +178,10 @@ function Home({ view }: { view: HomeView }) {
               <li key={school.id}>
                 <a href={`/schools/${school.id}/lessons`} data-testid="school-lessons-link">
                   {`Lessons at ${school.name}`}
+                </a>
+                {' · '}
+                <a href={`/schools/${school.id}/uniforms`} data-testid="school-uniforms-link">
+                  Uniforms
                 </a>
               </li>
             ))}

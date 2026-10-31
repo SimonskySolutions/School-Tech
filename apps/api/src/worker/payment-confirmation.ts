@@ -175,7 +175,10 @@ async function succeed(
   };
 }
 
-/** Confirms every booking of a line; false (and nothing confirmed) if any seat is no longer available. */
+/**
+ * Confirms every booking and stock reservation of a line; false (and nothing
+ * confirmed) if a seat or an item is no longer available.
+ */
 async function confirmBookings(tx: SystemTransaction, lineId: string): Promise<boolean> {
   await tx.query('SAVEPOINT confirm_line');
   try {
@@ -184,11 +187,17 @@ async function confirmBookings(tx: SystemTransaction, lineId: string): Promise<b
         WHERE order_line_id = $1 AND status IN ('reserved', 'expired')`,
       [lineId],
     );
+    await tx.query(
+      `UPDATE commerce.stock_reservation SET status = 'confirmed', confirmed_at = now(), reserved_until = NULL
+        WHERE order_line_id = $1 AND status IN ('reserved', 'expired')`,
+      [lineId],
+    );
     await tx.query('RELEASE SAVEPOINT confirm_line');
     return true;
   } catch (error) {
     await tx.query('ROLLBACK TO SAVEPOINT confirm_line');
-    if ((error as { code?: string }).code !== 'PY002') throw error;
+    const code = (error as { code?: string }).code;
+    if (code !== 'PY002' && code !== 'PY019') throw error;
     return false;
   }
 }
@@ -203,11 +212,16 @@ async function creditLine(
       WHERE order_line_id = $1 AND status = 'reserved'`,
     [line.id],
   );
+  const stock = await tx.query(
+    `UPDATE commerce.stock_reservation SET status = 'cancelled', cancelled_at = now(), reserved_until = NULL
+      WHERE order_line_id = $1 AND status IN ('reserved', 'expired') RETURNING id`,
+    [line.id],
+  );
   await tx.query(`UPDATE commerce.order_line SET status = 'cancelled' WHERE id = $1`, [line.id]);
   const [credit] = await tx.query<{ id: string }>(
     `INSERT INTO commerce.account_credit
        (group_id, billing_entity_id, holder_person_id, currency, original_amount_minor, remaining_amount_minor, reason, source_order_line_id)
-     VALUES ($1, $2, $3, $4, $5, $5, 'Paid after the reservation expired; the session was full', $6)
+     VALUES ($1, $2, $3, $4, $5, $5, $7, $6)
      RETURNING id`,
     [
       payment.group_id,
@@ -216,6 +230,9 @@ async function creditLine(
       line.currency,
       line.line_total_minor,
       line.id,
+      stock.length
+        ? 'Paid after the reservation expired; the item was no longer in stock'
+        : 'Paid after the reservation expired; the session was full',
     ],
   );
   await tx.query(

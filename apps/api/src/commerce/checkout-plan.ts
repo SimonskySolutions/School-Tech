@@ -11,6 +11,9 @@ export interface BasketItem {
   sessionIds?: string[];
   /** The child's stop, for a transport seat (ADR 0024). */
   stopId?: string;
+  /** A uniform variant and how many (ADR 0025). */
+  variantId?: string;
+  quantity?: number;
 }
 
 export interface PlannedLine {
@@ -21,7 +24,7 @@ export interface PlannedLine {
   description: string;
   serviceDate: string | null;
   sessionId: string | null;
-  quantity: 1;
+  quantity: number;
   unitAmountMinor: number;
   vatRateBp: number;
   currency: string;
@@ -29,6 +32,8 @@ export interface PlannedLine {
   bookingSessionIds: string[];
   /** The stop written on each booking of a transport seat. */
   transportStopId: string | null;
+  /** Stock held for a uniform line. */
+  stock: { variantId: string; quantity: number } | null;
 }
 
 export interface PlannedOrder {
@@ -55,19 +60,76 @@ export interface PlanInput {
   openSessionsByOffering: ReadonlyMap<string, readonly SessionRow[]>;
   /** Routes of the transport offerings in the basket. */
   routesByOffering?: ReadonlyMap<string, TransportRoute>;
+  /** Uniform variants per student (only the child's schools), keyed by variant. */
+  uniformsByStudent?: ReadonlyMap<string, ReadonlyMap<string, UniformVariant>>;
 }
+
+/** A uniform variant as the planner needs it. */
+export interface UniformVariant {
+  offeringId: string;
+  offeringName: string;
+  schoolId: string;
+  billingEntityId: string;
+  billingEntityName: string;
+  label: string;
+  priceVersionId: string;
+  unitAmountMinor: number;
+  currency: string;
+  vatRateBp: number;
+  free: number;
+}
+
+/** Most items of one variant in one line. */
+export const MAX_UNIFORM_QUANTITY = 5;
 
 export function planCheckout({
   items,
   offeringsByStudent,
   openSessionsByOffering,
   routesByOffering = new Map(),
+  uniformsByStudent = new Map(),
 }: PlanInput): PlannedOrder[] {
   if (items.length === 0) throw new CheckoutRejected(422, 'the basket is empty');
   const lines: (PlannedLine & { billingEntityId: string; billingEntityName: string })[] = [];
   const seen = new Set<string>();
 
   for (const item of items) {
+    if (item.variantId !== undefined) {
+      const variant = uniformsByStudent.get(item.studentId)?.get(item.variantId);
+      if (!variant || variant.offeringId !== item.offeringId) {
+        throw new CheckoutRejected(422, 'an item is not available for this child');
+      }
+      const quantity = item.quantity ?? 1;
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_UNIFORM_QUANTITY) {
+        throw new CheckoutRejected(422, `choose 1 to ${MAX_UNIFORM_QUANTITY} of ${variant.offeringName}`);
+      }
+      if (quantity > variant.free) {
+        throw new CheckoutRejected(
+          409,
+          `only ${Math.max(0, variant.free)} of ${variant.offeringName}, ${variant.label} left`,
+        );
+      }
+      claim(seen, item.studentId, `variant:${item.variantId}`);
+      lines.push({
+        studentId: item.studentId,
+        offeringId: variant.offeringId,
+        schoolId: variant.schoolId,
+        priceVersionId: variant.priceVersionId,
+        quantity,
+        unitAmountMinor: variant.unitAmountMinor,
+        vatRateBp: variant.vatRateBp,
+        currency: variant.currency,
+        billingEntityId: variant.billingEntityId,
+        billingEntityName: variant.billingEntityName,
+        description: `${variant.offeringName}, ${variant.label}`.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+        transportStopId: null,
+        stock: { variantId: item.variantId, quantity },
+      });
+      continue;
+    }
     const offering = offeringsByStudent.get(item.studentId)?.get(item.offeringId);
     if (!offering) throw new CheckoutRejected(422, 'an item is not available for this child');
     const open = openSessionsByOffering.get(offering.id) ?? [];
@@ -83,6 +145,7 @@ export function planCheckout({
       billingEntityId: offering.billing_entity_id,
       billingEntityName: offering.billing_entity_name,
       transportStopId: null,
+      stock: null,
     };
 
     if (offering.kind === 'transport') {

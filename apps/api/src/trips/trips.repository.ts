@@ -97,7 +97,8 @@ export async function studentTrips(tx: PersonTransaction, studentId: string): Pr
        JOIN org.school sc ON sc.id = s.school_id
        LEFT JOIN catalog.policy_version w ON w.id = catalog.current_trip_consent(o.id)
        LEFT JOIN LATERAL (SELECT p.unit_amount_minor, p.currency FROM catalog.price_version p
-                           WHERE p.offering_id = o.id AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
+                           WHERE p.offering_id = o.id AND p.variant_id IS NULL
+                             AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
                            ORDER BY p.valid_from DESC LIMIT 1) pv ON true
        LEFT JOIN scheduling.trip_permission tp
               ON tp.session_id = s.id AND tp.student_person_id = $1 AND tp.status = 'given'

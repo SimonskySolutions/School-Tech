@@ -25,6 +25,11 @@ export async function releaseOrder(
       [orderId, reason],
     );
     await tx.query(
+      `UPDATE commerce.stock_reservation SET status = 'cancelled', cancelled_at = now(), reserved_until = NULL
+        WHERE status = 'reserved' AND order_line_id IN (SELECT id FROM commerce.order_line WHERE order_id = $1)`,
+      [orderId],
+    );
+    await tx.query(
       `UPDATE commerce.order_line SET status = 'cancelled' WHERE order_id = $1 AND status = 'pending'`,
       [orderId],
     );
@@ -35,6 +40,11 @@ export async function releaseOrder(
   } else {
     await tx.query(
       `UPDATE scheduling.booking SET status = 'expired', reserved_until = NULL
+        WHERE status = 'reserved' AND order_line_id IN (SELECT id FROM commerce.order_line WHERE order_id = $1)`,
+      [orderId],
+    );
+    await tx.query(
+      `UPDATE commerce.stock_reservation SET status = 'expired', reserved_until = NULL
         WHERE status = 'reserved' AND order_line_id IN (SELECT id FROM commerce.order_line WHERE order_id = $1)`,
       [orderId],
     );

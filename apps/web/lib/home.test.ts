@@ -79,6 +79,7 @@ describe('buildHome', () => {
         school: 'School A',
         studentsHref: '/schools/a/students',
         lessonsHref: '/schools/a/lessons',
+        uniformsHref: '/schools/a/uniforms',
       },
     ]);
     expect(view.groupSchools).toEqual([]);

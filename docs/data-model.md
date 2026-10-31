@@ -77,6 +77,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
 
+Uniforms (ADR 0025): a product is a uniform offering with `catalog.product_variant`s, each with its own price versions (`catalog.price_version.variant_id`; queries for an offering's own price read only versions without a variant). The variant holds `on_hand`, `reserved` and `allocated`, never more held than in the store; `commerce.stock_reservation` (one per order line) moves items from reserved to allocated to handed over, and `catalog.stock_movement` is the permanent ledger of deliveries, corrections and hand-overs, which always adds up to `on_hand`.
+
 Transport (ADR 0024): a route for one term is a transport offering with a `scheduling.transport_route` row (vehicle, ISO weekdays) and ordered `scheduling.transport_stop`s; the term is the offering's one session, whose capacity is the seats. A seat is a booking of that session with `transport_stop_id`, checked by trigger. Routes and stops are visible in the group; changing them needs `catalog.manage`.
 
 Trips (ADR 0023): the consent wording is a `catalog.policy_version` of kind `trip_consent` (immutable, versioned); `scheduling.trip_permission` records a guardian's permission for one child and trip, pointing at the exact wording, with an emergency contact for the day. It is readable by the child's guardians and by staff with `bookings.read` or `consent.manage` at the school; the emergency contact is redacted in the audit log. A trip booking needs a given permission for the wording in force.
@@ -114,6 +116,7 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY016` | A trip needs a guardian's permission for its current wording first |
 | `PY017` | A trip permission cannot be withdrawn while a payment for the trip is open |
 | `PY018` | A transport seat needs an active stop of its own route (and only transport seats have one) |
+| `PY019` | Not enough of a uniform item in stock (or a correction would leave fewer than are held for orders) |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

@@ -12,6 +12,7 @@ import {
   type SchoolLessons,
   type SchoolSetup,
   type SchoolTransport,
+  type SchoolUniforms,
   type StudentList,
   type MeResponse,
   type OnboardingOverview,
@@ -213,3 +214,6 @@ export const fetchSchoolTransport = (apiUrl: string, accessToken: string, school
 
 export const fetchTransportRuns = (apiUrl: string, accessToken: string, date: string | null) =>
   get<TransportRuns>(apiUrl, `/school-life/transport${date ? `?date=${date}` : ''}`, accessToken);
+
+export const fetchSchoolUniforms = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolUniforms>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/uniforms`, accessToken);
