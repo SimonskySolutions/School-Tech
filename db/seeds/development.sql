@@ -236,13 +236,24 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO catalog.price_version (id, group_id, offering_id, variant_id, version, unit_amount_minor, vat_rate_bp, price_unit, valid_from)
 SELECT ('d7' || substr(v.id::text, 3))::uuid, :G, v.offering_id, v.id, 1, CASE WHEN v.size = '152' THEN 2800 ELSE 2500 END, 0, 'one_off',
        TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia'
-FROM catalog.product_variant v WHERE v.offering_id = 'd2000000-0000-7000-8000-0000000000a9'
-ON CONFLICT (id) DO NOTHING;
-INSERT INTO catalog.stock_movement (group_id, school_id, variant_id, kind, delta, reason)
-SELECT :G, :SA, v.id, 'delivery', v.on_hand, 'Opening stock (synthetic)'
 FROM catalog.product_variant v
-WHERE v.offering_id = 'd2000000-0000-7000-8000-0000000000a9' AND v.on_hand > 0
-  AND NOT EXISTS (SELECT 1 FROM catalog.stock_movement m WHERE m.variant_id = v.id);
+-- Only the sizes above: tests add their own (with their own prices) and the
+-- seed runs again on top of them.
+WHERE v.id IN ('d6000000-0000-7000-8000-0000000000a1', 'd6000000-0000-7000-8000-0000000000a2',
+               'd6000000-0000-7000-8000-0000000000a3', 'd6000000-0000-7000-8000-0000000000a4')
+  AND NOT EXISTS (SELECT 1 FROM catalog.price_version p WHERE p.variant_id = v.id)
+ON CONFLICT DO NOTHING;
+-- The opening stock as fixed quantities, never the current count: tests change
+-- the stock and the seed runs again on top of them.
+INSERT INTO catalog.stock_movement (group_id, school_id, variant_id, kind, delta, reason)
+SELECT :G, :SA, v.variant::uuid, 'delivery', v.quantity, 'Opening stock (synthetic)'
+FROM (VALUES
+  ('d6000000-0000-7000-8000-0000000000a1', 10),
+  ('d6000000-0000-7000-8000-0000000000a2', 10),
+  ('d6000000-0000-7000-8000-0000000000a3', 1)
+) AS v (variant, quantity)
+WHERE NOT EXISTS (SELECT 1 FROM catalog.stock_movement m
+                   WHERE m.variant_id = v.variant::uuid AND m.reason = 'Opening stock (synthetic)');
 
 -- Transport (M4.5): route 1 to School A on school days, three stops, 20 seats
 -- for a term starting two weeks after the seed runs. Synthetic places and plate.
