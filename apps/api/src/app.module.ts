@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
+import { SchoolRequestsController, StudentRequestsController } from './requests/requests.controller';
 import { SchoolTransportController, TransportRunsController } from './transport/transport.controller';
 import { SchoolUniformsController } from './uniforms/uniforms.controller';
 import {
@@ -43,6 +44,8 @@ import { type Env } from './config/env';
     DietaryController,
     DietaryReviewController,
     SchoolLessonsController,
+    SchoolRequestsController,
+    StudentRequestsController,
     StudentLessonsController,
     StudentTripsController,
     SchoolTransportController,

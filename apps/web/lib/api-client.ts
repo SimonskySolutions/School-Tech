@@ -10,6 +10,7 @@ import {
   type LunchMenus,
   type RevenueReport,
   type SchoolLessons,
+  type SchoolRequests,
   type SchoolSetup,
   type SchoolTransport,
   type SchoolUniforms,
@@ -21,6 +22,7 @@ import {
   type StudentDietary,
   type StudentLessons,
   type StudentOfferings,
+  type StudentRequests,
   type StudentTrips,
   type TransportRuns,
   type TripParticipants,
@@ -217,3 +219,9 @@ export const fetchTransportRuns = (apiUrl: string, accessToken: string, date: st
 
 export const fetchSchoolUniforms = (apiUrl: string, accessToken: string, schoolId: string) =>
   get<SchoolUniforms>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/uniforms`, accessToken);
+
+export const fetchStudentRequests = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentRequests>(apiUrl, `/students/${encodeURIComponent(studentId)}/requests`, accessToken);
+
+export const fetchSchoolRequests = (apiUrl: string, accessToken: string, status: string) =>
+  get<SchoolRequests>(apiUrl, `/school-life/requests?${new URLSearchParams({ status })}`, accessToken);

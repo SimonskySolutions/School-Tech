@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Families' requests (M4.7)
+
+- Parents write under "Messages to the school" next to each child (absence, dietary change, who collects, question, other); the request goes to the child's school.
+- School Life, principals and school administrators answer at `/school-life/requests` (waiting first; filters for each status). "Working on it" tells the family it is being handled; an answer marks it answered; the family's reply reopens it; either side can close it.
+- No e-mail is sent yet on new requests or answers (M7), so staff check the page.
+
 ### Uniforms (ADR 0025)
 
 - Setting up: add a uniform offering on the school's set-up page (its own price is not used), then on "Sizes, prices and stock" (`/schools/<id>/uniforms`) add each size or colour with its code and price, and take in a delivery to put it on sale.

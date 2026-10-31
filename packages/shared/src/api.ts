@@ -821,3 +821,49 @@ export interface SchoolUniforms {
     paidAt: string | null;
   }[];
 }
+
+export const REQUEST_KINDS = ['absence', 'dietary', 'collection', 'question', 'other'] as const;
+export type RequestKind = (typeof REQUEST_KINDS)[number];
+export type RequestStatus = 'open' | 'in_progress' | 'answered' | 'closed';
+
+/** A family's request to the school about a child, with its messages (M4.7). */
+export interface FamilyRequest {
+  id: string;
+  school: { id: SchoolId; name: string };
+  kind: RequestKind;
+  subject: string;
+  status: RequestStatus;
+  createdAt: string;
+  lastMessageAt: string;
+  messages: {
+    /** Written by the school's staff (families do not see staff names). */
+    fromSchool: boolean;
+    authorName: string | null;
+    body: string;
+    createdAt: string;
+  }[];
+}
+
+/** A guardian's requests about one child, and the schools they can write to. */
+export interface StudentRequests {
+  student: { id: PersonId; givenName: string; familyName: string };
+  schools: { id: SchoolId; name: string }[];
+  requests: FamilyRequest[];
+}
+
+export interface OpenRequestBody {
+  schoolId: string;
+  kind: RequestKind;
+  subject: string;
+  message: string;
+}
+
+/** Requests at the schools where the viewer handles them; "active" is everything not closed. */
+export interface SchoolRequests {
+  filter: 'active' | RequestStatus;
+  requests: (FamilyRequest & {
+    studentName: string | null;
+    classLabel: string | null;
+    requestedBy: string | null;
+  })[];
+}

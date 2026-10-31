@@ -85,6 +85,10 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={`/children/${child.id}/trips`} data-testid="child-trips-link">
                   Trips
                 </Link>
+                {' · '}
+                <Link href={`/children/${child.id}/requests`} data-testid="child-requests-link">
+                  Messages to the school
+                </Link>
               </li>
             ))}
           </ul>
@@ -185,6 +189,13 @@ function Home({ view }: { view: HomeView }) {
                 </a>
               </li>
             ))}
+            {view.showsRequests ? (
+              <li>
+                <a href="/school-life/requests" data-testid="requests-link">
+                  Families&apos; requests
+                </a>
+              </li>
+            ) : null}
             {view.showsDietaryReview ? (
               <li>
                 <a href="/school-life/dietary" data-testid="dietary-review-link">

@@ -21,6 +21,15 @@ DELETE FROM commerce.credit_application;
 DELETE FROM commerce.refund;
 DELETE FROM commerce.account_credit;
 DELETE FROM scheduling.trip_permission;
+-- Requests the tests opened, with their messages.
+DELETE FROM people.family_request_message
+ WHERE request_id IN (SELECT id FROM people.family_request
+                       WHERE subject LIKE '%(integration test)' OR subject LIKE '%(e2e test)');
+DELETE FROM people.family_request WHERE subject LIKE '%(integration test)' OR subject LIKE '%(e2e test)';
+-- The seeded request starts again as Anna sent it.
+DELETE FROM people.family_request_message
+ WHERE request_id = 'd8000000-0000-7000-8000-0000000000a1' AND id <> 'd8100000-0000-7000-8000-0000000000a1';
+UPDATE people.family_request SET status = 'open', closed_at = NULL WHERE id = 'd8000000-0000-7000-8000-0000000000a1';
 -- Uniform stock: no orders hold anything any more; the store is what the
 -- ledger says once test deliveries, corrections and hand-overs are gone.
 DELETE FROM catalog.stock_movement

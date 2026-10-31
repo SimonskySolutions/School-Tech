@@ -255,6 +255,17 @@ FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM catalog.stock_movement m
                    WHERE m.variant_id = v.variant::uuid AND m.reason = 'Opening stock (synthetic)');
 
+-- A request (M4.7): Anna asks School A about collecting Mila on Friday.
+INSERT INTO people.family_request (id, group_id, school_id, student_person_id, requested_by_person_id, kind, subject)
+VALUES ('d8000000-0000-7000-8000-0000000000a1', :G, :SA, 'c1000000-0000-7000-8000-000000000030',
+        'c1000000-0000-7000-8000-000000000020', 'collection', 'Grandmother collects Mila on Friday (synthetic)')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO people.family_request_message (id, group_id, request_id, author_person_id, from_school, body)
+VALUES ('d8100000-0000-7000-8000-0000000000a1', :G, 'd8000000-0000-7000-8000-0000000000a1',
+        'c1000000-0000-7000-8000-000000000020', false,
+        'Mila''s grandmother, Elena Ivanova, will collect her at 15:00 on Friday. (Synthetic example.)')
+ON CONFLICT (id) DO NOTHING;
+
 -- Transport (M4.5): route 1 to School A on school days, three stops, 20 seats
 -- for a term starting two weeks after the seed runs. Synthetic places and plate.
 INSERT INTO scheduling.transport_route (offering_id, group_id, school_id, vehicle, weekdays)

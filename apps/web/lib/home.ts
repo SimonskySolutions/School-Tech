@@ -20,6 +20,8 @@ export interface HomeView {
   showsSchoolLife: boolean;
   /** Children's dietary needs to verify (dietary and enrolment read); the API enforces it. */
   showsDietaryReview: boolean;
+  /** Families' requests (requests.manage); the API enforces it. */
+  showsRequests: boolean;
   /** Group roles that see School Life: the lessons page of each school. */
   lessonSchools: { id: string; name: string }[];
   /** Revenue and balances per school; the API decides which schools. */
@@ -44,6 +46,9 @@ const SCHOOL_LIFE_ROLES = new Set([
 
 // Roles that hold sensitive.dietary.read and enrolment.read; a hint for links only.
 const DIETARY_REVIEW_ROLES = new Set(['school_life_coordinator', 'principal']);
+
+// Roles that hold requests.manage; a hint for links only.
+const REQUEST_ROLES = new Set(['school_life_coordinator', 'principal', 'school_admin']);
 
 // Roles that hold reports.read in the database; again only a hint for links.
 const REPORT_ROLES = new Set([
@@ -90,6 +95,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     groupSchools: groupRoles.length > 0 ? schools.map((school) => school.name) : [],
     showsSchoolLife: me.roles.some((role) => SCHOOL_LIFE_ROLES.has(role.code)),
     showsDietaryReview: me.roles.some((role) => DIETARY_REVIEW_ROLES.has(role.code)),
+    showsRequests: me.roles.some((role) => REQUEST_ROLES.has(role.code)),
     lessonSchools: me.roles.some((role) => role.scope === 'group' && SCHOOL_LIFE_ROLES.has(role.code))
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],
