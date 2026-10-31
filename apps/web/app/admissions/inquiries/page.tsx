@@ -124,6 +124,38 @@ export default async function InquiriesPage({ searchParams }: { searchParams: Se
               ))}
             </ul>
           ) : null}
+          {inquiry.parentName ? (
+            <details data-testid="family-requests" style={{ margin: '0.5rem 0' }}>
+              <summary>The family asks…</summary>
+              <form method="post" action="/admissions/export" style={{ display: 'inline' }}>
+                <input type="hidden" name="kind" value="inquiry" />
+                <input type="hidden" name="id" value={inquiry.id} />
+                <button type="submit" data-testid="export">
+                  To see what we hold (download)
+                </button>
+              </form>{' '}
+              {inquiry.newsConsent ? (
+                <form method="post" action={action} style={{ display: 'inline' }}>
+                  <input type="hidden" name="action" value="withdraw-consent" />
+                  <input type="hidden" name="inquiry_id" value={inquiry.id} />
+                  <button type="submit" data-testid="withdraw-consent">
+                    No more news about open days
+                  </button>
+                </form>
+              ) : null}
+              <form method="post" action={action} style={{ marginTop: '0.5rem' }}>
+                <input type="hidden" name="action" value="erase" />
+                <input type="hidden" name="inquiry_id" value={inquiry.id} />
+                <label>
+                  <input type="checkbox" name="confirm" value="yes" required /> The family asked us to erase
+                  this inquiry; it cannot be undone.
+                </label>{' '}
+                <button type="submit" data-testid="erase">
+                  Erase
+                </button>
+              </form>
+            </details>
+          ) : null}
           {inquiry.invited ? (
             <p data-testid="invited">Invited to apply: the parent can sign in and apply.</p>
           ) : null}

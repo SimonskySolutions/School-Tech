@@ -5,6 +5,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Header,
   HttpCode,
   HttpException,
   Inject,
@@ -27,10 +28,13 @@ import { Database, type PersonTransaction } from '../database/database';
 import {
   addNote,
   closeInquiry,
+  eraseInquiry,
+  exportInquiry,
   formFromRows,
   InquiriesRejected,
   refusalsAsInquiries,
   schoolInquiries,
+  withdrawNewsConsent,
 } from './inquiries.repository';
 
 const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -186,5 +190,36 @@ export class InquiriesController {
   ) {
     const data = parse(closeSchema, body);
     return run(this.database, principal, (tx) => closeInquiry(tx, inquiryId, data.outcome));
+  }
+
+  /** The family asked to be forgotten (Art. 17). */
+  @Post(':inquiryId/erase')
+  @HttpCode(200)
+  erase(
+    @CurrentPrincipal() principal: Principal,
+    @Param('inquiryId', new ParseUUIDPipe()) inquiryId: string,
+  ) {
+    return run(this.database, principal, (tx) => eraseInquiry(tx, inquiryId));
+  }
+
+  /** The family no longer wants news about open days (Art. 7(3)). */
+  @Post(':inquiryId/withdraw-consent')
+  @HttpCode(200)
+  withdrawConsent(
+    @CurrentPrincipal() principal: Principal,
+    @Param('inquiryId', new ParseUUIDPipe()) inquiryId: string,
+  ) {
+    return run(this.database, principal, (tx) => withdrawNewsConsent(tx, inquiryId));
+  }
+
+  /** What is held about the sender, for an access request (Art. 15). */
+  @Post(':inquiryId/export')
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  export(
+    @CurrentPrincipal() principal: Principal,
+    @Param('inquiryId', new ParseUUIDPipe()) inquiryId: string,
+  ) {
+    return run(this.database, principal, (tx) => exportInquiry(tx, inquiryId));
   }
 }

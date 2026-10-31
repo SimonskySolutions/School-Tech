@@ -405,6 +405,15 @@ INSERT INTO admissions.intake (id, group_id, school_id, school_year, grade, plac
 VALUES ('db000000-0000-7000-8000-0000000000a1', :G, :SA, '2027/28', '1', 20, current_date - 1, current_date + 90,
         'c1000000-0000-7000-8000-000000000006')
 ON CONFLICT (id) DO NOTHING;
+-- Retention (M5.6): a draft policy for inquiries and applications that led to
+-- no enrolment. Draft, so the worker erases nothing until the DPO approves a
+-- period of their own (ADR 0006, 0026).
+INSERT INTO privacy.retention_policy (group_id, code, description, applies_to, retain_for, after_action, legal_basis_note)
+VALUES (:G, 'admissions.unsuccessful',
+        'Inquiries and applications that did not lead to an enrolment (synthetic draft)',
+        'admissions.inquiry, admissions.application', interval '12 months', 'pseudonymise',
+        'To be set by the data protection officer before production.')
+ON CONFLICT (group_id, code) DO NOTHING;
 
 COMMIT;
 

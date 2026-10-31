@@ -134,6 +134,8 @@ export const NOTE_LABELS: Record<InquiryNoteKind | 'family_message', string> = {
 export const INQUIRY_DONE: Record<string, string> = {
   noted: 'Note added.',
   closed: 'Inquiry closed.',
+  'consent-withdrawn': 'No more news about open days will be sent.',
+  erased: 'Erased at the family’s request.',
 };
 
 // Applications (M5.2, ADR 0027). -------------------------------------------
@@ -280,6 +282,7 @@ export const APPLICATION_DONE: Record<string, string> = {
   rejected: 'Marked as not offered a place.',
   noted: 'Note added.',
   enrolled: 'Enrolled. The family can now book services for the child.',
+  erased: 'Erased at the family’s request.',
   accepted: 'Place accepted. The school will be in touch about the next steps.',
   declined: 'Offer declined.',
   'intake-opened': 'Intake opened.',

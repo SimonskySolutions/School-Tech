@@ -172,6 +172,23 @@ export async function addNote(
   return { status: row!.status };
 }
 
+/** Erasure on request (M5.6): the inquiry and its log emptied, the row kept for counting. */
+export async function eraseInquiry(tx: PersonTransaction, inquiryId: string) {
+  await tx.query('SELECT admissions.erase_inquiry($1)', [inquiryId]);
+  return { status: 'erased' as const };
+}
+
+export async function withdrawNewsConsent(tx: PersonTransaction, inquiryId: string) {
+  await tx.query('SELECT admissions.withdraw_news_consent($1)', [inquiryId]);
+  return { newsConsent: false as const };
+}
+
+/** Everything held about the sender (Art. 15), logged and recorded as a request. */
+export async function exportInquiry(tx: PersonTransaction, inquiryId: string): Promise<unknown> {
+  const [row] = await tx.query<{ doc: unknown }>('SELECT admissions.export_inquiry($1) AS doc', [inquiryId]);
+  return row!.doc;
+}
+
 export async function closeInquiry(
   tx: PersonTransaction,
   inquiryId: string,

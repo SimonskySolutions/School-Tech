@@ -204,8 +204,10 @@ export async function schoolApplications(
     submitted_at: Date;
     offer_expires_at: Date | null;
     waitlist_position: number | null;
+    erased: boolean;
   }>(
     `SELECT a.id, a.school_id, s.name AS school_name, a.intake_id, it.school_year, it.grade, a.status,
+            a.erased_at IS NOT NULL AS erased,
             coalesce(c.given_name, a.child_given_name) AS child_given, coalesce(c.family_name, a.child_family_name) AS child_family,
             to_char(coalesce(c.date_of_birth, a.child_birth_date), 'YYYY-MM-DD') AS birth_date,
             a.student_person_id IS NOT NULL AS known, a.current_school,
@@ -271,6 +273,7 @@ export async function schoolApplications(
       submittedAt: row.submitted_at.toISOString(),
       offerExpiresAt: row.offer_expires_at?.toISOString() ?? null,
       waitlistPosition: row.waitlist_position,
+      erased: row.erased,
       notes: notes
         .filter((note) => note.application_id === row.id)
         .map((note) => ({
@@ -290,6 +293,20 @@ export async function enrolApplication(tx: PersonTransaction, applicationId: str
     [applicationId, body.startDate, body.classLabel ?? null, body.relationship ?? null],
   );
   return { status: 'enrolled' as const, studentId: row!.id };
+}
+
+/** Erasure on request (M5.6): a live application is withdrawn first. */
+export async function eraseApplication(tx: PersonTransaction, applicationId: string) {
+  await tx.query('SELECT admissions.erase_application($1)', [applicationId]);
+  return { status: 'erased' as const };
+}
+
+/** Everything held about one application (Art. 15), logged and recorded as a request. */
+export async function exportApplication(tx: PersonTransaction, applicationId: string): Promise<unknown> {
+  const [row] = await tx.query<{ doc: unknown }>('SELECT admissions.export_application($1) AS doc', [
+    applicationId,
+  ]);
+  return row!.doc;
 }
 
 export async function makeOffer(tx: PersonTransaction, applicationId: string, answerBy: string) {

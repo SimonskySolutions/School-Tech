@@ -1074,6 +1074,8 @@ export interface SchoolApplications {
     submittedAt: string;
     offerExpiresAt: string | null;
     waitlistPosition: number | null;
+    /** Emptied on request or after the retention period (M5.6). */
+    erased: boolean;
     /** Assessment and interview notes: admissions staff only. */
     notes: { kind: ApplicationNoteKind; author: string | null; body: string | null; createdAt: string }[];
   }[];

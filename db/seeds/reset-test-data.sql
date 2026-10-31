@@ -41,6 +41,8 @@ DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_appl
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Requests the tests recorded by erasing or exporting admissions records.
+DELETE FROM privacy.data_subject_request WHERE outcome_note LIKE 'Admissions % on request';
 -- Applications and intakes the tests made, and the seeded intake open again.
 DELETE FROM admissions.application_note;
 DELETE FROM admissions.application;
@@ -56,9 +58,12 @@ UPDATE admissions.inquiry SET applicant_person_id = NULL, invited_at = NULL WHER
 -- Inquiries the tests sent, and the seeded one back as the family sent it.
 DELETE FROM admissions.inquiry_note
  WHERE inquiry_id IN (SELECT id FROM admissions.inquiry
-                       WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)')
+                       WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)'
+                          OR erased_at IS NOT NULL)
     OR inquiry_id = 'da000000-0000-7000-8000-0000000000a1';
-DELETE FROM admissions.inquiry WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)';
+-- Erased ones too: their names are gone, and the seed erases none.
+DELETE FROM admissions.inquiry
+ WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)' OR erased_at IS NOT NULL;
 UPDATE admissions.inquiry SET status = 'new', outcome = NULL, closed_at = NULL, last_activity_at = received_at
  WHERE id = 'da000000-0000-7000-8000-0000000000a1';
 -- Uniform stock: no orders hold anything any more; the store is what the

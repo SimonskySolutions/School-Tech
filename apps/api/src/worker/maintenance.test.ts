@@ -17,6 +17,14 @@ function fakeDatabase(result: Record<string, number>) {
 }
 
 describe('maintenance jobs', () => {
+  it('applies admissions retention once a day', async () => {
+    const { database, calls } = fakeDatabase({ erased: 3 });
+    expect(await runMaintenance(database, 'admissions.apply-retention')).toEqual({ affected: 3 });
+    expect(calls).toEqual([
+      { actor: 'worker:admissions-retention', sql: 'SELECT admissions.apply_retention() AS erased' },
+    ]);
+  });
+
   it('expires admission offers past their deadline every minute', async () => {
     const { database, calls } = fakeDatabase({ expired: 2 });
     expect(await runMaintenance(database, 'admissions.expire-offers')).toEqual({ affected: 2 });
@@ -58,13 +66,15 @@ describe('maintenance jobs', () => {
 
   it('schedules only the jobs that need no human approval', () => {
     // Retention deletions wait for policies approved by the data protection officer (ADR 0006).
-    // Offer expiry only applies the deadline staff set on each offer (M5.3).
+    // Offer expiry only applies the deadline staff set on each offer (M5.3). Admissions
+    // retention erases only under a policy the DPO approved; the database checks it (M5.6).
     expect(MAINTENANCE_SCHEDULES.map((schedule) => schedule.id)).toEqual([
       'audit-partitions',
       'inbound-payload-purge',
       'reservation-expiry',
       'domain-verification',
       'offer-expiry',
+      'admissions-retention',
     ]);
   });
 });

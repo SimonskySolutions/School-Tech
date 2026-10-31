@@ -31,6 +31,8 @@ import {
   closeIntake,
   decideApplication,
   enrolApplication,
+  eraseApplication,
+  exportApplication,
   familyAdmissions,
   inviteApplicant,
   linkApplicantLogin,
@@ -192,6 +194,27 @@ export class AdmissionsController {
   ) {
     const data = parse(enrolSchema, body);
     return run(this.database, principal, (tx) => enrolApplication(tx, applicationId, data));
+  }
+
+  /** The family asked to be forgotten (Art. 17); a live application is withdrawn first. */
+  @Post('applications/:applicationId/erase')
+  @HttpCode(200)
+  erase(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+  ) {
+    return run(this.database, principal, (tx) => eraseApplication(tx, applicationId));
+  }
+
+  /** What is held about one application, for an access request (Art. 15). */
+  @Post('applications/:applicationId/export')
+  @HttpCode(200)
+  @Header('cache-control', 'no-store')
+  exportOne(
+    @CurrentPrincipal() principal: Principal,
+    @Param('applicationId', new ParseUUIDPipe()) applicationId: string,
+  ) {
+    return run(this.database, principal, (tx) => exportApplication(tx, applicationId));
   }
 
   @Post('applications/:applicationId/decision')

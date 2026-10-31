@@ -121,7 +121,14 @@ describe('worker', () => {
       'reservation-expiry': '* * * * *',
       'domain-verification': '* * * * *',
       'offer-expiry': '* * * * *',
+      'admissions-retention': '0 4 * * *',
     });
+  });
+
+  it('may apply admissions retention, as its job does', async () => {
+    const { rows } = await worker.query<{ erased: number }>('SELECT admissions.apply_retention() AS erased');
+    // The development seed's policy is a draft, so nothing is erased.
+    expect(rows[0]!.erased).toBe(0);
   });
 
   it('may expire admission offers, as its job does', async () => {

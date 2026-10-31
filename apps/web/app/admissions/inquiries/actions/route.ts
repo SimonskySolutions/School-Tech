@@ -60,6 +60,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       call = { path: `/admissions/inquiries/${inquiryId}/notes`, body: noteBody(form), done: 'noted' };
     } else if (action === 'close') {
       call = { path: `/admissions/inquiries/${inquiryId}/close`, body: closeBody(form), done: 'closed' };
+    } else if (action === 'withdraw-consent') {
+      call = {
+        path: `/admissions/inquiries/${inquiryId}/withdraw-consent`,
+        body: {},
+        done: 'consent-withdrawn',
+      };
+    } else if (action === 'erase') {
+      if (text(form, 'confirm') !== 'yes') throw new FormProblem('confirm that the family asked for erasure');
+      call = { path: `/admissions/inquiries/${inquiryId}/erase`, body: {}, done: 'erased' };
     } else {
       return outcome({ error: 'unknown action' });
     }

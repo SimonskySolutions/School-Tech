@@ -36,6 +36,13 @@ export const MAINTENANCE_SCHEDULES = [
     jobName: 'admissions.expire-offers',
     pattern: '* * * * *',
   },
+  {
+    // Unsuccessful inquiries and applications are erased after the period of the
+    // group's approved retention policy; without one the database erases nothing (M5.6).
+    id: 'admissions-retention',
+    jobName: 'admissions.apply-retention',
+    pattern: '0 4 * * *',
+  },
 ] as const;
 
 export type MaintenanceJob = (typeof MAINTENANCE_SCHEDULES)[number]['jobName'];
@@ -67,6 +74,12 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
         tx.query<{ expired: number }>('SELECT admissions.expire_offers() AS expired'),
       );
       return { affected: row?.expired ?? 0 };
+    }
+    case 'admissions.apply-retention': {
+      const [row] = await database.withSystem('worker:admissions-retention', (tx) =>
+        tx.query<{ erased: number }>('SELECT admissions.apply_retention() AS erased'),
+      );
+      return { affected: row?.erased ?? 0 };
     }
     default:
       throw new Error(`unknown maintenance job: ${job}`);

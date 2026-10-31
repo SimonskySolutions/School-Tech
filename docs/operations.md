@@ -136,6 +136,18 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.
 - It only summarises the other pages and follows their permissions: the kitchen and the CEO see no requests, and nobody sees another school's day.
 
+### Retention and requests from prospective families (M5.6)
+
+- When a family asks what we hold, open their inquiry or application, choose "The family asks…" and download the file; send it to them. When they ask to be forgotten, erase it there (tick the confirmation). When they want no more news about open days, record it there. Each of these is recorded as a completed data subject request.
+- An erased inquiry or application keeps no name, address, child or message, but still counts in "Admissions in numbers". An enrolled child's application is part of their school record and is not erased from admissions. An invited parent's sign-in and record are erased under the general person erasure (ADR 0006).
+- The worker erases unsuccessful inquiries and applications every day at 04:00, but only under an approved retention policy `admissions.unsuccessful`. The seed's policy (12 months) is a draft. To approve the period the DPO has set, as the privacy officer or a database administrator:
+
+  ```sql
+  UPDATE privacy.retention_policy
+     SET retain_for = interval '12 months', status = 'approved', approved_at = now(), approved_by_person_id = '<privacy officer person id>'
+   WHERE code = 'admissions.unsuccessful';
+  ```
+
 ### Admissions in numbers (M5.5)
 
 - `/admissions/pipeline` shows applications per intake (places, free, new and in review, waiting, offered, accepted, enrolled, not placed, and how many came after an inquiry) and inquiries per website, optionally since a date. The CEO opens it from "Admissions per school" in the reports and sees every school's numbers, never names.

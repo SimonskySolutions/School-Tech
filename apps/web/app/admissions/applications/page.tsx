@@ -168,6 +168,29 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
             {application.offerExpiresAt ? (
               <p>{`Offer open until ${new Date(application.offerExpiresAt).toLocaleString('en-GB', { timeZone: 'Europe/Sofia' })}`}</p>
             ) : null}
+            {!application.erased && application.status !== 'enrolled' ? (
+              <details data-testid="family-requests" style={{ margin: '0.5rem 0' }}>
+                <summary>The family asks…</summary>
+                <form method="post" action="/admissions/export" style={{ display: 'inline' }}>
+                  <input type="hidden" name="kind" value="application" />
+                  <input type="hidden" name="id" value={application.id} />
+                  <button type="submit" data-testid="export">
+                    To see what we hold (download)
+                  </button>
+                </form>
+                <form method="post" action={action} style={{ marginTop: '0.5rem' }}>
+                  <input type="hidden" name="action" value="erase" />
+                  <input type="hidden" name="application_id" value={application.id} />
+                  <label>
+                    <input type="checkbox" name="confirm" value="yes" required /> The family asked us to erase
+                    this application; a live one is withdrawn. It cannot be undone.
+                  </label>{' '}
+                  <button type="submit" data-testid="erase">
+                    Erase
+                  </button>
+                </form>
+              </details>
+            ) : null}
             {application.waitlistPosition ? (
               <p>{`Number ${application.waitlistPosition} on the waiting list`}</p>
             ) : null}

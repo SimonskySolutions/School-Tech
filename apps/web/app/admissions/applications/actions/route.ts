@@ -51,6 +51,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         body: { decision },
         done: decision,
       };
+    } else if (action === 'erase') {
+      if (text(form, 'confirm') !== 'yes') throw new FormProblem('confirm that the family asked for erasure');
+      call = { path: `/admissions/applications/${id('application_id')}/erase`, done: 'erased' };
     } else if (action === 'enrol') {
       call = {
         path: `/admissions/applications/${id('application_id')}/enrol`,

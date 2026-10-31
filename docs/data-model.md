@@ -42,7 +42,7 @@ Status: implemented for milestone M0 (database foundation), 2026-10-29. Source o
 | Credit | `commerce.account_credit`, `commerce.credit_application` | Owed by one entity to one payer; usable only with the same entity |
 | Refund | `commerce.refund` | Requested, approved by a second person, processed; never above the payment |
 
-Not yet modelled (later milestones): admissions retention and the enrolment fee (inquiries, intakes, applications, offers, the waiting list and the enrolment hand-off exist, M5.1–M5.4), academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
+Not yet modelled (later milestones): the enrolment fee (inquiries, intakes, applications, offers, the waiting list and the enrolment hand-off exist, M5.1–M5.4), academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
 
 ## Schemas
 
@@ -87,6 +87,8 @@ Offers and the waiting list (M5.3): an application may be waitlisted (with the t
 The hand-off (M5.4): `admissions.enrol_application` turns an accepted application into an enrolment in one transaction, exactly once (status `enrolled`, with `enrolment_id`, `enrolled_at` and who enrolled). For a child new to the group it creates the `people.person` from the application's details, which are then cleared from the application, and a guardian relationship for the parent who applied (active, `can_consent`, verified by the member of staff); a known child is enrolled as themselves. It needs `admissions.manage`, `enrolment.manage` and `guardians.manage` at the school. Enrolled places count against the intake.
 
 Admissions numbers (M5.5): `admissions.intake_counts()` and `admissions.inquiry_counts(since)` are security-definer functions that return counts only (per intake and state; per school and website), to staff with `admissions.manage` for their schools and to holders of `admissions.report` (the CEO) for every school. No other access to admissions records comes with `admissions.report`.
+
+Admissions retention (M5.6): `admissions.apply_retention()` (worker only) erases, under the group's approved retention policy `admissions.unsuccessful`, inquiries closed or untouched for longer than its period (unless the parent's child was enrolled at that school) and applications that ended without a place; erasure empties every personal field and note text and sets `erased_at`, keeping the rows for counting. Admissions staff erase, export (`export_inquiry`, `export_application`, logged in `audit.access_log`) and record a withdrawn open-day consent; each erasure and export is a completed `privacy.data_subject_request`.
 
 Parent requests (M4.7): `people.family_request` (a child, the school, a kind, a subject, a status) with append-only `people.family_request_message`s. Writes only through `people.open_family_request`, `people.reply_to_family_request` and `people.set_family_request_status`; readable by the child's guardians and staff with `requests.manage` at that school. Subjects and messages may say why a child is absent or what they cannot eat, so the audit log records that they changed, never what they say.
 
