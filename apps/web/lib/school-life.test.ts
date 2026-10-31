@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   attendanceNotice,
   cancelNotice,
+  dayHref,
   dietaryLabel,
   formatDay,
   formatSessionTime,
   isUrgent,
+  readDayQuery,
   readLunchQuery,
   readRange,
   shiftRange,
@@ -74,5 +76,27 @@ describe('attendance notices', () => {
     expect(attendanceNotice(403)).toBe('refused');
     expect(attendanceNotice(404)).toBe('refused');
     expect(attendanceNotice(500)).toBe('failed');
+  });
+});
+
+describe('the School Life day', () => {
+  const school = 'b1000000-0000-7000-8000-00000000000a';
+
+  it('keeps a valid school and date, and leaves the rest to the API', () => {
+    expect(readDayQuery({ schoolId: school, date: '2026-11-18' })).toEqual({
+      schoolId: school,
+      date: '2026-11-18',
+    });
+    expect(readDayQuery({ schoolId: 'school-a', date: '18.11.2026' })).toEqual({
+      schoolId: null,
+      date: null,
+    });
+    expect(readDayQuery({})).toEqual({ schoolId: null, date: null });
+  });
+
+  it('links to the day before and after, across a month end', () => {
+    expect(dayHref(school, '2026-11-30', 1)).toBe(`/school-life/day?schoolId=${school}&date=2026-12-01`);
+    expect(dayHref(school, '2026-12-01', -1)).toBe(`/school-life/day?schoolId=${school}&date=2026-11-30`);
+    expect(dayHref(school, '2026-11-18')).toBe(`/school-life/day?schoolId=${school}&date=2026-11-18`);
   });
 });

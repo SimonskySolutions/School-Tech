@@ -87,6 +87,25 @@ export function readLunchQuery(
     : null;
 }
 
+/** The school and day the day page asks for; either may be left to the API's defaults. */
+export function readDayQuery(params: Record<string, string | string[] | undefined>): {
+  schoolId: string | null;
+  date: string | null;
+} {
+  const { schoolId, date } = params;
+  return {
+    schoolId: typeof schoolId === 'string' && UUID.test(schoolId) ? schoolId : null,
+    date: typeof date === 'string' && DAY.test(date) ? date : null,
+  };
+}
+
+/** The day page for a school on the day before or after. */
+export function dayHref(schoolId: string, date: string, shift: -1 | 0 | 1 = 0): string {
+  const day = new Date(`${date}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + shift);
+  return `/school-life/day?${new URLSearchParams({ schoolId, date: day.toISOString().slice(0, 10) })}`;
+}
+
 export const ATTENDANCE_NOTICES: Record<string, string> = {
   marked: 'Attendance saved.',
   'not-started': 'This meeting has not started yet; attendance is marked once it has.',

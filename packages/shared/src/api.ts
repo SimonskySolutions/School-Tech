@@ -867,3 +867,54 @@ export interface SchoolRequests {
     requestedBy: string | null;
   })[];
 }
+
+/** One school on one day for School Life: what every service needs doing (M4.8). A null part is not for the viewer. */
+export interface SchoolLifeDay {
+  school: { id: SchoolId; name: string; timeZone: string };
+  date: string;
+  /** Schools the viewer can switch to. */
+  schools: { id: SchoolId; name: string }[];
+  lunch: {
+    meals: number;
+    awaitingPayment: number;
+    capacity: number | null;
+    /** Dishes on the menu; 0 when it is not published. */
+    dishes: number;
+    showsDietary: boolean;
+    alerts: {
+      studentName: string | null;
+      classLabel: string | null;
+      kind: string;
+      severity: string | null;
+      description: string;
+      /** Dishes on this child's lunch that contain their declared allergens. */
+      onMenu: string[];
+      verified: boolean;
+    }[];
+  } | null;
+  /** Club meetings and booked lessons. */
+  sessions: {
+    id: string;
+    name: string;
+    startsAt: string;
+    endsAt: string | null;
+    location: string | null;
+    booked: number;
+    /** Children marked attended or absent. */
+    marked: number;
+    canMark: boolean;
+  }[];
+  trips: {
+    sessionId: string;
+    name: string;
+    startsAt: string;
+    booked: number;
+    capacity: number | null;
+    withoutPermission: number;
+  }[];
+  transport: { name: string; riders: number; seats: number | null; firstPickup: string | null }[];
+  uniforms: { awaitingHandOver: number; lowStock: number } | null;
+  requests: { waiting: number; inProgress: number } | null;
+  /** Current dietary needs at the school not yet verified; null if the viewer may not review them. */
+  dietaryToVerify: number | null;
+}

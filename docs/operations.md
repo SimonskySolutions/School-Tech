@@ -104,6 +104,11 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### The School Life day (M4.8)
+
+- `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.
+- It only summarises the other pages and follows their permissions: the kitchen and the CEO see no requests, and nobody sees another school's day.
+
 ### Families' requests (M4.7)
 
 - Parents write under "Messages to the school" next to each child (absence, dietary change, who collects, question, other); the request goes to the child's school.

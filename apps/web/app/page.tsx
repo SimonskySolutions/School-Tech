@@ -154,6 +154,11 @@ function Home({ view }: { view: HomeView }) {
           <h2 id="school-life">School Life</h2>
           <ul>
             <li>
+              <a href="/school-life/day" data-testid="day-link">
+                Today at school: everything in one place
+              </a>
+            </li>
+            <li>
               <a href="/school-life/kitchen" data-testid="kitchen-link">
                 Kitchen: lunches per day
               </a>

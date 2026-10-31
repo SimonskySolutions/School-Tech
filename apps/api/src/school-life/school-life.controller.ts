@@ -24,12 +24,14 @@ import {
   type LunchMenus,
   MENU_COURSES,
   type MenuDish,
+  type SchoolLifeDay,
   type StudentActivities,
 } from '@pythagoras/shared';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database, type PersonTransaction } from '../database/database';
 import { cancelLunchBooking, CancelRejected, lunchList } from './cancellation';
+import { schoolLifeDay } from './day';
 import { lunchMenus, MenuRejected, setMenu } from './menus';
 import { asHttpError } from '../common/database-errors';
 import {
@@ -56,6 +58,7 @@ const day = z
   .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)), 'not a date');
 
 const lunchQuery = z.object({ schoolId: z.uuid(), date: day });
+const dayQuery = z.object({ schoolId: z.uuid().optional(), date: day.optional() });
 
 // The reason is kept on the booking (audit-redacted: it may say a child is ill).
 const cancelBody = z.object({ reason: z.string().trim().min(3).max(200) });
@@ -147,6 +150,19 @@ export class SchoolLifeController {
       if (!allowed?.ok) throw new ForbiddenException('School Life views are for staff');
       const from = parsed.data.from ?? (await defaultFrom(tx));
       return load(tx, { from, days: parsed.data.days });
+    });
+  }
+
+  /** One school on one day: what lunch, clubs, lessons, trips, transport, uniforms and requests need (M4.8). */
+  @Get('day')
+  day(@CurrentPrincipal() principal: Principal, @Query() query: unknown): Promise<SchoolLifeDay> {
+    const parsed = dayQuery.safeParse(query);
+    if (!parsed.success)
+      throw new BadRequestException('an optional schoolId (uuid) and date (YYYY-MM-DD) are expected');
+    return this.database.withPerson(principal, async (tx) => {
+      const found = await schoolLifeDay(tx, parsed.data.schoolId ?? null, parsed.data.date ?? null);
+      if (!found) throw new NotFoundException('no such school, or not yours to see');
+      return found;
     });
   }
 

@@ -10,6 +10,7 @@ import {
   type LunchMenus,
   type RevenueReport,
   type SchoolLessons,
+  type SchoolLifeDay,
   type SchoolRequests,
   type SchoolSetup,
   type SchoolTransport,
@@ -225,3 +226,15 @@ export const fetchStudentRequests = (apiUrl: string, accessToken: string, studen
 
 export const fetchSchoolRequests = (apiUrl: string, accessToken: string, status: string) =>
   get<SchoolRequests>(apiUrl, `/school-life/requests?${new URLSearchParams({ status })}`, accessToken);
+
+export const fetchSchoolLifeDay = (
+  apiUrl: string,
+  accessToken: string,
+  schoolId: string | null,
+  date: string | null,
+) => {
+  const query = new URLSearchParams();
+  if (schoolId) query.set('schoolId', schoolId);
+  if (date) query.set('date', date);
+  return get<SchoolLifeDay>(apiUrl, `/school-life/day?${query}`, accessToken);
+};
