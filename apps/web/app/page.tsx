@@ -235,6 +235,11 @@ function Home({ view }: { view: HomeView }) {
                 Intakes and applications
               </a>
             </li>
+            <li>
+              <a href="/admissions/pipeline" data-testid="pipeline-link">
+                Admissions in numbers, and what to follow up
+              </a>
+            </li>
           </ul>
         </section>
       ) : null}
@@ -247,6 +252,13 @@ function Home({ view }: { view: HomeView }) {
               Revenue and balances per school
             </a>
           </p>
+          {view.showsAdmissionsReport ? (
+            <p>
+              <a href="/admissions/pipeline" data-testid="admissions-report-link">
+                Admissions per school
+              </a>
+            </p>
+          ) : null}
         </section>
       ) : null}
 

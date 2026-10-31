@@ -5,6 +5,7 @@ import {
   applicationNoteBody,
   enrolBody,
   isFinished,
+  notPlaced,
   offerBody,
   closeBody,
   inquiryBody,
@@ -172,5 +173,23 @@ describe('the enrolment hand-off in the portal', () => {
     expect(() => enrolBody(form({ start_date: '2027-09-15' }), true)).toThrow('related');
     expect(() => enrolBody(form({ start_date: '' }), false)).toThrow(FormProblem);
     expect(isFinished('enrolled')).toBe(true);
+  });
+});
+
+describe('the admissions pipeline in the portal', () => {
+  it('counts as not placed the declined, expired, refused and withdrawn', () => {
+    const counts = {
+      submitted: 9,
+      under_review: 9,
+      waitlisted: 9,
+      offered: 9,
+      accepted: 9,
+      enrolled: 9,
+      declined: 1,
+      expired: 2,
+      rejected: 3,
+      withdrawn: 4,
+    };
+    expect(notPlaced(counts)).toBe(10);
   });
 });

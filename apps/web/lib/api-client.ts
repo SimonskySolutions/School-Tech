@@ -9,6 +9,7 @@ import {
   type LunchList,
   type LunchMenus,
   type RevenueReport,
+  type AdmissionsPipeline,
   type FamilyAdmissions,
   type SchoolApplications,
   type SchoolInquiries,
@@ -252,5 +253,12 @@ export const fetchSchoolApplications = (apiUrl: string, accessToken: string, int
   get<SchoolApplications>(
     apiUrl,
     `/admissions/applications${intakeId ? `?${new URLSearchParams({ intakeId })}` : ''}`,
+    accessToken,
+  );
+
+export const fetchAdmissionsPipeline = (apiUrl: string, accessToken: string, since: string | null) =>
+  get<AdmissionsPipeline>(
+    apiUrl,
+    `/admissions/pipeline${since ? `?${new URLSearchParams({ since })}` : ''}`,
     accessToken,
   );

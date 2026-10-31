@@ -24,6 +24,8 @@ export interface HomeView {
   showsRequests: boolean;
   /** Inquiries from school websites (admissions.manage); the API enforces it. */
   showsAdmissions: boolean;
+  /** Admissions numbers per school without names (admissions.report); the API enforces it. */
+  showsAdmissionsReport: boolean;
   /** Group roles that see School Life: the lessons page of each school. */
   lessonSchools: { id: string; name: string }[];
   /** Revenue and balances per school; the API decides which schools. */
@@ -54,6 +56,9 @@ const REQUEST_ROLES = new Set(['school_life_coordinator', 'principal', 'school_a
 
 // Roles that hold admissions.manage; a hint for links only.
 const ADMISSIONS_ROLES = new Set(['principal', 'school_admin', 'group_admin']);
+
+// Roles that hold admissions.report; a hint for links only.
+const ADMISSIONS_REPORT_ROLES = new Set(['group_ceo']);
 
 // Roles that hold reports.read in the database; again only a hint for links.
 const REPORT_ROLES = new Set([
@@ -102,6 +107,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     showsDietaryReview: me.roles.some((role) => DIETARY_REVIEW_ROLES.has(role.code)),
     showsRequests: me.roles.some((role) => REQUEST_ROLES.has(role.code)),
     showsAdmissions: me.roles.some((role) => ADMISSIONS_ROLES.has(role.code)),
+    showsAdmissionsReport: me.roles.some((role) => ADMISSIONS_REPORT_ROLES.has(role.code)),
     lessonSchools: me.roles.some((role) => role.scope === 'group' && SCHOOL_LIFE_ROLES.has(role.code))
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],

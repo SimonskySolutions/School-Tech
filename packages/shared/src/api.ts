@@ -1104,3 +1104,42 @@ export interface IntakeRequestBody {
   opensOn: string;
   closesOn: string;
 }
+
+/** The admissions pipeline in numbers (M5.5): per school, intake and source, without personal data. */
+export interface AdmissionsPipeline {
+  since: string | null;
+  intakes: {
+    id: string;
+    school: { id: SchoolId; name: string };
+    schoolYear: string;
+    grade: string;
+    places: number;
+    status: IntakeStatus;
+    /** Places not offered, accepted or enrolled. */
+    free: number;
+    counts: Record<ApplicationStatus, number>;
+    /** Applications from parents invited after an inquiry to the school. */
+    fromInquiry: number;
+  }[];
+  inquiries: {
+    school: { id: SchoolId; name: string };
+    website: { id: string; name: string };
+    received: number;
+    waiting: number;
+    contacted: number;
+    closed: number;
+    applied: number;
+    invited: number;
+  }[];
+  /** What needs doing next, for admissions staff; null for those who see numbers only. */
+  followUps:
+    | {
+        kind: 'inquiry_waiting' | 'application_waiting' | 'offer_ending' | 'to_enrol';
+        school: { id: SchoolId; name: string };
+        label: string | null;
+        /** When it started waiting, or when the offer ends. */
+        at: string;
+        href: string;
+      }[]
+    | null;
+}

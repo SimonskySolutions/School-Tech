@@ -1,4 +1,5 @@
 import {
+  type AdmissionsPipeline,
   APPLICATION_NOTE_KINDS,
   type EnrolRequestBody,
   GUARDIAN_RELATIONSHIPS,
@@ -284,3 +285,17 @@ export const APPLICATION_DONE: Record<string, string> = {
   'intake-opened': 'Intake opened.',
   'intake-closed': 'Intake closed.',
 };
+
+// The pipeline (M5.5). ------------------------------------------------------
+
+export const FOLLOW_UP_LABELS: Record<NonNullable<AdmissionsPipeline['followUps']>[number]['kind'], string> =
+  {
+    inquiry_waiting: 'Inquiry not answered',
+    application_waiting: 'Application not reviewed',
+    offer_ending: 'Offer ending',
+    to_enrol: 'Accepted, to enrol',
+  };
+
+/** Applications that ended without a place: declined, expired, refused or withdrawn. */
+export const notPlaced = (counts: Record<ApplicationStatus, number>) =>
+  counts.declined + counts.expired + counts.rejected + counts.withdrawn;

@@ -136,6 +136,11 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.
 - It only summarises the other pages and follows their permissions: the kitchen and the CEO see no requests, and nobody sees another school's day.
 
+### Admissions in numbers (M5.5)
+
+- `/admissions/pipeline` shows applications per intake (places, free, new and in review, waiting, offered, accepted, enrolled, not placed, and how many came after an inquiry) and inquiries per website, optionally since a date. The CEO opens it from "Admissions per school" in the reports and sees every school's numbers, never names.
+- Admissions staff also see what to follow up: inquiries unanswered after 3 days, applications not reviewed after 7, offers ending within 3 days and accepted places to enrol, each linking to its page.
+
 ### Families' requests (M4.7)
 
 - Parents write under "Messages to the school" next to each child (absence, dietary change, who collects, question, other); the request goes to the child's school.

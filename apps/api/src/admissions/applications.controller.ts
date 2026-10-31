@@ -14,6 +14,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  type AdmissionsPipeline,
   APPLICATION_NOTE_KINDS,
   type CreatedAccountResponse,
   GUARDIAN_RELATIONSHIPS,
@@ -41,6 +42,7 @@ import {
   withdrawApplication,
 } from './applications.repository';
 import { parse, run } from './inquiries.controller';
+import { admissionsPipeline } from './pipeline';
 import { InquiriesRejected } from './inquiries.repository';
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a date as YYYY-MM-DD');
@@ -85,6 +87,7 @@ export const applicationNoteSchema = z.object({
   body: z.string().trim().min(1).max(4000),
 });
 const listSchema = z.object({ intakeId: z.uuid().optional() });
+const pipelineSchema = z.object({ since: day.optional() });
 
 /** Intakes, applications and invitations to apply (M5.2, ADR 0027). */
 @Controller('admissions')
@@ -95,6 +98,18 @@ export class AdmissionsController {
     @Inject(Database) private readonly database: Database,
     @Inject(ACCOUNT_DIRECTORY) private readonly directory: AccountDirectory | null,
   ) {}
+
+  /** The pipeline in numbers per school (M5.5); follow-ups for admissions staff only. */
+  @Get('pipeline')
+  pipeline(@CurrentPrincipal() principal: Principal, @Query() query: unknown): Promise<AdmissionsPipeline> {
+    const { since } = parse(pipelineSchema, query);
+    return run(this.database, principal, async (tx) => {
+      const pipeline = await admissionsPipeline(tx, since ?? null);
+      if (!pipeline)
+        throw new InquiriesRejected(403, 'admissions numbers are for admissions staff and the CEO');
+      return pipeline;
+    });
+  }
 
   /** A signed-in parent: open intakes, their children, their own applications. */
   @Get('family')
