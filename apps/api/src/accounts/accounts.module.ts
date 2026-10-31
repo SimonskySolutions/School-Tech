@@ -21,5 +21,7 @@ export function createAccountDirectory(env: Env): AccountDirectory | null {
 @Module({
   controllers: [AccountsController],
   providers: [{ provide: ACCOUNT_DIRECTORY, inject: [ENV], useFactory: createAccountDirectory }],
+  // Admissions invitations create accounts for new applicant parents (ADR 0027).
+  exports: [ACCOUNT_DIRECTORY],
 })
 export class AccountsModule {}

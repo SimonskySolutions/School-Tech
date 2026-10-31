@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { FormProblem, text } from '../../../../lib/admin';
-import { closeBody, noteBody } from '../../../../lib/admissions';
+import { type CreatedAccountResponse } from '@pythagoras/shared';
+import { accountPage } from '../../../../lib/account-page';
+import { closeBody, inviteBody, noteBody } from '../../../../lib/admissions';
 import { writeApi } from '../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../lib/server';
 
@@ -28,6 +30,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const action = text(form, 'action');
   const inquiryId = text(form, 'inquiry_id');
   if (!UUID.test(inquiryId)) return outcome({ error: 'no such inquiry' });
+
+  if (action === 'invite') {
+    let name;
+    try {
+      name = inviteBody(form);
+    } catch (error) {
+      if (error instanceof FormProblem) return outcome({ error: error.message });
+      throw error;
+    }
+    const invited = await writeApi<CreatedAccountResponse>(
+      config.API_INTERNAL_URL,
+      session.accessToken,
+      'POST',
+      `/admissions/inquiries/${inquiryId}/invite`,
+      name,
+    );
+    if (invited.kind === 'refused') {
+      if (invited.status === 401) return go('/auth/sign-in');
+      return outcome({ error: invited.message.slice(0, 300) });
+    }
+    // The answer itself, never a redirect: it may show a one-time password.
+    return accountPage(invited.value, '/admissions/inquiries', 'Back to the inquiries');
+  }
 
   let call: { path: string; body: unknown; done: string };
   try {

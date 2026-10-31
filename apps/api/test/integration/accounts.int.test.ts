@@ -1,6 +1,6 @@
 import { type CreatedAccountResponse, type MeResponse, type OnboardingOverview } from '@pythagoras/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { API, get, secret, tokenFor } from './helpers';
+import { API, get, keycloakAdmin, passwordGrant, tokenFor } from './helpers';
 
 // Sign-in accounts for people an administrator registers (M3.2), against the
 // real Keycloak: the account is created by the provisioning service account,
@@ -8,7 +8,6 @@ import { API, get, secret, tokenFor } from './helpers';
 // test people use "test-" e-mail addresses; scripts/db-reset-test-data.sh
 // removes them, their school and their Keycloak users before each run.
 
-const KEYCLOAK = process.env.KEYCLOAK_URL ?? 'http://keycloak:8080';
 const run = Date.now().toString(36);
 const tokens: Record<string, string> = {};
 let schoolId: string;
@@ -28,36 +27,6 @@ async function post<T>(user: string, path: string, body?: unknown) {
     body: (await response.json()) as T & { message?: string },
   };
 }
-
-/** A Keycloak administrator, to look at the account and to stand in for the person at first sign-in. */
-async function keycloakAdmin() {
-  const response = await fetch(`${KEYCLOAK}/realms/master/protocol/openid-connect/token`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      grant_type: 'password',
-      client_id: 'admin-cli',
-      username: 'admin',
-      password: secret('keycloak_admin_password'),
-    }),
-  });
-  const { access_token } = (await response.json()) as { access_token: string };
-  return (path: string, init: RequestInit = {}) =>
-    fetch(`${KEYCLOAK}/admin/realms/pythagoras${path}`, {
-      ...init,
-      headers: { authorization: `Bearer ${access_token}`, 'content-type': 'application/json' },
-    });
-}
-
-const passwordGrant = (username: string, password: string) =>
-  fetch(`${KEYCLOAK}/realms/pythagoras/protocol/openid-connect/token`, {
-    method: 'POST',
-    body: new URLSearchParams({
-      grant_type: 'password',
-      client_id: 'pythagoras-dev-tests',
-      username,
-      password,
-    }),
-  });
 
 beforeAll(async () => {
   for (const user of ['admin', 'principal.a', 'anna.ivanova']) tokens[user] = await tokenFor(user);

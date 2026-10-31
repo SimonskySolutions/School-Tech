@@ -111,6 +111,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - No IP address is stored. If a website receives more than 30 inquiries in an hour, further senders are asked to try again later; the count drops as the hour passes.
 - Inquiries that led to no enrolment are to be erased after the DPO's retention period (M5.6, not built yet); until then they stay.
 
+### Intakes and applications (M5.2, ADR 0027)
+
+- Admissions staff open an intake (school, school year such as `2027/28`, grade, places, the dates applications are taken) at `/admissions/applications`, see the applications there and take them into review.
+- Parents apply at "Apply for a place" (`/admissions/apply`) for one of their children (they need the consent capability for that child) or for a child new to the group.
+- A family that only sent an inquiry has no sign-in yet: on the inquiry, "Invite to apply" creates the parent's record and account. In development the next page shows a one-time temporary password to pass on by phone; production needs the e-mail set-up (`ACCOUNT_SETUP=email`, SMTP in M7). If the address is already known to the group nothing is created; a group administrator links the family by hand.
+- The seeded grade 1 intake at School A closes 90 days after the seed first ran; reseeding a fresh database moves it.
+
 ### The School Life day (M4.8)
 
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.

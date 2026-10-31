@@ -116,3 +116,33 @@ export async function post<T>(token: string, path: string, body?: unknown) {
   });
   return { status: response.status, body: (await response.json()) as T & { message?: string } };
 }
+
+/** A Keycloak administrator, to look at the account and to stand in for the person at first sign-in. */
+export async function keycloakAdmin() {
+  const response = await fetch(`${KEYCLOAK}/realms/master/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'admin-cli',
+      username: 'admin',
+      password: secret('keycloak_admin_password'),
+    }),
+  });
+  const { access_token } = (await response.json()) as { access_token: string };
+  return (path: string, init: RequestInit = {}) =>
+    fetch(`${KEYCLOAK}/admin/realms/pythagoras${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${access_token}`, 'content-type': 'application/json' },
+    });
+}
+
+export const passwordGrant = (username: string, password: string) =>
+  fetch(`${KEYCLOAK}/realms/pythagoras/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'pythagoras-dev-tests',
+      username,
+      password,
+    }),
+  });

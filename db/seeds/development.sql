@@ -399,6 +399,12 @@ VALUES ('da000000-0000-7000-8000-0000000000a1', :G, :SA, 'c2000000-0000-7000-800
         2020, '1', 'September 2027',
         'We are moving to Sofia next summer. Is there a place in grade 1, and can we visit? (Synthetic example.)')
 ON CONFLICT (id) DO NOTHING;
+-- An intake (M5.2): grade 1 at School A for 2027/28, taking applications for
+-- three months from the day the seed first runs.
+INSERT INTO admissions.intake (id, group_id, school_id, school_year, grade, places, opens_on, closes_on, created_by_person_id)
+VALUES ('db000000-0000-7000-8000-0000000000a1', :G, :SA, '2027/28', '1', 20, current_date - 1, current_date + 90,
+        'c1000000-0000-7000-8000-000000000006')
+ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 

@@ -1,4 +1,7 @@
 import {
+  type ApplicationRequestBody,
+  type ApplicationStatus,
+  type IntakeRequestBody,
   INQUIRY_NOTE_KINDS,
   INQUIRY_OUTCOMES,
   type InquiryNoteKind,
@@ -125,4 +128,83 @@ export const NOTE_LABELS: Record<InquiryNoteKind | 'family_message', string> = {
 export const INQUIRY_DONE: Record<string, string> = {
   noted: 'Note added.',
   closed: 'Inquiry closed.',
+};
+
+// Applications (M5.2, ADR 0027). -------------------------------------------
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A parent's application: one of their children (`child` = its id) or a new child (`child` = "new"). */
+export function applicationBody(form: Form): ApplicationRequestBody {
+  const intakeId = text(form, 'intake_id');
+  const noticeId = text(form, 'notice_id');
+  if (!UUID.test(intakeId)) throw new FormProblem('choose the school and grade');
+  if (!UUID.test(noticeId)) throw new FormProblem('please reload the page and send the form again');
+  if (text(form, 'notice_read') !== 'yes')
+    throw new FormProblem('please confirm you have read the privacy notice');
+  const child = text(form, 'child');
+  const extra = {
+    ...withValue('currentSchool', optional(form, 'current_school', 200, 'The current school')),
+    ...withValue('message', optional(form, 'message', 2000, 'The message')),
+  };
+  if (UUID.test(child)) return { intakeId, noticeId, studentId: child, ...extra };
+  if (child !== 'new') throw new FormProblem('choose the child');
+  const givenName = text(form, 'child_given_name');
+  const familyName = text(form, 'child_family_name');
+  const birthDate = text(form, 'child_birth_date');
+  if (!givenName || givenName.length > 100 || !familyName || familyName.length > 100) {
+    throw new FormProblem("give the child's first and family name");
+  }
+  if (!DAY.test(birthDate)) throw new FormProblem("give the child's date of birth");
+  return { intakeId, noticeId, child: { givenName, familyName, birthDate }, ...extra };
+}
+
+export function intakeBody(form: Form): IntakeRequestBody {
+  const schoolId = text(form, 'school_id');
+  if (!UUID.test(schoolId)) throw new FormProblem('choose the school');
+  const schoolYear = text(form, 'school_year');
+  if (!/^\d{4}\/\d{2}$/.test(schoolYear)) throw new FormProblem('give the school year like 2027/28');
+  const grade = text(form, 'grade');
+  if (!grade || grade.length > 20) throw new FormProblem('give the grade');
+  const places = Number(text(form, 'places'));
+  if (!Number.isInteger(places) || places < 1 || places > 1000)
+    throw new FormProblem('give the number of places');
+  const opensOn = text(form, 'opens_on');
+  const closesOn = text(form, 'closes_on');
+  if (!DAY.test(opensOn) || !DAY.test(closesOn) || closesOn < opensOn) {
+    throw new FormProblem('give the dates applications open and close, in that order');
+  }
+  return { schoolId, schoolYear, grade, places, opensOn, closesOn };
+}
+
+/** The parent's name as staff confirm it for an invitation; the form's guess splits at the last space. */
+export function inviteBody(form: Form): { givenName: string; familyName: string } {
+  const givenName = text(form, 'given_name');
+  const familyName = text(form, 'family_name');
+  if (!givenName || givenName.length > 100 || !familyName || familyName.length > 100) {
+    throw new FormProblem("give the parent's first and family name");
+  }
+  return { givenName, familyName };
+}
+
+export function splitName(name: string | null): { givenName: string; familyName: string } {
+  const clean = (name ?? '').replace(/\s*\(.*\)\s*$/, '').trim();
+  const at = clean.lastIndexOf(' ');
+  return at > 0
+    ? { givenName: clean.slice(0, at), familyName: clean.slice(at + 1) }
+    : { givenName: clean, familyName: '' };
+}
+
+export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+  submitted: 'Submitted',
+  under_review: 'Under review',
+  withdrawn: 'Withdrawn',
+};
+
+export const APPLICATION_DONE: Record<string, string> = {
+  applied: 'Application sent to the school.',
+  withdrawn: 'Application withdrawn.',
+  reviewed: 'Taken into review.',
+  'intake-opened': 'Intake opened.',
+  'intake-closed': 'Intake closed.',
 };

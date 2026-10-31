@@ -69,7 +69,7 @@ export const noteSchema = z.object({
 export const closeSchema = z.object({ outcome: z.enum(INQUIRY_OUTCOMES) });
 const filterSchema = z.object({ status: z.enum(['open', 'closed', 'all']).default('open') });
 
-function parse<T>(schema: z.ZodType<T>, body: unknown): T {
+export function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -80,7 +80,7 @@ function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   return parsed.data;
 }
 
-function asHttp(error: unknown): never {
+export function asHttp(error: unknown): never {
   if (!(error instanceof InquiriesRejected)) throw error;
   if (error.status === 404) throw new NotFoundException(error.message);
   if (error.status === 403) throw new ForbiddenException(error.message);
@@ -137,7 +137,11 @@ export class PublicInquiriesController {
   }
 }
 
-async function run<T>(database: Database, principal: Principal, work: (tx: PersonTransaction) => Promise<T>) {
+export async function run<T>(
+  database: Database,
+  principal: Principal,
+  work: (tx: PersonTransaction) => Promise<T>,
+) {
   try {
     return await refusalsAsInquiries(() => database.withPerson(principal, work));
   } catch (error) {

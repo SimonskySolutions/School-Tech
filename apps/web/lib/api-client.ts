@@ -9,6 +9,8 @@ import {
   type LunchList,
   type LunchMenus,
   type RevenueReport,
+  type FamilyAdmissions,
+  type SchoolApplications,
   type SchoolInquiries,
   type SchoolLessons,
   type SchoolLifeDay,
@@ -242,3 +244,13 @@ export const fetchSchoolLifeDay = (
 
 export const fetchSchoolInquiries = (apiUrl: string, accessToken: string, status: string) =>
   get<SchoolInquiries>(apiUrl, `/admissions/inquiries?${new URLSearchParams({ status })}`, accessToken);
+
+export const fetchFamilyAdmissions = (apiUrl: string, accessToken: string) =>
+  get<FamilyAdmissions>(apiUrl, '/admissions/family', accessToken);
+
+export const fetchSchoolApplications = (apiUrl: string, accessToken: string, intakeId: string | null) =>
+  get<SchoolApplications>(
+    apiUrl,
+    `/admissions/applications${intakeId ? `?${new URLSearchParams({ intakeId })}` : ''}`,
+    accessToken,
+  );

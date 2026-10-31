@@ -1,5 +1,6 @@
 import { type CreatedAccountResponse } from '@pythagoras/shared';
 import { type NextRequest, NextResponse } from 'next/server';
+import { accountPage } from '../../../lib/account-page';
 import {
   backTo,
   companyBody,
@@ -60,34 +61,6 @@ const ACTIONS: Record<
     return { path: `/admin/schools/${id}/website/domains/${domainId}/check` };
   },
 };
-
-const escape = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-/**
- * The one-time password page. It is the direct answer to the form post, never
- * a redirect, so the password is in no address, history entry or log line.
- */
-function accountPage(account: CreatedAccountResponse, back: string): NextResponse {
-  const body = account.temporaryPassword
-    ? `<p>Give this temporary password to the person in person or by phone. It is shown <strong>only now</strong>;
-       they must choose their own password when they first sign in.</p>
-       <p>User name: <code data-testid="new-username">${escape(account.username)}</code></p>
-       <p>Temporary password: <code data-testid="temporary-password" style="font-size:1.25rem">${escape(account.temporaryPassword)}</code></p>`
-    : `<p>An e-mail with a link to set a password was sent to <code>${escape(account.username)}</code>.</p>`;
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign-in account created</title>
-<meta name="robots" content="noindex"></head>
-<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:2rem auto;line-height:1.5">
-<p style="background:#fff4ce;padding:.5rem .75rem;border-radius:4px">Development build with synthetic data.</p>
-<h1>Sign-in account created</h1>${body}
-<p><a href="${escape(back)}">Back to the school</a></p></body></html>`;
-  return new NextResponse(html, {
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-      'referrer-policy': 'no-referrer',
-    },
-  });
-}
 
 /** Every set-up form posts here; the administrator returns to the page with a notice. */
 export async function POST(request: NextRequest): Promise<NextResponse> {

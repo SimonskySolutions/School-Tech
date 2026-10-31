@@ -1,7 +1,7 @@
 import { INQUIRY_NOTE_KINDS, INQUIRY_OUTCOMES } from '@pythagoras/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { INQUIRY_DONE, NOTE_LABELS, OUTCOME_LABELS, STATUS_LABELS } from '../../../lib/admissions';
+import { INQUIRY_DONE, NOTE_LABELS, OUTCOME_LABELS, splitName, STATUS_LABELS } from '../../../lib/admissions';
 import { fetchSchoolInquiries } from '../../../lib/api-client';
 import { currentSession, runtime } from '../../../lib/server';
 import { DevelopmentBanner } from '../../development-banner';
@@ -123,6 +123,36 @@ export default async function InquiriesPage({ searchParams }: { searchParams: Se
                 </li>
               ))}
             </ul>
+          ) : null}
+          {inquiry.invited ? (
+            <p data-testid="invited">Invited to apply: the parent can sign in and apply.</p>
+          ) : null}
+          {inquiry.status !== 'closed' && !inquiry.invited && inquiry.email ? (
+            <form method="post" action={action} style={{ marginBottom: '0.5rem' }}>
+              <input type="hidden" name="action" value="invite" />
+              <input type="hidden" name="inquiry_id" value={inquiry.id} />
+              <label>
+                First name{' '}
+                <input
+                  name="given_name"
+                  required
+                  maxLength={100}
+                  defaultValue={splitName(inquiry.parentName).givenName}
+                />
+              </label>{' '}
+              <label>
+                Family name{' '}
+                <input
+                  name="family_name"
+                  required
+                  maxLength={100}
+                  defaultValue={splitName(inquiry.parentName).familyName}
+                />
+              </label>{' '}
+              <button type="submit" data-testid="invite">
+                Invite to apply
+              </button>
+            </form>
           ) : null}
           {inquiry.status !== 'closed' ? (
             <>

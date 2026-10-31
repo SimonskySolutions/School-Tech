@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { FormProblem } from './admin';
-import { closeBody, inquiryBody, isTrapped, noteBody, sentNotice } from './admissions';
+import {
+  applicationBody,
+  closeBody,
+  inquiryBody,
+  intakeBody,
+  inviteBody,
+  isTrapped,
+  noteBody,
+  sentNotice,
+  splitName,
+} from './admissions';
 
 const form = (fields: Record<string, string>) => {
   const data = new FormData();
@@ -70,5 +80,57 @@ describe('staff forms on an inquiry', () => {
     expect(() => noteBody(form({ kind: 'note', body: '' }))).toThrow(FormProblem);
     expect(closeBody(form({ outcome: 'not_interested' }))).toEqual({ outcome: 'not_interested' });
     expect(() => closeBody(form({ outcome: 'lost' }))).toThrow(FormProblem);
+  });
+});
+
+describe('applications in the portal', () => {
+  const INTAKE = 'db000000-0000-7000-8000-0000000000a1';
+  const CHILD = 'c1000000-0000-7000-8000-000000000031';
+  const base = { intake_id: INTAKE, notice_id: NOTICE, notice_read: 'yes' };
+
+  it('sends one of the parent’s children by id, and nothing typed for a new child', () => {
+    expect(
+      applicationBody(form({ ...base, child: CHILD, child_given_name: 'Typed', message: 'Hi' })),
+    ).toEqual({
+      intakeId: INTAKE,
+      noticeId: NOTICE,
+      studentId: CHILD,
+      message: 'Hi',
+    });
+  });
+
+  it('needs a new child’s name and date of birth, and the notice confirmed', () => {
+    const child = { child_given_name: 'Nia', child_family_name: 'Ivanova', child_birth_date: '2021-02-03' };
+    expect(applicationBody(form({ ...base, child: 'new', ...child }))).toEqual({
+      intakeId: INTAKE,
+      noticeId: NOTICE,
+      child: { givenName: 'Nia', familyName: 'Ivanova', birthDate: '2021-02-03' },
+    });
+    expect(() => applicationBody(form({ ...base, child: 'new', ...child, child_birth_date: '' }))).toThrow(
+      FormProblem,
+    );
+    expect(() => applicationBody(form({ ...base, child: '' }))).toThrow('choose the child');
+    expect(() => applicationBody(form({ ...base, notice_read: '', child: CHILD }))).toThrow('privacy notice');
+  });
+
+  it('reads an intake and refuses dates out of order', () => {
+    const intake = {
+      school_id: 'b1000000-0000-7000-8000-00000000000a',
+      school_year: '2027/28',
+      grade: '1',
+      places: '20',
+      opens_on: '2026-11-01',
+      closes_on: '2027-01-31',
+    };
+    expect(intakeBody(form(intake))).toMatchObject({ schoolYear: '2027/28', places: 20 });
+    expect(() => intakeBody(form({ ...intake, closes_on: '2026-10-01' }))).toThrow(FormProblem);
+    expect(() => intakeBody(form({ ...intake, places: '0' }))).toThrow(FormProblem);
+  });
+
+  it('guesses the parent’s names for an invitation, and needs both', () => {
+    expect(splitName('Lora Petkova (synthetic)')).toEqual({ givenName: 'Lora', familyName: 'Petkova' });
+    expect(splitName('Ana Maria Popova')).toEqual({ givenName: 'Ana Maria', familyName: 'Popova' });
+    expect(splitName('Cher')).toEqual({ givenName: 'Cher', familyName: '' });
+    expect(() => inviteBody(form({ given_name: 'Cher', family_name: '' }))).toThrow(FormProblem);
   });
 });

@@ -970,6 +970,8 @@ export interface Inquiry {
   /** The family agreed to news about open days, and has not withdrawn it. */
   newsConsent: boolean;
   noticeVersion: number;
+  /** The sender was invited to apply and has a parent record (ADR 0027). */
+  invited: boolean;
   receivedAt: string;
   lastActivityAt: string;
   notes: {
@@ -984,4 +986,73 @@ export interface Inquiry {
 export interface SchoolInquiries {
   status: 'open' | 'closed' | 'all';
   inquiries: Inquiry[];
+}
+
+/** Admissions M5.2 (ADR 0027): intakes and applications. */
+export type IntakeStatus = 'open' | 'closed';
+export type ApplicationStatus = 'submitted' | 'under_review' | 'withdrawn';
+
+export interface Intake {
+  id: string;
+  school: { id: SchoolId; name: string };
+  schoolYear: string;
+  grade: string;
+  places: number;
+  opensOn: string;
+  closesOn: string;
+  status: IntakeStatus;
+  /** Open and between its dates today, in the school's time zone. */
+  takingApplications: boolean;
+}
+
+/** What a signed-in parent sees: open intakes, their children, their own applications. */
+export interface FamilyAdmissions {
+  intakes: Intake[];
+  /** Children the parent may apply for (guardian with the consent capability). */
+  children: { id: string; name: string }[];
+  applications: {
+    id: string;
+    school: { id: SchoolId; name: string };
+    intake: { id: string; schoolYear: string; grade: string };
+    childName: string | null;
+    status: ApplicationStatus;
+    submittedAt: string;
+  }[];
+  notice: { id: string; version: number; text: string } | null;
+}
+
+export interface ApplicationRequestBody {
+  intakeId: string;
+  noticeId: string;
+  /** One of the parent's children, or `child` for a child the group does not know yet. */
+  studentId?: string;
+  child?: { givenName: string; familyName: string; birthDate: string };
+  currentSchool?: string;
+  message?: string;
+}
+
+/** What admissions staff see at their schools. */
+export interface SchoolApplications {
+  schools: { id: SchoolId; name: string }[];
+  intakes: (Intake & { applications: { live: number; withdrawn: number } })[];
+  applications: {
+    id: string;
+    school: { id: SchoolId; name: string };
+    intake: { id: string; schoolYear: string; grade: string };
+    status: ApplicationStatus;
+    child: { name: string | null; birthDate: string | null; known: boolean; currentSchool: string | null };
+    applicant: { name: string | null; email: string | null };
+    message: string | null;
+    noticeVersion: number;
+    submittedAt: string;
+  }[];
+}
+
+export interface IntakeRequestBody {
+  schoolId: string;
+  schoolYear: string;
+  grade: string;
+  places: number;
+  opensOn: string;
+  closesOn: string;
 }

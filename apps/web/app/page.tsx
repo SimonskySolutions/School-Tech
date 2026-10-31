@@ -212,14 +212,30 @@ function Home({ view }: { view: HomeView }) {
         </section>
       ) : null}
 
+      <section aria-labelledby="apply" data-testid="apply-for-a-place">
+        <h2 id="apply">Admission to our schools</h2>
+        <p>
+          <a href="/admissions/apply" data-testid="apply-link">
+            Apply for a place
+          </a>
+        </p>
+      </section>
+
       {view.showsAdmissions ? (
         <section aria-labelledby="admissions" data-testid="admissions">
           <h2 id="admissions">Admissions</h2>
-          <p>
-            <a href="/admissions/inquiries" data-testid="inquiries-link">
-              Inquiries from the school websites
-            </a>
-          </p>
+          <ul>
+            <li>
+              <a href="/admissions/inquiries" data-testid="inquiries-link">
+                Inquiries from the school websites
+              </a>
+            </li>
+            <li>
+              <a href="/admissions/applications" data-testid="applications-link">
+                Intakes and applications
+              </a>
+            </li>
+          </ul>
         </section>
       ) : null}
 

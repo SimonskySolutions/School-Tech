@@ -30,6 +30,17 @@ DELETE FROM people.family_request WHERE subject LIKE '%(integration test)' OR su
 DELETE FROM people.family_request_message
  WHERE request_id = 'd8000000-0000-7000-8000-0000000000a1' AND id <> 'd8100000-0000-7000-8000-0000000000a1';
 UPDATE people.family_request SET status = 'open', closed_at = NULL WHERE id = 'd8000000-0000-7000-8000-0000000000a1';
+-- Applications and intakes the tests made, and the seeded intake open again.
+DELETE FROM admissions.application;
+DELETE FROM admissions.intake WHERE id <> 'db000000-0000-7000-8000-0000000000a1';
+UPDATE admissions.intake SET status = 'open' WHERE id = 'db000000-0000-7000-8000-0000000000a1';
+-- Parents the tests invited to apply, with their sign-in links. Their
+-- Keycloak users stay; the tests give each run its own address.
+CREATE TEMP TABLE invited_person ON COMMIT DROP AS
+  SELECT applicant_person_id AS id FROM admissions.inquiry WHERE applicant_person_id IS NOT NULL;
+DELETE FROM people.login_identity WHERE person_id IN (SELECT id FROM invited_person);
+DELETE FROM people.person WHERE id IN (SELECT id FROM invited_person);
+UPDATE admissions.inquiry SET applicant_person_id = NULL, invited_at = NULL WHERE applicant_person_id IS NOT NULL;
 -- Inquiries the tests sent, and the seeded one back as the family sent it.
 DELETE FROM admissions.inquiry_note
  WHERE inquiry_id IN (SELECT id FROM admissions.inquiry

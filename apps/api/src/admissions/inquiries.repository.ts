@@ -22,12 +22,18 @@ export class InquiriesRejected extends Error {
 }
 
 const DATABASE_REFUSALS: Record<string, [InquiriesRejected['status'], string]> = {
-  P0002: [404, 'no such inquiry, or not yours to see'],
+  P0002: [404, 'not found, or not yours to see'],
   '42501': [403, 'not permitted'],
   '23514': [422, 'a value is not allowed here'],
   PY001: [409, 'the inquiry is closed'],
   PY020: [409, 'the privacy notice has changed; please read it again'],
   PY021: [429, 'too many inquiries just now; please try again later'],
+  PY022: [409, 'this intake is not taking applications'],
+  PY023: [409, 'this address is already known to the group; a group administrator can link the family'],
+  '23505': [
+    409,
+    'already there: one application per child and intake, and none to the school the child attends',
+  ],
 };
 
 export async function refusalsAsInquiries<T>(work: () => Promise<T>, notFound?: string): Promise<T> {
@@ -73,6 +79,7 @@ interface InquiryRow {
   message: string | null;
   news_consent: boolean;
   notice_version: number;
+  invited: boolean;
   received_at: Date;
   last_activity_at: Date;
 }
@@ -95,7 +102,7 @@ export async function schoolInquiries(
     `SELECT i.id, i.school_id, s.name AS school_name, i.status, i.outcome, i.parent_name, i.email, i.phone,
             i.child_name, i.birth_year, i.grade_of_interest, i.intended_start, i.message,
             (i.news_consent_at IS NOT NULL AND i.news_consent_withdrawn_at IS NULL) AS news_consent,
-            n.version AS notice_version, i.received_at, i.last_activity_at
+            n.version AS notice_version, i.applicant_person_id IS NOT NULL AS invited, i.received_at, i.last_activity_at
        FROM admissions.inquiry i
        JOIN org.school s ON s.id = i.school_id
        JOIN admissions.privacy_notice n ON n.id = i.notice_id
@@ -131,6 +138,7 @@ export async function schoolInquiries(
       message: row.message,
       newsConsent: row.news_consent,
       noticeVersion: row.notice_version,
+      invited: row.invited,
       receivedAt: row.received_at.toISOString(),
       lastActivityAt: row.last_activity_at.toISOString(),
       notes: notes
