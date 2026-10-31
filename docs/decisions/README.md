@@ -29,3 +29,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0023](0023-trips-and-consent.md) | Trips and guardian consent | Accepted |
 | [0024](0024-transport-routes-and-seats.md) | Transport: routes, stops and seats for a term | Accepted |
 | [0025](0025-uniforms-and-stock.md) | Uniforms: variants, prices and stock | Accepted |
+| [0026](0026-admissions-and-prospective-families.md) | Admissions: prospective families' data | Accepted |

@@ -104,6 +104,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Admissions inquiries (M5.1, ADR 0026)
+
+- Every school website has "Ask about a place" (`/inquiry` on the website's host, e.g. `http://school-a.pythagoras.localhost:53000/inquiry`). Families send it without signing in; principals, school administrators and group administrators answer at `/admissions/inquiries` in the portal ("Admissions" on the home page): log calls, e-mails and meetings, and close each inquiry with its outcome.
+- The form shows the group's current admissions privacy notice. The seeded notice is synthetic: before production the data protection officer publishes the real text (`admissions.publish_privacy_notice`, as a person with `privacy.manage`; no page yet). Forms opened before a new version are refused once and shown the new text.
+- No IP address is stored. If a website receives more than 30 inquiries in an hour, further senders are asked to try again later; the count drops as the hour passes.
+- Inquiries that led to no enrolment are to be erased after the DPO's retention period (M5.6, not built yet); until then they stay.
+
 ### The School Life day (M4.8)
 
 - `/school-life/day` ("Today at school" on the home page) shows one school on one day: lunch and dietary alerts, clubs and lessons, trips, buses, uniforms to hand over, families' requests waiting and dietary needs to verify. Switch school or day at the top; each part links to the page where the work is done.

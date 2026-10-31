@@ -9,6 +9,7 @@ import {
   type LunchList,
   type LunchMenus,
   type RevenueReport,
+  type SchoolInquiries,
   type SchoolLessons,
   type SchoolLifeDay,
   type SchoolRequests,
@@ -238,3 +239,6 @@ export const fetchSchoolLifeDay = (
   if (date) query.set('date', date);
   return get<SchoolLifeDay>(apiUrl, `/school-life/day?${query}`, accessToken);
 };
+
+export const fetchSchoolInquiries = (apiUrl: string, accessToken: string, status: string) =>
+  get<SchoolInquiries>(apiUrl, `/admissions/inquiries?${new URLSearchParams({ status })}`, accessToken);

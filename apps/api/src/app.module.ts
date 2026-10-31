@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { InquiriesController, PublicInquiriesController } from './admissions/inquiries.controller';
 import { AuthModule } from './auth/auth.module';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
@@ -40,6 +41,8 @@ import { type Env } from './config/env';
     SchoolsController,
     TlsController,
     SitesController,
+    PublicInquiriesController,
+    InquiriesController,
     CatalogController,
     DietaryController,
     DietaryReviewController,

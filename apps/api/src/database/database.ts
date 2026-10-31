@@ -20,6 +20,15 @@ export interface SiteRow {
   schools: { name: string; kind: string }[];
 }
 
+export interface InquiryFormRow {
+  school_id: string;
+  school_name: string;
+  notice_id: string;
+  notice_version: number;
+  notice_text: string;
+  news_consent_text: string;
+}
+
 export interface PersonTransaction {
   query<Row extends QueryResultRow>(sql: string, params?: readonly unknown[]): Promise<Row[]>;
 }
@@ -96,6 +105,30 @@ export class Database {
       [hostname],
     );
     return result.rows[0] ?? null;
+  }
+
+  /**
+   * System operation: the inquiry form of a website (M5.1): the schools it
+   * serves and the current admissions privacy notice. Public information.
+   */
+  async inquiryForm(hostname: string): Promise<InquiryFormRow[]> {
+    const result = await this.pool.query<InquiryFormRow>(
+      `SELECT school_id, school_name, notice_id, notice_version, notice_text, news_consent_text
+         FROM admissions.inquiry_form($1)`,
+      [hostname],
+    );
+    return result.rows;
+  }
+
+  /**
+   * System operation: a family sends a website's inquiry form (M5.1). Without
+   * a person: the database function checks the website, school and notice.
+   */
+  async submitInquiry(values: unknown[]): Promise<void> {
+    await this.pool.query(
+      `SELECT admissions.submit_inquiry($1, $2, $3, $4, $5, $6, $7, $8::smallint, $9, $10, $11, $12)`,
+      values,
+    );
   }
 
   /**

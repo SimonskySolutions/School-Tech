@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-31. Current milestone: **M5 · Admissions and CRM** (not planned in detail yet). M4 is complete (all eight steps; CI green on GitHub for M4.1–M4.7, runs #40–#60). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
+Last updated: 2026-10-31. Current milestone: **M5 · Admissions and CRM** (planned below; M5.1 done, M5.2 next). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. Each milestone is planned in detail when it starts; later milestones are outlined.
 
@@ -185,11 +185,35 @@ Tests added for M4.8: 2 API unit tests (only the chosen school, what needs doing
 7. Met: every service is bought through the common basket, order and payment flow; with one billing company in development each basket is one order, and the M3 tests prove one order per company. Each step's tests show that staff at another school see none of it.
 8. Met: a parent request reaches School Life and the leaders of the child's school only (M4.7 tests).
 
+## M5 · Admissions and CRM — in progress
+
+**Goal:** a family that does not attend yet can ask a school about a place, apply, be offered one and enrol, and the group sees how admissions are going at each school; prospective families' data is collected for a stated purpose, kept to the minimum, seen only by each school's admissions staff and erased when it is no longer needed (ADR 0026). The brief names the area without detail, so the steps below are this plan's reading of it, built on what exists: school websites (M3.5), people, guardian relationships and enrolments (M1, M3.3), the common checkout (M2) and the DPO's privacy records (ADR 0006).
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M5.1 Inquiries from school websites | M3.5 | ADR first. Every school website has an inquiry form for the schools it serves, showing the group's current admissions privacy notice and an optional, separate consent to news about open days; the inquiry reaches that school's admissions staff only (`admissions.manage`: principals, school administrators, group administrators), who note contacts and close it with an outcome. No person or account is created; no IP address is kept; abuse limited in the database | **Done** (2026-10-31), ADR 0026: migration `20261111090000` adds the schema `admissions` with `admissions.privacy_notice` (numbered per group, immutable, published by the privacy officer through `admissions.publish_privacy_notice`), `admissions.inquiry` and its contact log `admissions.inquiry_note` (permanent; erasure may only empty a note's text), the permission `admissions.manage` (principals, school administrators, group administrators), `admissions.inquiry_form` and `admissions.submit_inquiry` for anonymous visitors (only a school the website serves, only with the current notice, `PY020`; 30 an hour per website, `PY021`; a second form from the same address joins the open inquiry with the same answer) and `admissions.add_inquiry_note` / `admissions.close_inquiry` for staff. Readable by the school's admissions staff only: not the CEO, School Life, teachers or the kitchen; names, contact details and messages never reach the audit log; no IP address kept. API: public `GET /sites/inquiry-form?host=` and `POST /sites/inquiries` (strict: only the fields the notice covers), `GET /admissions/inquiries?status=`, `POST /admissions/inquiries/:id/notes` and `/close`. Pages: "Ask about a place" on every school website (`/inquiry`, linked from the footer; a hidden field bots fill, a same-site origin check, the news consent unticked), `/admissions/inquiries` in the portal ("Admissions" on the home page). Not built: a page for the privacy officer to publish the notice (database function only). The seed has a synthetic notice and Lora Petkova's inquiry to School A |
+| M5.2 Intakes and applications | M5.1, M1 | Admissions staff open an intake per school, school year and grade with a number of places; a signed-in parent applies for a new or existing child of theirs; states submitted, under review, withdrawn; the parent sees the state of their own applications only | Planned |
+| M5.3 Assessment, offers and the waiting list | M5.2 | Assessment notes seen by admissions staff only; offers never exceed the intake's places, even when decided at the same time (concurrency test); an offer expires after its deadline and its place goes back; declined and expired places go to the next on the waiting list in order | Planned |
+| M5.4 Enrolment hand-off | M5.3, M3.3 | Accepting an offer creates, in one transaction, the student (or uses the parent's existing child), the guardian relationship verified by staff and the enrolment at the school, exactly once; an optional enrolment fee is charged through the common checkout to the school's billing company | Planned |
+| M5.5 Admissions pipeline and reporting | M5.1–M5.4 | Per school: inquiries, applications, offers and enrolments by intake and source, with follow-ups due; for the CEO the same numbers per school without any personal data | Planned |
+| M5.6 Retention and requests from prospective families | M5.1–M5.4, ADR 0006 | Inquiries and applications that did not lead to an enrolment are erased by the worker after the DPO-approved retention period (never without an approved policy); staff erase one on request and export what is held about a sender (Art. 15, 17); withdrawing the open-day consent is recorded | Planned |
+| M5.7 Admissions end to end | M5.1–M5.6 | An end-to-end test from an inquiry on a school website to an enrolled child whose parent buys lunch, at a school added through administration | Planned |
+
+Tests added for M5.1: 38 database checks (no form or inquiry without a notice, only the privacy officer publishes, notices immutable, only a school the website serves, an old notice refused, addresses checked and lower-cased, the sender cannot read back, a second form joins the open inquiry, no person created, who reads it (the school's principal and the group administrator; not the CEO, School Life, the kitchen, other schools or parents), no writes except through the functions, notes and contacts, outcomes, closed stays closed, a new inquiry after closing, the log permanent but erasable, nothing in the audit log, the hourly cap), 4 API unit tests, 5 API integration tests (the form without signing in, an inquiry and a second one answered alike, refusals, who sees it, logging a call and closing), 5 web unit tests and 4 end-to-end tests (the website's link, notice and unticked consent; sending, the same answer twice and for a bot, the notice confirmation, cross-site forms refused; the principal logs a call and closes it; the kitchen, School Life, the CEO and another school see nothing).
+
+**Acceptance criteria**
+1. An inquiry sent from a school's website reaches that school's admissions staff only, records the privacy-notice version the sender saw, asks for nothing beyond the stated purpose and creates no account or access.
+2. A parent sees only their own applications; applications and assessment notes are seen only by the school's admissions staff.
+3. Offers never exceed an intake's places, even when decided at the same time; an expired or declined offer gives its place to the next on the waiting list.
+4. Accepting an offer enrols the child exactly once and creates a guardian relationship verified by staff; an e-mail match alone never grants access.
+5. The CEO sees admissions numbers per school without personal data.
+6. Unsuccessful inquiries and applications are erased after the DPO-approved retention period, and on request; nothing is erased without an approved policy.
+7. The path from inquiry to enrolment works at a school added through administration, without code changes.
+
 ## Later milestones (outline)
 
 | Milestone | Depends on | Outcome |
 | --- | --- | --- |
-| M5 · Admissions and CRM | M1 | Inquiries, applications, enrolment hand-off |
 | M6 · Staff, documents, tasks | M1 | Staff records and qualifications, documents and approvals, tasks and projects |
 | M7 · Integrations | Contracts in `docs/integration-register.md` | Shkolo, accounting export, e-signature, notifications: only after each contract is confirmed |
 | M8 · Production deployment | M2 | Production Compose, TLS, PgBouncer, pgBackRest, monitoring, restore drills |

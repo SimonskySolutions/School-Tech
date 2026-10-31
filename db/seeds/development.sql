@@ -380,6 +380,26 @@ JOIN (VALUES
 WHERE x.group_id = :G
   AND NOT EXISTS (SELECT 1 FROM scheduling.menu_dish md WHERE md.session_id = x.id);
 
+-- Admissions (M5.1, ADR 0026): a synthetic admissions privacy notice, to be
+-- replaced by the DPO's own text before production, and one inquiry sent from
+-- the School A website by a family that does not attend yet.
+INSERT INTO admissions.privacy_notice (id, group_id, version, notice_text, news_consent_text, published_by_person_id)
+VALUES ('d9000000-0000-7000-8000-000000000001', :G, 1,
+        'SYNTHETIC NOTICE FOR DEVELOPMENT, NOT LEGAL TEXT. The school uses what you send here only to answer your '
+        || 'question about a place and to arrange a visit, at your request before any contract (GDPR Art. 6(1)(b)). '
+        || 'Only the school''s admissions staff read it. If no application follows, it is erased after the period the '
+        || 'data protection officer sets. Contact dpo@pythagoras.test to see, correct or erase what is held about you.',
+        'Also send me news about open days at this school. You can withdraw this at any time. (Synthetic.)',
+        'c1000000-0000-7000-8000-000000000005')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO admissions.inquiry (id, group_id, school_id, website_id, notice_id, parent_name, email, child_name,
+                                birth_year, grade_of_interest, intended_start, message)
+VALUES ('da000000-0000-7000-8000-0000000000a1', :G, :SA, 'c2000000-0000-7000-8000-00000000000a',
+        'd9000000-0000-7000-8000-000000000001', 'Lora Petkova (synthetic)', 'lora.petkova@example.test', 'Yana',
+        2020, '1', 'September 2027',
+        'We are moving to Sofia next summer. Is there a place in grade 1, and can we visit? (Synthetic example.)')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

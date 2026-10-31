@@ -42,7 +42,7 @@ Status: implemented for milestone M0 (database foundation), 2026-10-29. Source o
 | Credit | `commerce.account_credit`, `commerce.credit_application` | Owed by one entity to one payer; usable only with the same entity |
 | Refund | `commerce.refund` | Requested, approved by a second person, processed; never above the payment |
 
-Not yet modelled (later milestones): admissions and CRM, academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
+Not yet modelled (later milestones): applications, offers and the rest of admissions (only website inquiries exist, M5.1), academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
 
 ## Schemas
 
@@ -56,6 +56,7 @@ Not yet modelled (later milestones): admissions and CRM, academics and timetable
 | `commerce` | Orders, lines, payments, allocations, credits, refunds |
 | `integration` | Transactional outbox, verified inbound provider events, external references |
 | `privacy` | Processing purposes, retention policies, consent records, data subject requests |
+| `admissions` | Prospective families (ADR 0026): admissions privacy notices, inquiries from school websites and their contact log |
 | `sensitive` | Dietary and health requirements (special-category data) |
 | `audit` | Change log (monthly partitions), access log |
 | `reporting` | Read models: `school_revenue_daily` (per school, local day and `payment_mode`: test-mode money is never live revenue), `outstanding_balance` |
@@ -76,6 +77,8 @@ Row-level security applies to every table (ADR 0005). Summary of the main rules:
 | Audit log | No | No | With `audit.read` (CEO, privacy officer) | No |
 
 The School Life views (kitchen counts, club registers) are built on these rules rather than on rules of their own: a viewer gets sessions and counts only where they hold `bookings.read`, children's names only with `people.read`, classes only with `enrolment.read`, and dietary needs only with `sensitive.dietary.read`. Counts come from the session counters that the booking triggers maintain; "meals" are confirmed (paid) bookings.
+
+Admissions inquiries (M5.1, ADR 0026): a family that does not attend yet sends a school website's form; `admissions.inquiry` keeps what it said (parent's name and e-mail; optionally telephone, the child's first name, year of birth, grade, intended start and a message), the website, and the `admissions.privacy_notice` version the sender saw, which is numbered per group and immutable. It creates no person, login or guardian relationship. A separate, optional consent to news about open days is recorded with its time. Anonymous writes only through `admissions.submit_inquiry` (the website must serve the school and the notice must be the current one, `PY020`; at most 30 inquiries per website per hour, `PY021`; a second form from an open inquiry's address is added to it as a `family_message` note, with the same answer); staff with `admissions.manage` at the school (principals, school administrators, group administrators) read inquiries and write only through `admissions.add_inquiry_note` and `admissions.close_inquiry`. The contact log `admissions.inquiry_note` is permanent except that erasure may empty a note's text; names, contact details and messages are redacted from the audit log. No IP address or other trace of the sender is stored.
 
 Parent requests (M4.7): `people.family_request` (a child, the school, a kind, a subject, a status) with append-only `people.family_request_message`s. Writes only through `people.open_family_request`, `people.reply_to_family_request` and `people.set_family_request_status`; readable by the child's guardians and staff with `requests.manage` at that school. Subjects and messages may say why a child is absent or what they cannot eat, so the audit log records that they changed, never what they say.
 
@@ -119,6 +122,8 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY017` | A trip permission cannot be withdrawn while a payment for the trip is open |
 | `PY018` | A transport seat needs an active stop of its own route (and only transport seats have one) |
 | `PY019` | Not enough of a uniform item in stock (or a correction would leave fewer than are held for orders) |
+| `PY020` | An inquiry was sent with another admissions privacy notice than the current one |
+| `PY021` | Too many inquiries from one website in the last hour |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

@@ -918,3 +918,70 @@ export interface SchoolLifeDay {
   /** Current dietary needs at the school not yet verified; null if the viewer may not review them. */
   dietaryToVerify: number | null;
 }
+
+/** Admissions (M5, ADR 0026). Inquiries sent from a school's website. */
+export const INQUIRY_OUTCOMES = [
+  'applied',
+  'not_interested',
+  'no_response',
+  'not_eligible',
+  'duplicate',
+] as const;
+export type InquiryOutcome = (typeof INQUIRY_OUTCOMES)[number];
+export const INQUIRY_NOTE_KINDS = ['note', 'call', 'email', 'meeting'] as const;
+export type InquiryNoteKind = (typeof INQUIRY_NOTE_KINDS)[number];
+export type InquiryStatus = 'new' | 'contacted' | 'closed';
+
+/** What a website's inquiry form shows: the schools it serves and the current privacy notice. */
+export interface InquiryForm {
+  schools: { id: SchoolId; name: string }[];
+  notice: { id: string; version: number; text: string; newsConsentText: string };
+}
+
+export interface InquiryRequestBody {
+  host: string;
+  schoolId: string;
+  noticeId: string;
+  parentName: string;
+  email: string;
+  phone?: string;
+  childName?: string;
+  birthYear?: number;
+  gradeOfInterest?: string;
+  intendedStart?: string;
+  message?: string;
+  newsConsent: boolean;
+}
+
+export interface Inquiry {
+  id: string;
+  school: { id: SchoolId; name: string };
+  status: InquiryStatus;
+  outcome: InquiryOutcome | null;
+  /** Null once the inquiry has been erased. */
+  parentName: string | null;
+  email: string | null;
+  phone: string | null;
+  childName: string | null;
+  birthYear: number | null;
+  gradeOfInterest: string | null;
+  intendedStart: string | null;
+  message: string | null;
+  /** The family agreed to news about open days, and has not withdrawn it. */
+  newsConsent: boolean;
+  noticeVersion: number;
+  receivedAt: string;
+  lastActivityAt: string;
+  notes: {
+    kind: InquiryNoteKind | 'family_message';
+    /** Null for a later form from the family. */
+    author: string | null;
+    body: string | null;
+    createdAt: string;
+  }[];
+}
+
+export interface SchoolInquiries {
+  status: 'open' | 'closed' | 'all';
+  inquiries: Inquiry[];
+}

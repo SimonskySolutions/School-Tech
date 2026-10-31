@@ -79,6 +79,13 @@ export default async function WebsitePage({ params }: { params: Params }) {
         <p>
           Parents book lunch and clubs in the <a href={config.APP_URL}>Pythagoras family portal</a>.
         </p>
+        {site.value.schools.length > 0 ? (
+          <p>
+            <a href="/inquiry" data-testid="inquiry-link">
+              Ask about a place
+            </a>
+          </p>
+        ) : null}
       </footer>
     </main>
   );

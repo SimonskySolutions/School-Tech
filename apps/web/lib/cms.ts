@@ -1,5 +1,5 @@
 import 'server-only';
-import { type SiteInfo } from '@pythagoras/shared';
+import { type InquiryForm, type InquiryRequestBody, type SiteInfo } from '@pythagoras/shared';
 import { type CmsPage } from './sites';
 
 // Server-side reads for the public websites (M3.5): which website a host is
@@ -48,4 +48,31 @@ export async function publishedPages(cmsUrl: string, cmsKey: string): Promise<Lo
       bodyHtml: doc.bodyHtml ?? null,
     })),
   };
+}
+
+/** The inquiry form of a website (M5.1): its schools and the current privacy notice. */
+export async function lookUpInquiryForm(apiUrl: string, host: string): Promise<Lookup<InquiryForm>> {
+  const url = new URL('/sites/inquiry-form', apiUrl);
+  url.searchParams.set('host', host);
+  const result = await getJson(url);
+  if (!result) return { kind: 'unavailable' };
+  if (result.status === 404 || result.status === 400) return { kind: 'missing' };
+  if (result.status !== 200) return { kind: 'unavailable' };
+  return { kind: 'ok', value: result.body as InquiryForm };
+}
+
+/** Sends a website's inquiry form; the API's status, or 0 when it could not be reached. */
+export async function sendInquiry(apiUrl: string, body: InquiryRequestBody): Promise<number> {
+  try {
+    const response = await fetch(new URL('/sites/inquiries', apiUrl), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    return response.status;
+  } catch {
+    return 0;
+  }
 }

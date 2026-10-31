@@ -30,6 +30,14 @@ DELETE FROM people.family_request WHERE subject LIKE '%(integration test)' OR su
 DELETE FROM people.family_request_message
  WHERE request_id = 'd8000000-0000-7000-8000-0000000000a1' AND id <> 'd8100000-0000-7000-8000-0000000000a1';
 UPDATE people.family_request SET status = 'open', closed_at = NULL WHERE id = 'd8000000-0000-7000-8000-0000000000a1';
+-- Inquiries the tests sent, and the seeded one back as the family sent it.
+DELETE FROM admissions.inquiry_note
+ WHERE inquiry_id IN (SELECT id FROM admissions.inquiry
+                       WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)')
+    OR inquiry_id = 'da000000-0000-7000-8000-0000000000a1';
+DELETE FROM admissions.inquiry WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)';
+UPDATE admissions.inquiry SET status = 'new', outcome = NULL, closed_at = NULL, last_activity_at = received_at
+ WHERE id = 'da000000-0000-7000-8000-0000000000a1';
 -- Uniform stock: no orders hold anything any more; the store is what the
 -- ledger says once test deliveries, corrections and hand-overs are gone.
 DELETE FROM catalog.stock_movement

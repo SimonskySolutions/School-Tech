@@ -212,6 +212,17 @@ function Home({ view }: { view: HomeView }) {
         </section>
       ) : null}
 
+      {view.showsAdmissions ? (
+        <section aria-labelledby="admissions" data-testid="admissions">
+          <h2 id="admissions">Admissions</h2>
+          <p>
+            <a href="/admissions/inquiries" data-testid="inquiries-link">
+              Inquiries from the school websites
+            </a>
+          </p>
+        </section>
+      ) : null}
+
       {view.showsReports ? (
         <section aria-labelledby="reports" data-testid="reports">
           <h2 id="reports">Reports</h2>
