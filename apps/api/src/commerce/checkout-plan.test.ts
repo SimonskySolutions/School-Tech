@@ -41,6 +41,20 @@ const piano = offering('piano', {
   package_size: 5,
   unit_amount_minor: '12000',
 });
+const bus = offering('bus', {
+  kind: 'transport',
+  name: 'Bus 1',
+  price_unit: 'per_term',
+  unit_amount_minor: '9000',
+});
+const route = {
+  vehicle: null,
+  weekdays: [1, 2, 3, 4, 5],
+  stops: [
+    { id: 'stop-1', position: 1, name: 'Park', pickupTime: '07:30', dropoffTime: null, active: true },
+    { id: 'stop-2', position: 2, name: 'Closed', pickupTime: '07:40', dropoffTime: null, active: false },
+  ],
+};
 const otherCompany = offering('other', {
   billing_entity_id: 'company-2',
   billing_entity_name: 'Second Company',
@@ -50,7 +64,7 @@ const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
   planCheckout({
     items,
     offeringsByStudent: new Map([
-      ['mila', new Map([lunchA, chess, piano, otherCompany].map((o) => [o.id, o]))],
+      ['mila', new Map([lunchA, chess, piano, bus, otherCompany].map((o) => [o.id, o]))],
       ['boris', new Map([[lunchC.id, lunchC]])],
     ]),
     openSessionsByOffering: new Map([
@@ -59,7 +73,9 @@ const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
       ['chess', [session('k1', 'chess', null), session('k2', 'chess', null)]],
       ['other', [session('o1', 'other')]],
       ['piano', [session('p1', 'piano', null), session('p2', 'piano', null)]],
+      ['bus', [session('term', 'bus', null)]],
     ]),
+    routesByOffering: new Map([['bus', route]]),
   });
 
 const rejection = (run: () => unknown) => {
@@ -156,5 +172,18 @@ describe('planCheckout', () => {
         ]),
       ),
     ).toBe(422);
+  });
+
+  it('sells a transport seat for the term with the stop the family chose, and needs an active stop', () => {
+    const [order] = input([{ studentId: 'mila', offeringId: 'bus', stopId: 'stop-1' }]);
+    expect(order!.lines).toEqual([
+      expect.objectContaining({
+        description: 'Bus 1, from Park',
+        bookingSessionIds: ['term'],
+        transportStopId: 'stop-1',
+      }),
+    ]);
+    expect(rejection(() => input([{ studentId: 'mila', offeringId: 'bus' }]))).toBe(422);
+    expect(rejection(() => input([{ studentId: 'mila', offeringId: 'bus', stopId: 'stop-2' }]))).toBe(422);
   });
 });

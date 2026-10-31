@@ -26,6 +26,7 @@ const bodySchema = z.object({
         studentId: z.uuid(),
         offeringId: z.uuid(),
         sessionIds: z.array(z.uuid()).max(60).optional(),
+        stopId: z.uuid().optional(),
       }),
     )
     .min(1)

@@ -151,6 +151,7 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000005', :G, 'debate',   'activity', 'Debate club'),
   ('d1000000-0000-7000-8000-000000000006', :G, 'piano',    'lesson',   'Piano lessons'),
   ('d1000000-0000-7000-8000-000000000007', :G, 'museum',   'trip',     'Museum visit'),
+  ('d1000000-0000-7000-8000-000000000008', :G, 'bus',      'transport', 'School bus'),
   ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
 ON CONFLICT (id) DO NOTHING;
 
@@ -164,6 +165,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000a5', :G, :SA, 'd1000000-0000-7000-8000-000000000005', :CO, 'debate',   'Debate club, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a6', :G, :SA, 'd1000000-0000-7000-8000-000000000006', :CO, 'piano',    'Piano lessons, School A (5 lessons)', 'published'),
   ('d2000000-0000-7000-8000-0000000000a7', :G, :SA, 'd1000000-0000-7000-8000-000000000007', :CO, 'museum',   'Museum visit, School A', 'published'),
+  ('d2000000-0000-7000-8000-0000000000a8', :G, :SA, 'd1000000-0000-7000-8000-000000000008', :CO, 'bus',      'School bus, route 1, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
@@ -179,6 +181,7 @@ FROM (VALUES
   ('d2000000-0000-7000-8000-0000000000c3',  8000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a5',  5000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a7',  1500, 'one_off'),
+  ('d2000000-0000-7000-8000-0000000000a8',  9000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a4', 45000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000b4', 42000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000c4', 48000, 'per_month')
@@ -219,6 +222,25 @@ SELECT :G, :SA, 'd2000000-0000-7000-8000-0000000000a7',
        ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia',
        ((current_date + 8) + TIME '12:00') AT TIME ZONE 'Europe/Sofia'
 WHERE NOT EXISTS (SELECT 1 FROM scheduling.session WHERE offering_id = 'd2000000-0000-7000-8000-0000000000a7');
+
+-- Transport (M4.5): route 1 to School A on school days, three stops, 20 seats
+-- for a term starting two weeks after the seed runs. Synthetic places and plate.
+INSERT INTO scheduling.transport_route (offering_id, group_id, school_id, vehicle, weekdays)
+VALUES ('d2000000-0000-7000-8000-0000000000a8', :G, :SA, 'Minibus CA 0000 XX (synthetic)', '{1,2,3,4,5}')
+ON CONFLICT (offering_id) DO NOTHING;
+INSERT INTO scheduling.transport_stop (id, group_id, school_id, offering_id, position, name, pickup_time, dropoff_time) VALUES
+  ('d5000000-0000-7000-8000-0000000000a1', :G, :SA, 'd2000000-0000-7000-8000-0000000000a8', 1, 'Mladost metro station (synthetic)', TIME '07:20', TIME '16:40'),
+  ('d5000000-0000-7000-8000-0000000000a2', :G, :SA, 'd2000000-0000-7000-8000-0000000000a8', 2, 'Druzhba park, north gate (synthetic)', TIME '07:35', TIME '16:25'),
+  ('d5000000-0000-7000-8000-0000000000a3', :G, :SA, 'd2000000-0000-7000-8000-0000000000a8', 3, 'Iztok, bus shelter 4 (synthetic)', TIME '07:45', TIME '16:15')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO scheduling.session (group_id, school_id, offering_id, starts_at, ends_at, location_label, capacity, booking_cutoff_at, cancellation_cutoff_at)
+SELECT :G, :SA, 'd2000000-0000-7000-8000-0000000000a8',
+       (current_date + 14)::timestamp AT TIME ZONE 'Europe/Sofia',
+       (current_date + 101)::timestamp AT TIME ZONE 'Europe/Sofia',
+       'Spring term', 20,
+       (current_date + 14)::timestamp AT TIME ZONE 'Europe/Sofia',
+       (current_date + 14)::timestamp AT TIME ZONE 'Europe/Sofia'
+WHERE NOT EXISTS (SELECT 1 FROM scheduling.session WHERE offering_id = 'd2000000-0000-7000-8000-0000000000a8');
 
 -- Lessons (M4.3): a piano teacher and the music room at School A. The teacher
 -- teaches on Tuesdays and Thursdays 14:00-17:00; the room is free on school

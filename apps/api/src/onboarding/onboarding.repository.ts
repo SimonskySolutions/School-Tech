@@ -241,6 +241,36 @@ export async function createSessions(
   );
   if (!offering) throw new OnboardingRejected(404, 'no such offering at this school');
 
+  if (body.schedule.type === 'term') {
+    // A whole term, for transport: seats are booked and cancelled before it starts (ADR 0024).
+    if (offering.kind !== 'transport') throw new OnboardingRejected(422, 'term calendars are for transport');
+    const { from, to, label } = body.schedule;
+    if (to < from) throw new OnboardingRejected(422, 'the term ends before it starts');
+    // A seat is booked for the offering's whole calendar, so one route offering has one term.
+    const [existing] = await tx.query(
+      `SELECT 1 FROM scheduling.session WHERE offering_id = $1 AND status <> 'cancelled'`,
+      [offering.id],
+    );
+    if (existing) {
+      throw new OnboardingRejected(
+        422,
+        'this route already has its term; add a new offering for the next term',
+      );
+    }
+    const term = await tx.query<{ id: string }>(
+      `INSERT INTO scheduling.session
+         (group_id, school_id, offering_id, starts_at, ends_at, capacity, location_label, booking_cutoff_at,
+          cancellation_cutoff_at)
+       SELECT access.current_group_id(), $2, $1, starts, ends, $4, $5, starts, starts
+         FROM (SELECT $3::date::timestamp AT TIME ZONE $6 AS starts, ($7::date + 1)::timestamp AT TIME ZONE $6 AS ends) t
+        WHERE starts > now()
+          AND NOT EXISTS (SELECT 1 FROM scheduling.session x WHERE x.offering_id = $1 AND x.starts_at = t.starts)
+       RETURNING id`,
+      [offering.id, target.id, from, body.capacity, label ?? body.location ?? null, target.time_zone, to],
+    );
+    return { created: term.length, skipped: 1 - term.length };
+  }
+
   if (body.schedule.type === 'once') {
     // One day out, for trips: booking and cancelling close 48 hours before it starts.
     if (offering.kind !== 'trip') throw new OnboardingRejected(422, 'one-day calendars are for trips');

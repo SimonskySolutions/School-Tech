@@ -4,12 +4,15 @@ import { type BookableOffering, type CheckoutGroupView, type CheckoutRequestBody
 // tested without a browser. Prices and totals always come from the API; the
 // form only says which child, which offering and which days.
 
-/** Form values: "lunch" = student|offering|session; "activity", "package" (lessons) and "trip" = student|offering. */
+/**
+ * Form values: "lunch" = student|offering|session; "activity", "package" (lessons) and "trip" =
+ * student|offering; "transport" = student|offering|stop (the seat and the child's stop).
+ */
 export function basketFromForm(
   entries: Iterable<[string, FormDataEntryValue]>,
 ): CheckoutRequestBody['items'] {
   const lunch = new Map<string, { studentId: string; offeringId: string; sessionIds: string[] }>();
-  const activities = new Map<string, { studentId: string; offeringId: string }>();
+  const activities = new Map<string, { studentId: string; offeringId: string; stopId?: string }>();
   for (const [name, raw] of entries) {
     if (typeof raw !== 'string') continue;
     const parts = raw.split('|');
@@ -22,6 +25,9 @@ export function basketFromForm(
     } else if ((name === 'activity' || name === 'package' || name === 'trip') && parts.length === 2) {
       const [studentId, offeringId] = parts as [string, string];
       activities.set(raw, { studentId, offeringId });
+    } else if (name === 'transport' && parts.length === 3) {
+      const [studentId, offeringId, stopId] = parts as [string, string, string];
+      activities.set(`${studentId}|${offeringId}`, { studentId, offeringId, stopId });
     }
   }
   return [...lunch.values(), ...activities.values()];

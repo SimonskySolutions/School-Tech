@@ -113,24 +113,29 @@ export function sessionsBody(form: Form) {
     capacity,
     location: optional(form, 'location'),
     schedule:
-      text(form, 'pattern') === 'once'
-        ? {
-            type: 'once',
-            date: text(form, 'from'),
-            startTime: text(form, 'start_time'),
-            endTime: text(form, 'end_time'),
-          }
-        : text(form, 'pattern') === 'weekly'
+      text(form, 'pattern') === 'term'
+        ? { type: 'term', from: text(form, 'from'), to: text(form, 'to'), ...labelOf(form) }
+        : text(form, 'pattern') === 'once'
           ? {
-              type: 'weekly',
-              weekday: Number(text(form, 'weekday')),
+              type: 'once',
+              date: text(form, 'from'),
               startTime: text(form, 'start_time'),
               endTime: text(form, 'end_time'),
-              ...common,
             }
-          : { type: 'school_days', ...common },
+          : text(form, 'pattern') === 'weekly'
+            ? {
+                type: 'weekly',
+                weekday: Number(text(form, 'weekday')),
+                startTime: text(form, 'start_time'),
+                endTime: text(form, 'end_time'),
+                ...common,
+              }
+            : { type: 'school_days', ...common },
   };
 }
+
+/** A term's name, taken from the place field of the calendar form. */
+const labelOf = (form: Form) => (optional(form, 'location') ? { label: optional(form, 'location') } : {});
 
 export function staffBody(form: Form) {
   return {

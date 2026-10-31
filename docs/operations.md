@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Transport (ADR 0024)
+
+- Setting up a route for a term: add a transport offering on the school's set-up page (priced per term), add "A whole term (transport)" calendar with the first and last day, the seats as places and the term's name in the Room field, then open "Route and stops" to set the vehicle and weekdays and add the stops in order. One route offering has one term; the next term is a new offering.
+- Families choose a stop when they buy a seat; seats are bought before the term starts.
+- The driver's list: `/school-life/transport?from=YYYY-MM-DD` shows each route running that day with the stops in order and who boards at each.
+
 ### Trips and consent (ADR 0023)
 
 - Setting up a trip: add a trip offering on the school's set-up page, write its consent wording there ("Consent wording"), then add a "One day (trips)" calendar with the date, times, place and number of places. Without wording the trip cannot be booked. Changing the wording makes a new version: guardians give permission again before booking; places already booked stay.

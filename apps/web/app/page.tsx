@@ -161,6 +161,11 @@ function Home({ view }: { view: HomeView }) {
                 Trips: who is coming
               </a>
             </li>
+            <li>
+              <a href="/school-life/transport" data-testid="transport-link">
+                Transport: the day&apos;s lists for drivers
+              </a>
+            </li>
             {view.lessonSchools.map((school) => (
               <li key={school.id}>
                 <a href={`/schools/${school.id}/lessons`} data-testid="school-lessons-link">

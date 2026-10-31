@@ -1,4 +1,4 @@
-import { sumMoney } from '@pythagoras/shared';
+import { sumMoney, type TransportRoute } from '@pythagoras/shared';
 import { isPackage, type OfferingRow, pickSessions, type SessionRow } from '../catalog/catalog.repository';
 
 // Turns a basket into orders, before anything is written. Pure, so the rules
@@ -9,6 +9,8 @@ export interface BasketItem {
   studentId: string;
   offeringId: string;
   sessionIds?: string[];
+  /** The child's stop, for a transport seat (ADR 0024). */
+  stopId?: string;
 }
 
 export interface PlannedLine {
@@ -25,6 +27,8 @@ export interface PlannedLine {
   currency: string;
   /** Sessions this line books (one for a lunch day, all of them for an activity). */
   bookingSessionIds: string[];
+  /** The stop written on each booking of a transport seat. */
+  transportStopId: string | null;
 }
 
 export interface PlannedOrder {
@@ -49,12 +53,15 @@ export interface PlanInput {
   /** Bookable offerings per student (already limited to the student's schools). */
   offeringsByStudent: ReadonlyMap<string, ReadonlyMap<string, OfferingRow>>;
   openSessionsByOffering: ReadonlyMap<string, readonly SessionRow[]>;
+  /** Routes of the transport offerings in the basket. */
+  routesByOffering?: ReadonlyMap<string, TransportRoute>;
 }
 
 export function planCheckout({
   items,
   offeringsByStudent,
   openSessionsByOffering,
+  routesByOffering = new Map(),
 }: PlanInput): PlannedOrder[] {
   if (items.length === 0) throw new CheckoutRejected(422, 'the basket is empty');
   const lines: (PlannedLine & { billingEntityId: string; billingEntityName: string })[] = [];
@@ -75,9 +82,27 @@ export function planCheckout({
       currency: offering.currency,
       billingEntityId: offering.billing_entity_id,
       billingEntityName: offering.billing_entity_name,
+      transportStopId: null,
     };
 
-    if (isPackage(offering.price_unit)) {
+    if (offering.kind === 'transport') {
+      // A seat for the term, boarding at the stop the family chose.
+      const stop = routesByOffering
+        .get(offering.id)
+        ?.stops.find((candidate) => candidate.id === item.stopId && candidate.active);
+      if (!stop) throw new CheckoutRejected(422, `choose a stop for ${offering.name}`);
+      if (open.length === 0)
+        throw new CheckoutRejected(409, `${offering.name} is no longer open for booking`);
+      for (const session of open) claim(seen, item.studentId, session.id);
+      lines.push({
+        ...base,
+        description: `${offering.name}, from ${stop.name}`.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: open.map((session) => session.id),
+        transportStopId: stop.id,
+      });
+    } else if (isPackage(offering.price_unit)) {
       // A package of lessons: one line, no booking; slots are booked from the package once it is paid.
       const key = `package:${offering.id}`;
       claim(seen, item.studentId, key);

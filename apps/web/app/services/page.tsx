@@ -112,6 +112,8 @@ function ChildOfferings({ child, allergens }: { child: StudentOfferings; allerge
           <LessonPackage key={offering.id} studentId={child.student.id} offering={offering} />
         ) : offering.consent ? (
           <Trip key={offering.id} studentId={child.student.id} offering={offering} />
+        ) : offering.route ? (
+          <BusSeat key={offering.id} studentId={child.student.id} offering={offering} />
         ) : offering.pickSessions ? (
           <LunchDays
             key={offering.id}
@@ -273,6 +275,50 @@ function Trip({ studentId, offering }: { studentId: string; offering: BookableOf
           <Link href={`/children/${studentId}/trips`}>read the trip&apos;s details and give permission</Link>.
         </p>
       ) : null}
+    </fieldset>
+  );
+}
+
+/** A seat for the term, boarding at the stop the family chooses (ADR 0024). */
+function BusSeat({ studentId, offering }: { studentId: string; offering: BookableOffering }) {
+  const term = offering.sessions[0];
+  const route = offering.route!;
+  const booked = term?.alreadyBooked ?? false;
+  const full = term ? !booked && term.available === 0 : false;
+  const problem = offering.eligibility.problem;
+  const unavailable = !term || booked || full || problem !== null || route.stops.length === 0;
+  return (
+    <fieldset data-testid="offering-transport">
+      <legend>{`${offering.name}: ${priceText(offering)}`}</legend>
+      <p style={{ margin: '0 0 0.25rem' }}>
+        {[
+          term?.location,
+          term?.available === null || term?.available === undefined ? null : `${term.available} seats left`,
+          route.vehicle,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        {booked
+          ? ' (booked)'
+          : problem
+            ? ` (cannot be booked: ${problem})`
+            : full
+              ? ' (full)'
+              : !term
+                ? ' (no longer open)'
+                : ''}
+      </p>
+      <label>
+        Seat from{' '}
+        <select name="transport" defaultValue="" disabled={unavailable} data-testid="stop-select">
+          <option value="">No seat</option>
+          {route.stops.map((stop) => (
+            <option key={stop.id} value={`${studentId}|${offering.id}|${stop.id}`}>
+              {`${stop.name} (pick-up ${stop.pickupTime}${stop.dropoffTime ? `, back ${stop.dropoffTime}` : ''})`}
+            </option>
+          ))}
+        </select>
+      </label>
     </fieldset>
   );
 }

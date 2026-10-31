@@ -19,6 +19,8 @@ describe('basketFromForm', () => {
       ['activity', 'mila|chess'],
       ['package', 'mila|piano'],
       ['trip', 'mila|museum'],
+      ['transport', 'mila|bus|stop-2'],
+      ['transport', ''],
     ]);
     expect(items).toEqual([
       { studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['day-1', 'day-2'] },
@@ -26,6 +28,7 @@ describe('basketFromForm', () => {
       { studentId: 'mila', offeringId: 'chess' },
       { studentId: 'mila', offeringId: 'piano' },
       { studentId: 'mila', offeringId: 'museum' },
+      { studentId: 'mila', offeringId: 'bus', stopId: 'stop-2' },
     ]);
   });
 

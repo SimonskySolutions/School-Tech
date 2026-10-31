@@ -11,6 +11,7 @@ import {
   type OfferingRow,
   type SessionRow,
 } from '../catalog/catalog.repository';
+import { findRoutes } from '../transport/transport.repository';
 import { asHttpError } from '../common/database-errors';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
@@ -154,7 +155,11 @@ export class CheckoutService {
       }
     }
 
-    const planned = planCheckout({ items, offeringsByStudent, openSessionsByOffering });
+    const transportIds = [...offeringsByStudent.values()].flatMap((offerings) =>
+      [...offerings.values()].filter((o) => o.kind === 'transport').map((o) => o.id),
+    );
+    const routesByOffering = await findRoutes(tx, [...new Set(transportIds)]);
+    const planned = planCheckout({ items, offeringsByStudent, openSessionsByOffering, routesByOffering });
     const groupId = randomUUID();
     const expiresAt = new Date(Date.now() + this.env.CHECKOUT_TTL_MINUTES * 60_000);
     const [{ group_id: tenantGroupId } = { group_id: '' }] = await tx.query<{ group_id: string }>(
@@ -214,9 +219,18 @@ export class CheckoutService {
           // The database holds the seat (row lock + capacity check); a full session aborts the whole checkout.
           await tx.query(
             `INSERT INTO scheduling.booking
-               (group_id, school_id, session_id, student_person_id, order_line_id, status, reserved_until, created_by_person_id)
-             VALUES ($1, $2, $3, $4, $5, 'reserved', $6, app.current_person_id())`,
-            [tenantGroupId, line.schoolId, sessionId, line.studentId, lineId, expiresAt],
+               (group_id, school_id, session_id, student_person_id, order_line_id, status, reserved_until, created_by_person_id,
+                transport_stop_id)
+             VALUES ($1, $2, $3, $4, $5, 'reserved', $6, app.current_person_id(), $7)`,
+            [
+              tenantGroupId,
+              line.schoolId,
+              sessionId,
+              line.studentId,
+              lineId,
+              expiresAt,
+              line.transportStopId,
+            ],
           );
         }
       }

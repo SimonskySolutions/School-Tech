@@ -89,6 +89,12 @@ const sessionsSchema = z.object({
       closed: z.array(day).max(400).optional(),
     }),
     z.object({
+      type: z.literal('term'),
+      from: day,
+      to: day,
+      label: text(60).optional(),
+    }),
+    z.object({
       type: z.literal('once'),
       date: day,
       startTime: time,

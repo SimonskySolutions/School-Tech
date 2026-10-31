@@ -11,7 +11,7 @@ export interface StudentRow {
 
 export interface OfferingRow {
   id: string;
-  kind: 'lunch' | 'activity' | 'lesson' | 'trip';
+  kind: 'lunch' | 'activity' | 'lesson' | 'trip' | 'transport';
   name: string;
   school_id: string;
   school_name: string;
@@ -38,7 +38,7 @@ export interface SessionRow {
 }
 
 /** Bookable kinds in the family portal. Tuition is invoiced by staff. */
-export const BOOKABLE_KINDS = ['lunch', 'activity', 'lesson', 'trip'] as const;
+export const BOOKABLE_KINDS = ['lunch', 'activity', 'lesson', 'trip', 'transport'] as const;
 
 /** Lesson packages are bought without choosing slots; the slots are booked afterwards (ADR 0022). */
 export const isPackage = (priceUnit: string) => priceUnit === 'per_package';

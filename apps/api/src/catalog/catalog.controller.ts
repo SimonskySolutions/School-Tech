@@ -8,6 +8,7 @@ import {
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import { dishesBySession } from '../school-life/menus';
+import { findRoutes } from '../transport/transport.repository';
 import { eligibilityFromDatabase } from './eligibility';
 import {
   findBookableOfferings,
@@ -59,6 +60,10 @@ export class CatalogController {
         studentId,
         offerings.filter((o) => o.kind === 'trip').map((o) => o.id),
       );
+      const routes = await findRoutes(
+        tx,
+        offerings.filter((o) => o.kind === 'transport').map((o) => o.id),
+      );
       const lunchIds = new Set(offerings.filter((o) => o.kind === 'lunch').map((o) => o.id));
       const menus = await dishesBySession(
         tx,
@@ -86,6 +91,7 @@ export class CatalogController {
           pickSessions: pickSessions(offering.kind, offering.price_unit),
           package: isPackage(offering.price_unit) ? { lessons: offering.package_size ?? 1 } : null,
           consent: offering.kind === 'trip' ? { given: permitted.has(offering.id) } : null,
+          route: offering.kind === 'transport' ? (routes.get(offering.id) ?? null) : null,
           eligibility: {
             rules: eligibilityFromDatabase(offering.eligibility),
             problem: problems.get(offering.id) ?? null,

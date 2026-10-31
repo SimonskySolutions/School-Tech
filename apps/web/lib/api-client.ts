@@ -11,6 +11,7 @@ import {
   type RevenueReport,
   type SchoolLessons,
   type SchoolSetup,
+  type SchoolTransport,
   type StudentList,
   type MeResponse,
   type OnboardingOverview,
@@ -20,6 +21,7 @@ import {
   type StudentLessons,
   type StudentOfferings,
   type StudentTrips,
+  type TransportRuns,
   type TripParticipants,
 } from '@pythagoras/shared';
 
@@ -205,3 +207,9 @@ export const fetchStudentTrips = (apiUrl: string, accessToken: string, studentId
 
 export const fetchTripParticipants = (apiUrl: string, accessToken: string, from: string | null) =>
   get<TripParticipants>(apiUrl, `/school-life/trips${range(from, 31)}`, accessToken);
+
+export const fetchSchoolTransport = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolTransport>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/transport`, accessToken);
+
+export const fetchTransportRuns = (apiUrl: string, accessToken: string, date: string | null) =>
+  get<TransportRuns>(apiUrl, `/school-life/transport${date ? `?date=${date}` : ''}`, accessToken);

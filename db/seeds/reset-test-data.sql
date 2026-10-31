@@ -55,6 +55,7 @@ DELETE FROM scheduling.session_resource
  WHERE session_id IN (SELECT id FROM test_slot) OR school_id IN (SELECT id FROM test_school);
 DELETE FROM scheduling.resource_availability WHERE resource_id IN (SELECT id FROM test_resource);
 DELETE FROM scheduling.resource WHERE id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.transport_stop WHERE name LIKE '%(integration test)' OR name LIKE '%(e2e test)';
 DELETE FROM scheduling.menu_dish WHERE school_id IN (SELECT id FROM test_school) OR session_id IN (SELECT id FROM test_slot);
 DELETE FROM scheduling.session WHERE school_id IN (SELECT id FROM test_school) OR id IN (SELECT id FROM test_slot);
 DELETE FROM catalog.price_version

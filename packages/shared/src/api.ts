@@ -43,7 +43,7 @@ export interface StudentOfferings {
 
 export interface BookableOffering {
   id: string;
-  kind: 'lunch' | 'activity' | 'lesson' | 'trip';
+  kind: 'lunch' | 'activity' | 'lesson' | 'trip' | 'transport';
   name: string;
   school: { id: SchoolId; name: string };
   billingEntity: { id: string; name: string };
@@ -54,6 +54,8 @@ export interface BookableOffering {
   package: { lessons: number } | null;
   /** Trips: a guardian's permission for the current wording is needed before booking (ADR 0023). */
   consent: { given: boolean } | null;
+  /** Transport: the route and its stops; the basket names the child's stop (ADR 0024). */
+  route: TransportRoute | null;
   /** Who may take it, and why this child may not (null when they may). The database checks it again. */
   eligibility: { rules: EligibilityRules; problem: string | null };
   sessions: {
@@ -71,7 +73,8 @@ export interface BookableOffering {
 }
 
 export interface CheckoutRequestBody {
-  items: { studentId: string; offeringId: string; sessionIds?: string[] }[];
+  /** stopId: the child's stop, for a transport seat. */
+  items: { studentId: string; offeringId: string; sessionIds?: string[]; stopId?: string }[];
 }
 
 export interface CheckoutResponse {
@@ -412,6 +415,8 @@ export interface CreateOfferingRequest {
 export type SessionSchedule =
   | { type: 'school_days'; from: string; to: string; closed?: string[] }
   | { type: 'once'; date: string; startTime: string; endTime: string }
+  /** A whole term, for transport: the first and the last day (ADR 0024). */
+  | { type: 'term'; from: string; to: string; label?: string }
   | {
       type: 'weekly';
       weekday: number;
@@ -696,6 +701,61 @@ export interface TripParticipants {
       emergencyContact: { name: string; phone: string } | null;
       /** Only for staff who may read dietary and health needs. */
       dietary: { kind: string; severity: string | null; description: string }[];
+    }[];
+  }[];
+}
+
+/** A bus route: vehicle, ISO weekdays it runs, stops in order (school local times, HH:MM). */
+export interface TransportRoute {
+  vehicle: string | null;
+  weekdays: number[];
+  stops: {
+    id: string;
+    position: number;
+    name: string;
+    pickupTime: string;
+    dropoffTime: string | null;
+    active: boolean;
+  }[];
+}
+
+/** A school's transport offerings with their routes and terms, for staff. */
+export interface SchoolTransport {
+  school: { id: SchoolId; name: string; timeZone: string };
+  /** The viewer holds catalog.manage here. */
+  canManage: boolean;
+  offerings: {
+    id: string;
+    name: string;
+    route: TransportRoute | null;
+    terms: {
+      sessionId: string;
+      label: string | null;
+      startsAt: string;
+      endsAt: string | null;
+      seats: number | null;
+      taken: number;
+      awaitingPayment: number;
+    }[];
+  }[];
+}
+
+/** The routes running on one day, with who boards at each stop (for the driver). */
+export interface TransportRuns {
+  date: string;
+  routes: {
+    sessionId: string;
+    name: string;
+    school: { id: SchoolId; name: string };
+    term: string | null;
+    vehicle: string | null;
+    seats: number | null;
+    riders: number;
+    stops: {
+      name: string;
+      pickupTime: string;
+      dropoffTime: string | null;
+      children: { studentName: string | null; classLabel: string | null }[];
     }[];
   }[];
 }

@@ -192,3 +192,20 @@ describe('trips on the set-up page', () => {
     expect(() => tripConsentBody(form({ wording: 'ok' }))).toThrow(FormProblem);
   });
 });
+
+describe('term calendars', () => {
+  it('makes a whole-term calendar for transport, with the term name', () => {
+    expect(
+      sessionsBody(
+        form({
+          offering_id: 'bus',
+          capacity: '20',
+          pattern: 'term',
+          from: '2027-02-01',
+          to: '2027-06-30',
+          location: 'Spring term',
+        }),
+      ).schedule,
+    ).toEqual({ type: 'term', from: '2027-02-01', to: '2027-06-30', label: 'Spring term' });
+  });
+});
