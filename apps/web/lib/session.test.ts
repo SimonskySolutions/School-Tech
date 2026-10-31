@@ -45,7 +45,11 @@ describe('session cookie', () => {
   it('rejects a tampered cookie', async () => {
     const sealed = await sealSession(session, KEY);
     const parts = sealed.split('.');
-    parts[3] = `${parts[3]!.slice(0, -2)}AA`;
+    // Flip a bit of the first ciphertext byte. Overwriting the last characters
+    // is not always a change: they may already match, or carry only unused bits.
+    const ciphertext = Buffer.from(parts[3]!, 'base64url');
+    ciphertext[0] = ciphertext[0]! ^ 0x01;
+    parts[3] = ciphertext.toString('base64url');
     expect(await unsealSession(parts.join('.'), KEY)).toBeNull();
   });
 
