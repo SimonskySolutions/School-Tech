@@ -108,7 +108,9 @@ function ChildOfferings({ child, allergens }: { child: StudentOfferings; allerge
       </p>
       {child.offerings.length === 0 ? <p>Nothing to book at this school yet.</p> : null}
       {child.offerings.map((offering) =>
-        offering.pickSessions ? (
+        offering.package ? (
+          <LessonPackage key={offering.id} studentId={child.student.id} offering={offering} />
+        ) : offering.pickSessions ? (
           <LunchDays
             key={offering.id}
             studentId={child.student.id}
@@ -207,6 +209,33 @@ function Activity({ studentId, offering }: { studentId: string; offering: Bookab
                 ? ' (no meetings open)'
                 : ''}
       </label>
+    </fieldset>
+  );
+}
+
+/** Lessons are bought as a package; the times are booked on the child's lessons page once it is paid. */
+function LessonPackage({ studentId, offering }: { studentId: string; offering: BookableOffering }) {
+  const problem = offering.eligibility.problem;
+  return (
+    <fieldset data-testid="offering-lesson">
+      <legend>{offering.name}</legend>
+      <label style={{ opacity: problem ? 0.6 : 1 }}>
+        <input
+          type="checkbox"
+          name="package"
+          value={`${studentId}|${offering.id}`}
+          disabled={problem !== null}
+        />{' '}
+        {`${formatMoney(offering.price.unitAmountMinor, offering.price.currency)} for ${offering.package!.lessons} lessons`}
+        {problem ? ` (cannot be booked: ${problem})` : ''}
+      </label>
+      <p style={{ fontSize: '0.9em', margin: '0.25rem 0 0 1.5rem' }}>
+        Once paid, choose the times on the{' '}
+        <Link href={`/children/${studentId}/lessons`} data-testid="lessons-link">
+          lessons page
+        </Link>
+        . Cancel at least 24 hours before a lesson to get it back.
+      </p>
     </fieldset>
   );
 }

@@ -45,7 +45,7 @@ export default async function SchoolSetupPage({
   // Development addresses go through the gateway's port; production uses HTTPS on the default port.
   const devPort = new URL(config.APP_URL).port ? `:${new URL(config.APP_URL).port}` : '';
   const bookable = serviceDefinitions.filter(
-    (service) => service.kind === 'lunch' || service.kind === 'activity',
+    (service) => service.kind === 'lunch' || service.kind === 'activity' || service.kind === 'lesson',
   );
 
   return (
@@ -189,7 +189,13 @@ export default async function SchoolSetupPage({
                   ? `${formatMoney(offering.price.unitAmountMinor, offering.price.currency)} ${PRICE_UNITS[offering.price.unit] ?? offering.price.unit}`
                   : 'no price'
               }; ${offering.sessions} sessions${offering.firstDate ? ` from ${offering.firstDate} to ${offering.lastDate}` : ''}`}
-              {offering.kind === 'activity' ? (
+              {offering.kind === 'lesson' ? (
+                <>
+                  {' · '}
+                  <Link href={`/schools/${school.id}/lessons`}>Teachers, rooms and lesson times</Link>
+                </>
+              ) : null}
+              {offering.kind === 'activity' || offering.kind === 'lesson' ? (
                 <details data-testid={`eligibility-${offering.id}`}>
                   <summary>{`Who may take it: ${describeEligibility(offering.eligibility) ?? 'every child at the school'}`}</summary>
                   <form method="post" action="/admin/actions" style={grid}>
@@ -239,6 +245,10 @@ export default async function SchoolSetupPage({
                 </option>
               ))}
             </select>
+          </label>
+          <label>
+            Lessons in a package (package price only){' '}
+            <input name="package_size" inputMode="numeric" size={3} placeholder="10" />
           </label>
           <EligibilityFields grades="" />
           <button type="submit">Add the offering</button>

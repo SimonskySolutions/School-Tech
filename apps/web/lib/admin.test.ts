@@ -152,3 +152,18 @@ describe('who may take an offering', () => {
     expect(offeringBody(form({ ...base, grades: '5 6' })).eligibility).toEqual({ grades: ['5', '6'] });
   });
 });
+
+describe('package prices', () => {
+  const base = { service_definition_id: 'x', name: 'Piano', price: '120', price_unit: 'per_package' };
+  it('sends the number of lessons with a package price, and only then', () => {
+    expect(offeringBody(form({ ...base, package_size: '5' }))).toMatchObject({
+      priceUnit: 'per_package',
+      packageSize: 5,
+    });
+    expect(offeringBody(form({ ...base, price_unit: 'per_term', package_size: '5' }))).not.toHaveProperty(
+      'packageSize',
+    );
+    expect(() => offeringBody(form(base))).toThrow(FormProblem);
+    expect(() => offeringBody(form({ ...base, package_size: '0' }))).toThrow(FormProblem);
+  });
+});

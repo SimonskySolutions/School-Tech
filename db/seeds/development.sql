@@ -149,6 +149,7 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000002', :G, 'chess',    'activity', 'Chess club'),
   ('d1000000-0000-7000-8000-000000000003', :G, 'robotics', 'activity', 'Robotics club'),
   ('d1000000-0000-7000-8000-000000000005', :G, 'debate',   'activity', 'Debate club'),
+  ('d1000000-0000-7000-8000-000000000006', :G, 'piano',    'lesson',   'Piano lessons'),
   ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
 ON CONFLICT (id) DO NOTHING;
 
@@ -160,6 +161,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000a2', :G, :SA, 'd1000000-0000-7000-8000-000000000002', :CO, 'chess',    'Chess club, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000c3', :G, :SC, 'd1000000-0000-7000-8000-000000000003', :CO, 'robotics', 'Robotics club, School C', 'published'),
   ('d2000000-0000-7000-8000-0000000000a5', :G, :SA, 'd1000000-0000-7000-8000-000000000005', :CO, 'debate',   'Debate club, School A', 'published'),
+  ('d2000000-0000-7000-8000-0000000000a6', :G, :SA, 'd1000000-0000-7000-8000-000000000006', :CO, 'piano',    'Piano lessons, School A (5 lessons)', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
@@ -181,6 +183,12 @@ FROM (VALUES
 JOIN catalog.school_offering o ON o.id = v.offering::uuid
 ON CONFLICT (id) DO NOTHING;
 
+-- Piano: a package of 5 lessons for 120.00 (M4.3).
+INSERT INTO catalog.price_version (id, group_id, offering_id, version, unit_amount_minor, vat_rate_bp, price_unit, package_size, valid_from)
+VALUES ('d3000000-0000-7000-8000-0000000000a6', :G, 'd2000000-0000-7000-8000-0000000000a6', 1, 12000, 0, 'per_package', 5,
+        TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO catalog.policy_version (group_id, offering_id, kind, version, rules, valid_from)
 SELECT :G, o.id, 'booking_and_cancellation', 1,
        CASE WHEN o.code = 'lunch'
@@ -190,6 +198,25 @@ SELECT :G, o.id, 'booking_and_cancellation', 1,
 FROM catalog.school_offering o
 WHERE o.group_id = :G AND o.code IN ('lunch', 'chess', 'robotics', 'debate')
   AND NOT EXISTS (SELECT 1 FROM catalog.policy_version p WHERE p.offering_id = o.id);
+
+-- Lessons (M4.3): a piano teacher and the music room at School A. The teacher
+-- teaches on Tuesdays and Thursdays 14:00-17:00; the room is free on school
+-- days 8:00-18:00. 45-minute slots for the next four weeks.
+INSERT INTO scheduling.resource (id, group_id, school_id, kind, display_name) VALUES
+  ('d4000000-0000-7000-8000-0000000000a1', :G, :SA, 'teacher', 'Ms Elena Georgieva (piano)'),
+  ('d4000000-0000-7000-8000-0000000000a2', :G, :SA, 'room',    'Music room')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO scheduling.resource_availability (group_id, school_id, resource_id, weekday, starts, ends)
+SELECT :G, :SA, v.resource::uuid, v.weekday, v.starts, v.ends FROM (VALUES
+  ('d4000000-0000-7000-8000-0000000000a1', 2, TIME '14:00', TIME '17:00'),
+  ('d4000000-0000-7000-8000-0000000000a1', 4, TIME '14:00', TIME '17:00'),
+  ('d4000000-0000-7000-8000-0000000000a2', 1, TIME '08:00', TIME '18:00'),
+  ('d4000000-0000-7000-8000-0000000000a2', 2, TIME '08:00', TIME '18:00'),
+  ('d4000000-0000-7000-8000-0000000000a2', 3, TIME '08:00', TIME '18:00'),
+  ('d4000000-0000-7000-8000-0000000000a2', 4, TIME '08:00', TIME '18:00'),
+  ('d4000000-0000-7000-8000-0000000000a2', 5, TIME '08:00', TIME '18:00')
+) AS v (resource, weekday, starts, ends)
+WHERE NOT EXISTS (SELECT 1 FROM scheduling.resource_availability a WHERE a.resource_id = v.resource::uuid AND a.weekday = v.weekday);
 
 -- Who may take each club (M4.2): grades at the school, or ages on the day.
 -- Mila (grade 3) may take chess but not debate; Boris (6) may take robotics.
@@ -236,6 +263,10 @@ CROSS JOIN LATERAL (
 WHERE NOT EXISTS (
   SELECT 1 FROM scheduling.session x WHERE x.offering_id = o.id AND x.starts_at = (d::date + v.starts) AT TIME ZONE s.time_zone
 );
+
+-- Lesson slots; slots already there are skipped (they would overlap).
+SELECT scheduling.create_lesson_slots('d2000000-0000-7000-8000-0000000000a6', 'd4000000-0000-7000-8000-0000000000a1',
+                                      'd4000000-0000-7000-8000-0000000000a2', current_date + 1, current_date + 28, 45);
 
 -- A synthetic weekly lunch menu (M4.1) on every seeded lunch day that has none,
 -- with the allergens a caterer would declare. Thursday's dessert contains

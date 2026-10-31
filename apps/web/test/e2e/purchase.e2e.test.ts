@@ -224,14 +224,16 @@ describe('CEO reporting after the purchase', () => {
 // Runs last: School Life cancels Mila's lunch; Anna sees it and gets credit.
 describe('cancelling a lunch day after the purchase', () => {
   it("School Life cancels Mila's lunch from the lunch list; Anna sees it on her order", async () => {
+    // The day of Mila's lunch in Anna's order: other tests (the fourth school) may
+    // have booked Mila other days, and test files run in any order.
+    const annaFirst = (await signIn('anna.ivanova@pythagoras.test', PASSWORD)).browser;
+    const ordered = await (await annaFirst.follow(annasOrder)).response.text();
+    const day = /Lunch at School A, (\d{4}-\d{2}-\d{2})/.exec(ordered)![1]!;
+
     const { browser } = await signIn('schoollife@pythagoras.test', PASSWORD);
     const kitchen = await (await browser.follow(`${APP}/school-life/kitchen?days=10`)).response.text();
-    // The day Mila is booked is the row carrying her allergy alert.
-    const at = kitchen.indexOf('Mila Ivanova (3A): Allergy');
-    expect(at).toBeGreaterThan(0);
-    const href = decode(
-      /href="(\/school-life\/lunch\?[^"]+)"/.exec(kitchen.slice(kitchen.lastIndexOf('<tr', at)))![1]!,
-    );
+    const schoolA = kitchen.slice(kitchen.indexOf('data-testid="kitchen-School A"'));
+    const href = decode(new RegExp(`href="(/school-life/lunch[?][^"]*date=${day})"`).exec(schoolA)![1]!);
     const listUrl = `${APP}${href}`;
 
     const list = await (await browser.follow(listUrl)).response.text();

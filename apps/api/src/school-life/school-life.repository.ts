@@ -176,8 +176,9 @@ export async function activityRegisters(tx: PersonTransaction, range: DateRange)
        JOIN catalog.school_offering o ON o.id = s.offering_id
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
        JOIN org.school sc ON sc.id = s.school_id
-      WHERE d.kind = 'activity' AND s.status <> 'cancelled' AND s.starts_at IS NOT NULL
+      WHERE d.kind IN ('activity', 'lesson') AND s.status <> 'cancelled' AND s.starts_at IS NOT NULL
         AND access.has_permission('bookings.read', s.school_id)
+        AND (d.kind = 'activity' OR s.confirmed_count + s.reserved_count > 0)
         AND (s.starts_at AT TIME ZONE sc.time_zone)::date BETWEEN $1::date AND $1::date + ($2::int - 1)
       ORDER BY s.starts_at, o.name`,
     [range.from, range.days],

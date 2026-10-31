@@ -15,6 +15,7 @@ const offering = (id: string, overrides: Partial<OfferingRow> = {}): OfferingRow
   currency: 'EUR',
   price_unit: 'per_day',
   vat_rate_bp: 0,
+  package_size: null,
   eligibility: {},
   ...overrides,
 });
@@ -33,6 +34,13 @@ const session = (id: string, offeringId: string, date: string | null = '2026-11-
 const lunchA = offering('lunch-a');
 const lunchC = offering('lunch-c', { school_id: 'school-c', unit_amount_minor: '500' });
 const chess = offering('chess', { kind: 'activity', price_unit: 'per_term', unit_amount_minor: '6000' });
+const piano = offering('piano', {
+  kind: 'lesson',
+  name: 'Piano',
+  price_unit: 'per_package',
+  package_size: 5,
+  unit_amount_minor: '12000',
+});
 const otherCompany = offering('other', {
   billing_entity_id: 'company-2',
   billing_entity_name: 'Second Company',
@@ -42,7 +50,7 @@ const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
   planCheckout({
     items,
     offeringsByStudent: new Map([
-      ['mila', new Map([lunchA, chess, otherCompany].map((o) => [o.id, o]))],
+      ['mila', new Map([lunchA, chess, piano, otherCompany].map((o) => [o.id, o]))],
       ['boris', new Map([[lunchC.id, lunchC]])],
     ]),
     openSessionsByOffering: new Map([
@@ -50,6 +58,7 @@ const input = (items: Parameters<typeof planCheckout>[0]['items']) =>
       ['lunch-c', [session('c1', 'lunch-c')]],
       ['chess', [session('k1', 'chess', null), session('k2', 'chess', null)]],
       ['other', [session('o1', 'other')]],
+      ['piano', [session('p1', 'piano', null), session('p2', 'piano', null)]],
     ]),
   });
 
@@ -126,5 +135,26 @@ describe('planCheckout', () => {
   it('counts a repeated day in one item once', () => {
     const [order] = input([{ studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['a1', 'a1'] }]);
     expect(order!.lines).toHaveLength(1);
+  });
+
+  it('sells a package of lessons as one line that books no slot, once per basket', () => {
+    const [order] = input([{ studentId: 'mila', offeringId: 'piano', sessionIds: ['p1'] }]);
+    expect(order!.lines).toEqual([
+      expect.objectContaining({
+        description: 'Piano (5 lessons)',
+        sessionId: null,
+        bookingSessionIds: [],
+        unitAmountMinor: 12000,
+      }),
+    ]);
+    expect(order!.totalMinor).toBe(12000);
+    expect(
+      rejection(() =>
+        input([
+          { studentId: 'mila', offeringId: 'piano' },
+          { studentId: 'mila', offeringId: 'piano' },
+        ]),
+      ),
+    ).toBe(422);
   });
 });

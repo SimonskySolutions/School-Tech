@@ -63,14 +63,19 @@ const schoolSchema = z.object({
   billingEntityId: z.uuid(),
 });
 
-const offeringSchema = z.object({
-  serviceDefinitionId: z.uuid(),
-  name: text(200),
-  unitAmountMinor: z.number().int().min(0).max(100_000_000),
-  priceUnit: z.enum(['per_session', 'per_day', 'per_month', 'per_term', 'one_off']),
-  vatRateBp: z.number().int().min(0).max(10_000).optional(),
-  eligibility: eligibilitySchema.optional(),
-});
+const offeringSchema = z
+  .object({
+    serviceDefinitionId: z.uuid(),
+    name: text(200),
+    unitAmountMinor: z.number().int().min(0).max(100_000_000),
+    priceUnit: z.enum(['per_session', 'per_day', 'per_month', 'per_term', 'per_package', 'one_off']),
+    packageSize: z.number().int().min(1).max(100).optional(),
+    vatRateBp: z.number().int().min(0).max(10_000).optional(),
+    eligibility: eligibilitySchema.optional(),
+  })
+  .refine((offering) => (offering.priceUnit === 'per_package') === (offering.packageSize !== undefined), {
+    message: 'a package price needs the number of lessons in the package, and only a package price has one',
+  });
 
 const sessionsSchema = z.object({
   offeringId: z.uuid(),

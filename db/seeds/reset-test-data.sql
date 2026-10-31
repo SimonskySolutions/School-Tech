@@ -19,6 +19,8 @@ DELETE FROM commerce.payment_allocation;
 DELETE FROM commerce.credit_application;
 DELETE FROM commerce.refund;
 DELETE FROM commerce.account_credit;
+DELETE FROM scheduling.package_entry;
+DELETE FROM scheduling.lesson_package;
 DELETE FROM scheduling.booking;
 DELETE FROM commerce.payment;
 DELETE FROM commerce.order_line;
@@ -39,7 +41,20 @@ DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id 
 DELETE FROM sensitive.dietary_requirement WHERE description LIKE '%(integration test)' OR description LIKE '%(e2e test)';
 DELETE FROM people.login_identity WHERE person_id IN (SELECT id FROM test_person);
 DELETE FROM people.person WHERE id IN (SELECT id FROM test_person);
-DELETE FROM scheduling.session WHERE school_id IN (SELECT id FROM test_school);
+-- Teachers and rooms the tests added, with their slots. Cascades do not run
+-- here (triggers are off), so dependent rows go explicitly.
+CREATE TEMP TABLE test_resource ON COMMIT DROP AS
+  SELECT id FROM scheduling.resource
+   WHERE school_id IN (SELECT id FROM test_school)
+      OR display_name LIKE '%(integration test)' OR display_name LIKE '%(e2e test)';
+CREATE TEMP TABLE test_slot ON COMMIT DROP AS
+  SELECT DISTINCT session_id AS id FROM scheduling.session_resource WHERE resource_id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.session_resource
+ WHERE session_id IN (SELECT id FROM test_slot) OR school_id IN (SELECT id FROM test_school);
+DELETE FROM scheduling.resource_availability WHERE resource_id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.resource WHERE id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.menu_dish WHERE school_id IN (SELECT id FROM test_school) OR session_id IN (SELECT id FROM test_slot);
+DELETE FROM scheduling.session WHERE school_id IN (SELECT id FROM test_school) OR id IN (SELECT id FROM test_slot);
 DELETE FROM catalog.price_version
  WHERE offering_id IN (SELECT id FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school));
 DELETE FROM catalog.policy_version

@@ -59,8 +59,19 @@ export function offeringBody(form: Form) {
     name: text(form, 'name'),
     unitAmountMinor: amountMinor(text(form, 'price')),
     priceUnit: text(form, 'price_unit'),
+    ...packageSize(form),
     ...(Object.keys(eligibility).length ? { eligibility } : {}),
   };
+}
+
+/** Lessons in a package: required with a package price, and only then. */
+function packageSize(form: Form): { packageSize?: number } {
+  if (text(form, 'price_unit') !== 'per_package') return {};
+  const size = Number(text(form, 'package_size'));
+  if (!Number.isInteger(size) || size < 1 || size > 100) {
+    throw new FormProblem('a package price needs the number of lessons in it, from 1 to 100');
+  }
+  return { packageSize: size };
 }
 
 const age = (input: string, label: string): number | undefined => {
@@ -130,6 +141,7 @@ export const PRICE_UNITS: Record<string, string> = {
   per_session: 'per session',
   per_month: 'per month',
   per_term: 'per term',
+  per_package: 'per package of lessons',
   one_off: 'one-off',
 };
 

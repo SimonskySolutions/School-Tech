@@ -15,6 +15,7 @@ import {
   findEligibilityProblems,
   findOpenSessions,
   findStudentWithSchools,
+  isPackage,
   pickSessions,
 } from './catalog.repository';
 
@@ -77,12 +78,14 @@ export class CatalogController {
             vatRateBp: offering.vat_rate_bp,
           },
           pickSessions: pickSessions(offering.kind, offering.price_unit),
+          package: isPackage(offering.price_unit) ? { lessons: offering.package_size ?? 1 } : null,
           eligibility: {
             rules: eligibilityFromDatabase(offering.eligibility),
             problem: problems.get(offering.id) ?? null,
           },
+          // A package's slots are booked on the lessons page, not in the basket.
           sessions: sessions
-            .filter((session) => session.offering_id === offering.id)
+            .filter((session) => session.offering_id === offering.id && !isPackage(offering.price_unit))
             .map((session) => ({
               id: session.id,
               serviceDate: session.service_date,

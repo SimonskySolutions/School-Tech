@@ -9,6 +9,7 @@ import {
   type LunchList,
   type LunchMenus,
   type RevenueReport,
+  type SchoolLessons,
   type SchoolSetup,
   type StudentList,
   type MeResponse,
@@ -16,6 +17,7 @@ import {
   type SchoolSummary,
   type StudentActivities,
   type StudentDietary,
+  type StudentLessons,
   type StudentOfferings,
 } from '@pythagoras/shared';
 
@@ -180,3 +182,18 @@ export const fetchDietaryReview = (apiUrl: string, accessToken: string) =>
 
 export const fetchStudentActivities = (apiUrl: string, accessToken: string, studentId: string) =>
   get<StudentActivities>(apiUrl, `/students/${encodeURIComponent(studentId)}/activities`, accessToken);
+
+export const fetchStudentLessons = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentLessons>(apiUrl, `/students/${encodeURIComponent(studentId)}/lessons`, accessToken);
+
+export const fetchSchoolLessons = (
+  apiUrl: string,
+  accessToken: string,
+  schoolId: string,
+  from: string | null,
+) =>
+  get<SchoolLessons>(
+    apiUrl,
+    `/schools/${encodeURIComponent(schoolId)}/lessons${range(from, 14)}`,
+    accessToken,
+  );

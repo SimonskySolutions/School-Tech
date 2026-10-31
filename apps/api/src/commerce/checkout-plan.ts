@@ -1,5 +1,5 @@
 import { sumMoney } from '@pythagoras/shared';
-import { type OfferingRow, pickSessions, type SessionRow } from '../catalog/catalog.repository';
+import { isPackage, type OfferingRow, pickSessions, type SessionRow } from '../catalog/catalog.repository';
 
 // Turns a basket into orders, before anything is written. Pure, so the rules
 // are unit-tested: what may be bought for which child, how lines are formed,
@@ -77,7 +77,18 @@ export function planCheckout({
       billingEntityName: offering.billing_entity_name,
     };
 
-    if (pickSessions(offering.kind, offering.price_unit)) {
+    if (isPackage(offering.price_unit)) {
+      // A package of lessons: one line, no booking; slots are booked from the package once it is paid.
+      const key = `package:${offering.id}`;
+      claim(seen, item.studentId, key);
+      lines.push({
+        ...base,
+        description: `${offering.name} (${offering.package_size ?? 1} lessons)`,
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+      });
+    } else if (pickSessions(offering.kind, offering.price_unit)) {
       const ids = [...new Set(item.sessionIds ?? [])];
       if (ids.length === 0) throw new CheckoutRejected(422, `choose at least one day for ${offering.name}`);
       for (const id of ids) {

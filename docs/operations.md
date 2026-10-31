@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Individual lessons (ADR 0022)
+
+- Selling lessons: on the school's set-up page add a lessons offering with the price "per package of lessons" and the number of lessons (1 for single lessons). Parents buy packages on the booking page.
+- Teachers, rooms and times: `/schools/<id>/lessons` (linked from the offering, from home for school staff, and from the School Life section). Add teachers and rooms, give each weekly hours, then "Create lesson times" for a date range and length; it fills the hours the teacher and the room share and leaves out anything that would clash, so running it again is safe.
+- Families book on "Lessons" next to each child. Cancelling at least 24 hours before returns the lesson to the package; later, it counts as used. Unused lessons do not expire and are not refunded automatically.
+
 ### Club eligibility and attendance (ADR 0021)
 
 - Who may take a club: on the school's set-up page, under each club, "Who may take it" (grades as the school names them, and ages in whole years on the day). Bookings already made stay when the rules change. An age rule needs the child's date of birth on their record.

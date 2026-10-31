@@ -43,13 +43,15 @@ export interface StudentOfferings {
 
 export interface BookableOffering {
   id: string;
-  kind: 'lunch' | 'activity';
+  kind: 'lunch' | 'activity' | 'lesson';
   name: string;
   school: { id: SchoolId; name: string };
   billingEntity: { id: string; name: string };
   price: { unitAmountMinor: number; currency: string; unit: string; vatRateBp: number };
   /** Lunch: pick days. Activity: the whole set of sessions is booked together. */
   pickSessions: boolean;
+  /** Lessons: bought as a package of this many lessons, then booked slot by slot (sessions is empty). */
+  package: { lessons: number } | null;
   /** Who may take it, and why this child may not (null when they may). The database checks it again. */
   eligibility: { rules: EligibilityRules; problem: string | null };
   sessions: {
@@ -398,7 +400,9 @@ export interface CreateOfferingRequest {
   serviceDefinitionId: string;
   name: string;
   unitAmountMinor: number;
-  priceUnit: 'per_session' | 'per_day' | 'per_month' | 'per_term' | 'one_off';
+  priceUnit: 'per_session' | 'per_day' | 'per_month' | 'per_term' | 'per_package' | 'one_off';
+  /** Lessons in one package; required with per_package. */
+  packageSize?: number;
   vatRateBp?: number;
   eligibility?: EligibilityRules;
 }
@@ -556,4 +560,67 @@ export interface SiteInfo {
   cmsKey: string | null;
   locale: string;
   schools: { name: string; kind: string }[];
+}
+
+/** A lesson slot: one place, a teacher and a room (ADR 0022). */
+export interface LessonSlot {
+  sessionId: string;
+  offeringId: string;
+  offeringName: string;
+  schoolName: string;
+  timeZone: string;
+  startsAt: string;
+  endsAt: string;
+  teacher: string | null;
+  room: string | null;
+}
+
+/** A guardian's view of one child's lessons. */
+export interface StudentLessons {
+  student: { id: PersonId; givenName: string; familyName: string };
+  /** The guardian manages the child's bookings. */
+  canBook: boolean;
+  packages: {
+    id: string;
+    offeringId: string;
+    offeringName: string;
+    schoolName: string;
+    lessonsBought: number;
+    lessonsLeft: number;
+    boughtAt: string;
+  }[];
+  /** Free slots of the lessons the child has packages with lessons left for, the next three weeks. */
+  slots: LessonSlot[];
+  bookings: (LessonSlot & {
+    bookingId: string;
+    status: 'confirmed' | 'attended' | 'absent';
+    canCancel: boolean;
+    /** Cancelling now gives the lesson back (before the cutoff); otherwise it counts as used. */
+    cancelReturnsLesson: boolean;
+    cancellationCutoffAt: string | null;
+  })[];
+}
+
+export interface BookLessonRequest {
+  sessionId: string;
+  packageId: string;
+}
+
+/** Teachers, rooms, their hours and the lesson slots of one school, for staff. */
+export interface SchoolLessons {
+  from: string;
+  days: number;
+  school: { id: SchoolId; name: string; timeZone: string };
+  /** The viewer holds catalog.manage here: adds teachers, rooms, hours and slots. */
+  canManage: boolean;
+  resources: {
+    id: string;
+    kind: 'teacher' | 'room';
+    displayName: string;
+    active: boolean;
+    /** Weekly hours in the school's time: ISO weekday (1 = Monday), HH:MM. */
+    hours: { id: string; weekday: number; starts: string; ends: string }[];
+  }[];
+  offerings: { id: string; name: string; packageSize: number | null }[];
+  slots: (LessonSlot & { booked: boolean; bookedFor: string | null })[];
 }

@@ -33,6 +33,11 @@ const DEFAULT_RULES: Record<string, Record<string, string>> = {
     cancellation_cutoff: 'before first session',
     after_cancellation: 'account_credit',
   },
+  lesson: {
+    booking_cutoff: 'slot start minus 2 hours',
+    cancellation_cutoff: 'slot start minus 24 hours',
+    after_cancellation: 'lesson returned to the package before the cutoff, used after it',
+  },
 };
 
 export class OnboardingRejected extends Error {
@@ -182,8 +187,9 @@ export async function createOffering(
   );
   const [price] = await tx.query<{ id: string }>(
     `INSERT INTO catalog.price_version
-       (group_id, offering_id, version, currency, unit_amount_minor, vat_rate_bp, price_unit, valid_from, created_by_person_id)
-     VALUES ($1, $2, 1, $7, $3, $4, $5, now(), $6) RETURNING id`,
+       (group_id, offering_id, version, currency, unit_amount_minor, vat_rate_bp, price_unit, package_size, valid_from,
+        created_by_person_id)
+     VALUES ($1, $2, 1, $7, $3, $4, $5, $8, now(), $6) RETURNING id`,
     [
       offering!.group_id,
       offering!.id,
@@ -192,6 +198,7 @@ export async function createOffering(
       body.priceUnit,
       personId,
       DEFAULT_CURRENCY,
+      body.priceUnit === 'per_package' ? (body.packageSize ?? null) : null,
     ],
   );
   const rules = DEFAULT_RULES[definition.kind];

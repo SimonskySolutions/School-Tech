@@ -74,7 +74,12 @@ describe('buildHome', () => {
       schools,
     );
     expect(view.schoolRoles).toEqual([
-      { role: 'Principal', school: 'School A', studentsHref: '/schools/a/students' },
+      {
+        role: 'Principal',
+        school: 'School A',
+        studentsHref: '/schools/a/students',
+        lessonsHref: '/schools/a/lessons',
+      },
     ]);
     expect(view.groupSchools).toEqual([]);
     expect(view.showsSchoolLife).toBe(true);

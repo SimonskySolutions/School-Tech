@@ -11,7 +11,7 @@ export interface StudentRow {
 
 export interface OfferingRow {
   id: string;
-  kind: 'lunch' | 'activity';
+  kind: 'lunch' | 'activity' | 'lesson';
   name: string;
   school_id: string;
   school_name: string;
@@ -22,6 +22,7 @@ export interface OfferingRow {
   currency: string;
   price_unit: string;
   vat_rate_bp: number;
+  package_size: number | null;
   eligibility: Record<string, unknown>;
 }
 
@@ -37,7 +38,10 @@ export interface SessionRow {
 }
 
 /** Bookable kinds in the family portal. Tuition is invoiced by staff. */
-export const BOOKABLE_KINDS = ['lunch', 'activity'] as const;
+export const BOOKABLE_KINDS = ['lunch', 'activity', 'lesson'] as const;
+
+/** Lesson packages are bought without choosing slots; the slots are booked afterwards (ADR 0022). */
+export const isPackage = (priceUnit: string) => priceUnit === 'per_package';
 
 /** Lunch is bought per day; other kinds are bought as the whole set of sessions. */
 export const pickSessions = (kind: string, priceUnit: string) =>
@@ -70,7 +74,7 @@ export function findBookableOfferings(
     `SELECT o.id, d.kind, o.name, o.school_id, s.name AS school_name,
             o.billing_entity_id, le.legal_name AS billing_entity_name,
             pv.id AS price_version_id, pv.unit_amount_minor, pv.currency, pv.price_unit, pv.vat_rate_bp,
-            o.eligibility
+            pv.package_size, o.eligibility
        FROM catalog.school_offering o
        JOIN catalog.service_definition d ON d.id = o.service_definition_id
        JOIN org.school s ON s.id = o.school_id

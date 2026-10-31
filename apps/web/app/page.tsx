@@ -77,6 +77,10 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={`/children/${child.id}/activities`} data-testid="child-activities-link">
                   Clubs and attendance
                 </Link>
+                {' · '}
+                <Link href={`/children/${child.id}/lessons`} data-testid="child-lessons-link">
+                  Lessons
+                </Link>
               </li>
             ))}
           </ul>
@@ -100,6 +104,14 @@ function Home({ view }: { view: HomeView }) {
                     {' · '}
                     <Link href={entry.studentsHref} data-testid="students-link">
                       Students and families
+                    </Link>
+                  </>
+                ) : null}
+                {entry.lessonsHref ? (
+                  <>
+                    {' · '}
+                    <Link href={entry.lessonsHref} data-testid="lessons-link">
+                      Lessons
                     </Link>
                   </>
                 ) : null}
@@ -140,6 +152,13 @@ function Home({ view }: { view: HomeView }) {
                 Lunch menus
               </a>
             </li>
+            {view.lessonSchools.map((school) => (
+              <li key={school.id}>
+                <a href={`/schools/${school.id}/lessons`} data-testid="school-lessons-link">
+                  {`Lessons at ${school.name}`}
+                </a>
+              </li>
+            ))}
             {view.showsDietaryReview ? (
               <li>
                 <a href="/school-life/dietary" data-testid="dietary-review-link">

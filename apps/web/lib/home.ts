@@ -7,13 +7,15 @@ export interface HomeView {
   greeting: string;
   children: { id: string; name: string; places: string[] }[];
   /** studentsHref: the school's students page, for roles that can read enrolments there. */
-  schoolRoles: { role: string; school: string; studentsHref: string | null }[];
+  schoolRoles: { role: string; school: string; studentsHref: string | null; lessonsHref: string | null }[];
   groupRoles: string[];
   groupSchools: string[];
   /** Kitchen counts and club registers; the API decides what each role sees there. */
   showsSchoolLife: boolean;
   /** Children's dietary needs to verify (dietary and enrolment read); the API enforces it. */
   showsDietaryReview: boolean;
+  /** Group roles that see School Life: the lessons page of each school. */
+  lessonSchools: { id: string; name: string }[];
   /** Revenue and balances per school; the API decides which schools. */
   showsReports: boolean;
   /** Setting up schools (org.manage); the API enforces it. */
@@ -69,6 +71,8 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       role: role.name,
       school: role.school!.name,
       studentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/students` : null,
+      // Every school role holds bookings.read or catalog.read there (access.role_permission).
+      lessonsHref: `/schools/${role.school!.id}/lessons`,
     }));
 
   return {
@@ -79,6 +83,9 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     groupSchools: groupRoles.length > 0 ? schools.map((school) => school.name) : [],
     showsSchoolLife: me.roles.some((role) => SCHOOL_LIFE_ROLES.has(role.code)),
     showsDietaryReview: me.roles.some((role) => DIETARY_REVIEW_ROLES.has(role.code)),
+    lessonSchools: me.roles.some((role) => role.scope === 'group' && SCHOOL_LIFE_ROLES.has(role.code))
+      ? schools.map((school) => ({ id: school.id, name: school.name }))
+      : [],
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),
     showsSchoolSetup: me.roles.some((role) => SETUP_ROLES.has(role.code)),
     hasNothing: children.length === 0 && schoolRoles.length === 0 && groupRoles.length === 0,

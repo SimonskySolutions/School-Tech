@@ -25,3 +25,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0019](0019-cms-sign-in-with-keycloak.md) | CMS editors sign in with Keycloak | Accepted |
 | [0020](0020-menus-allergens-dietary-verification.md) | Lunch menus, allergens and verified dietary needs | Accepted |
 | [0021](0021-activity-eligibility-and-attendance.md) | Activity eligibility and attendance | Accepted |
+| [0022](0022-individual-lessons.md) | Individual lessons: teachers, rooms, slots and packages | Accepted |
