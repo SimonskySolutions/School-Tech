@@ -1,3 +1,4 @@
+import { formatMoney } from '@pythagoras/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { APPLICATION_NOTE_KINDS, GUARDIAN_RELATIONSHIPS } from '@pythagoras/shared';
@@ -80,6 +81,28 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
                 {`${intake.school.name}, grade ${intake.grade}, ${intake.schoolYear}`}
               </Link>
               {`: ${intake.places} places, ${intake.free} free · ${intake.applications.live} applications, ${intake.applications.offered} offered, ${intake.applications.accepted} accepted, ${intake.applications.enrolled} enrolled, ${intake.applications.waitlisted} waiting · ${intake.status === 'open' ? `open ${formatDay(intake.opensOn)} to ${formatDay(intake.closesOn)}` : 'closed'}`}
+              {` · ${intake.fee ? `fee ${intake.fee.name}, ${formatMoney(intake.fee.amountMinor, intake.fee.currency)}` : 'no enrolment fee'}`}
+              <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                <input type="hidden" name="action" value="set-fee" />
+                <input type="hidden" name="intake_id" value={intake.id} />
+                <select
+                  name="offering_id"
+                  defaultValue={intake.fee?.offeringId ?? ''}
+                  aria-label="Enrolment fee"
+                >
+                  <option value="">No fee</option>
+                  {view.fees
+                    .filter((fee) => fee.schoolId === intake.school.id)
+                    .map((fee) => (
+                      <option key={fee.id} value={fee.id}>
+                        {`${fee.name}, ${formatMoney(fee.amountMinor, fee.currency)}`}
+                      </option>
+                    ))}
+                </select>{' '}
+                <button type="submit" data-testid="set-fee">
+                  Set the fee
+                </button>
+              </form>
               {intake.status === 'open' ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
                   <input type="hidden" name="action" value="close-intake" />

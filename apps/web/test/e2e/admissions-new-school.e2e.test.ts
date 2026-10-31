@@ -17,6 +17,7 @@ const ADMIN_PASSWORD = readFileSync('/workspace/secrets/keycloak_admin_password'
 const KEYCLOAK = 'http://keycloak:8080';
 const WEB = 'http://web:3000';
 const LUNCH = 'd1000000-0000-7000-8000-000000000001';
+const ENROLMENT_FEE = 'd1000000-0000-7000-8000-00000000000a';
 const run = Date.now().toString(36);
 const code = `test-${run}-e`;
 const schoolName = `School E ${run}`;
@@ -126,6 +127,16 @@ describe('admissions at a school added through administration', () => {
       capacity: '60',
       closed: '',
     });
+    // An enrolment fee too (M5.8): not sold by session, so it needs no calendar to go live.
+    await post(admin, '/admin/actions', {
+      action: 'add-offering',
+      back,
+      school_id: schoolId,
+      service_definition_id: ENROLMENT_FEE,
+      name: `Enrolment fee, ${schoolName}`,
+      price: '100.00',
+      price_unit: 'one_off',
+    });
     const principalEmail = `test-${run}-e-principal@pythagoras.test`;
     await post(admin, '/admin/actions', {
       action: 'add-staff',
@@ -231,6 +242,19 @@ describe('admissions at a school added through administration', () => {
     const intakeId = new RegExp(`<option value="([0-9a-f-]{36})"[^>]*>${schoolName}, grade 1, 2027/28<`).exec(
       apply,
     )![1]!;
+    const intakesPage = await page(principal, '/admissions/applications');
+    const feeId = new RegExp(`<option value="([0-9a-f-]{36})">Enrolment fee, ${schoolName}, 100,00`).exec(
+      intakesPage,
+    )![1]!;
+    expect(
+      done(
+        await staffAct([
+          ['action', 'set-fee'],
+          ['intake_id', intakeId],
+          ['offering_id', feeId],
+        ]),
+      ).get('done'),
+    ).toBe('fee-set');
     const applied = await post(parent, '/admissions/apply/actions', [
       ['action', 'apply'],
       ['intake_id', intakeId],
@@ -279,6 +303,9 @@ describe('admissions at a school added through administration', () => {
     ).toBe('enrolled');
     expect(await page(parent, '/admissions/apply')).toContain(
       `Iva Petrova: ${schoolName}, grade 1, 2027/28 · Enrolled`,
+    );
+    expect(await page(parent, '/admissions/apply')).toMatch(
+      new RegExp(`Enrolment fee, ${schoolName}: pay 100,00\\s?€`),
     );
 
     // 7. The parent buys a day of lunch for Iva and pays School E's company.

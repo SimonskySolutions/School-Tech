@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { formatMoney } from '@pythagoras/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { APPLICATION_DONE, APPLICATION_STATUS_LABELS, isFinished } from '../../../lib/admissions';
@@ -99,6 +101,27 @@ export default async function ApplyPage({ searchParams }: { searchParams: Search
                     Book lunch and clubs
                   </Link>
                 </>
+              ) : null}
+              {application.fee && application.studentId ? (
+                <div data-testid={`fee-${application.fee.state}`} style={{ marginTop: '0.25rem' }}>
+                  {application.fee.state === 'due' ? (
+                    <form method="post" action="/checkout" style={{ display: 'inline' }}>
+                      <input type="hidden" name="idempotency_key" value={randomUUID()} />
+                      <input
+                        type="hidden"
+                        name="fee"
+                        value={`${application.studentId}|${application.fee.offeringId}`}
+                      />
+                      <button type="submit" data-testid="pay-fee">
+                        {`${application.fee.name}: pay ${formatMoney(application.fee.amountMinor, application.fee.currency)}`}
+                      </button>
+                    </form>
+                  ) : application.fee.state === 'open' ? (
+                    `${application.fee.name}: an order is waiting for payment`
+                  ) : (
+                    `${application.fee.name} paid`
+                  )}
+                </div>
               ) : null}
               {!isFinished(application.status) ? (
                 <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>

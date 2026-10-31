@@ -1,5 +1,11 @@
 import { sumMoney, type TransportRoute } from '@pythagoras/shared';
-import { isPackage, type OfferingRow, pickSessions, type SessionRow } from '../catalog/catalog.repository';
+import {
+  type FeeOfferingRow,
+  isPackage,
+  type OfferingRow,
+  pickSessions,
+  type SessionRow,
+} from '../catalog/catalog.repository';
 
 // Turns a basket into orders, before anything is written. Pure, so the rules
 // are unit-tested: what may be bought for which child, how lines are formed,
@@ -62,6 +68,8 @@ export interface PlanInput {
   routesByOffering?: ReadonlyMap<string, TransportRoute>;
   /** Uniform variants per student (only the child's schools), keyed by variant. */
   uniformsByStudent?: ReadonlyMap<string, ReadonlyMap<string, UniformVariant>>;
+  /** Enrolment fees each student owes now, keyed by offering (M5.8). */
+  feesByStudent?: ReadonlyMap<string, ReadonlyMap<string, FeeOfferingRow>>;
 }
 
 /** A uniform variant as the planner needs it. */
@@ -88,6 +96,7 @@ export function planCheckout({
   openSessionsByOffering,
   routesByOffering = new Map(),
   uniformsByStudent = new Map(),
+  feesByStudent = new Map(),
 }: PlanInput): PlannedOrder[] {
   if (items.length === 0) throw new CheckoutRejected(422, 'the basket is empty');
   const lines: (PlannedLine & { billingEntityId: string; billingEntityName: string })[] = [];
@@ -127,6 +136,30 @@ export function planCheckout({
         bookingSessionIds: [],
         transportStopId: null,
         stock: { variantId: item.variantId, quantity },
+      });
+      continue;
+    }
+    const fee = feesByStudent.get(item.studentId)?.get(item.offeringId);
+    if (fee) {
+      // An enrolment fee: one line, nothing to book (M5.8). The database refuses a second one.
+      claim(seen, item.studentId, `fee:${fee.id}`);
+      lines.push({
+        studentId: item.studentId,
+        offeringId: fee.id,
+        schoolId: fee.school_id,
+        priceVersionId: fee.price_version_id,
+        quantity: 1,
+        unitAmountMinor: Number(fee.unit_amount_minor),
+        vatRateBp: fee.vat_rate_bp,
+        currency: fee.currency,
+        billingEntityId: fee.billing_entity_id,
+        billingEntityName: fee.billing_entity_name,
+        description: fee.name.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+        transportStopId: null,
+        stock: null,
       });
       continue;
     }

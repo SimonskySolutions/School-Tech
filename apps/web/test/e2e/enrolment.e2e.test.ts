@@ -4,9 +4,10 @@ import { APP, type Browser, signIn } from './browser';
 
 // The enrolment hand-off through the web app (M5.4). A family new to the
 // group (invited from an inquiry, so no seeded family gains a child) applies
-// for their child; the principal of School A offers the place, the parent
-// accepts, the principal enrols the child from today; the parent can then
-// book lunch for her at School A.
+// for their child to an intake with an enrolment fee (M5.8); the principal of
+// School A offers the place, the parent accepts, the principal enrols the
+// child from today; the parent pays the fee once and can then book lunch for
+// her at School A.
 
 const PASSWORD = readFileSync('/workspace/secrets/keycloak_dev_user_password', 'utf8').trim();
 const KEYCLOAK_ADMIN = readFileSync('/workspace/secrets/keycloak_admin_password', 'utf8').trim();
@@ -14,6 +15,7 @@ const KEYCLOAK = 'http://keycloak:8080';
 const WEB = 'http://web:3000';
 const SITE_A = 'school-a.pythagoras.localhost';
 const SCHOOL_A = 'b1000000-0000-7000-8000-00000000000a';
+const FEE = 'd2000000-0000-7000-8000-0000000000af';
 const run = Date.now().toString(36);
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 
@@ -110,6 +112,22 @@ describe('from an accepted place to a child the family books for', () => {
         ]),
       ).get('done'),
     ).toBe('intake-opened');
+    const intakes = await open(principal, '/admissions/applications');
+    const newIntake = /data-testid="intake-([0-9a-f-]{36})"/.exec(
+      intakes.slice(intakes.lastIndexOf('<li', intakes.indexOf(`grade ${grade}, 2028/29`))),
+    )![1]!;
+    expect(
+      done(
+        await staffAct([
+          ['action', 'set-fee'],
+          ['intake_id', newIntake],
+          ['offering_id', FEE],
+        ]),
+      ).get('done'),
+    ).toBe('fee-set');
+    expect(await open(principal, '/admissions/applications')).toContain(
+      'fee Enrolment fee, School A, 150,00',
+    );
 
     const anna = await invitedParent(principal);
     const form = await open(anna, '/admissions/apply');
@@ -182,6 +200,29 @@ describe('from an accepted place to a child the family books for', () => {
     const emaLine = mine.slice(mine.indexOf('Ema Ivanova: School A'));
     expect(emaLine.slice(0, emaLine.indexOf('</li>'))).not.toContain('data-testid="withdraw"');
     expect(await open(anna, '/')).toMatch(/Ema Ivanova[\s\S]*?School A, class 1A/);
+
+    // The enrolment fee: due, paid once through the checkout, then shown as paid.
+    expect(mine).toMatch(/Enrolment fee, School A: pay 150,00\s?€/);
+    const feeValue = decode(/name="fee" value="([^"]+)"/.exec(mine)![1]!);
+    const placed = await postForm(anna, '/checkout', [
+      ['idempotency_key', hidden(mine, 'idempotency_key')],
+      ['fee', feeValue],
+    ]);
+    const checkoutUrl = placed.headers.get('location')!;
+    const provider = await (await anna.follow(checkoutUrl)).response.text();
+    const payAction = decode(/<form method="post" action="([^"]+\/succeed)"/.exec(provider)![1]!);
+    const paid = await anna.request(new URL(payAction, checkoutUrl).toString(), { method: 'POST' });
+    const orderUrl = new URL(paid.headers.get('location')!, APP).toString();
+    let order = '';
+    for (let tries = 0; tries < 40 && !order.includes('data-status="paid"'); tries += 1) {
+      if (tries > 0) await new Promise((resolve) => setTimeout(resolve, 500));
+      order = await open(anna, orderUrl.replace(APP, ''));
+    }
+    expect(order).toContain('Enrolment fee, School A');
+    expect(order).toMatch(/Total 150,00\s?€/);
+    const afterFee = await open(anna, '/admissions/apply');
+    expect(afterFee).toContain('data-testid="fee-paid"');
+    expect(afterFee).not.toContain('data-testid="pay-fee"');
     const services = await open(anna, '/services');
     const section = services.slice(services.indexOf('data-testid="child-Ema"'));
     expect(section).toContain('Lunch at School A');

@@ -27,11 +27,24 @@ interface IntakeRow {
   closes_on: string;
   status: Intake['status'];
   taking: boolean;
+  fee_offering_id: string | null;
+  fee_name: string | null;
+  fee_amount_minor: string | null;
+  fee_currency: string | null;
 }
 
 const INTAKE_COLUMNS = `it.id, it.school_id, s.name AS school_name, it.school_year, it.grade, it.places,
        to_char(it.opens_on, 'YYYY-MM-DD') AS opens_on, to_char(it.closes_on, 'YYYY-MM-DD') AS closes_on, it.status,
-       (it.status = 'open' AND (now() AT TIME ZONE s.time_zone)::date BETWEEN it.opens_on AND it.closes_on) AS taking`;
+       (it.status = 'open' AND (now() AT TIME ZONE s.time_zone)::date BETWEEN it.opens_on AND it.closes_on) AS taking,
+       it.fee_offering_id, fee.name AS fee_name, fee.unit_amount_minor AS fee_amount_minor, fee.currency AS fee_currency`;
+// The intake's fee with its current price (an intake joined as "it", its school as "s").
+const FEE_JOIN = `LEFT JOIN LATERAL (
+         SELECT fo.name, pv.unit_amount_minor, pv.currency
+           FROM catalog.school_offering fo
+           JOIN catalog.price_version pv ON pv.offering_id = fo.id AND pv.variant_id IS NULL
+                AND pv.valid_from <= now() AND (pv.valid_until IS NULL OR pv.valid_until > now())
+          WHERE fo.id = it.fee_offering_id
+          ORDER BY pv.valid_from DESC LIMIT 1) fee ON true`;
 
 const intakeOf = (row: IntakeRow): Intake => ({
   id: row.id,
@@ -43,6 +56,15 @@ const intakeOf = (row: IntakeRow): Intake => ({
   closesOn: row.closes_on,
   status: row.status,
   takingApplications: row.taking,
+  fee:
+    row.fee_offering_id && row.fee_name
+      ? {
+          offeringId: row.fee_offering_id,
+          name: row.fee_name,
+          amountMinor: Number(row.fee_amount_minor),
+          currency: row.fee_currency ?? 'EUR',
+        }
+      : null,
 });
 
 const fullName = (given: string | null, family: string | null) =>
@@ -53,6 +75,7 @@ export async function familyAdmissions(tx: PersonTransaction): Promise<FamilyAdm
   const intakes = await tx.query<IntakeRow>(
     `SELECT ${INTAKE_COLUMNS}
        FROM admissions.intake it JOIN org.school s ON s.id = it.school_id
+       ${FEE_JOIN}
       WHERE it.status = 'open' AND s.status = 'active'
       ORDER BY s.name, it.school_year, it.grade`,
   );
@@ -75,14 +98,24 @@ export async function familyAdmissions(tx: PersonTransaction): Promise<FamilyAdm
     submitted_at: Date;
     offer_expires_at: Date | null;
     waitlist_position: number | null;
+    student_id: string | null;
+    fee_offering_id: string | null;
+    fee_name: string | null;
+    fee_amount_minor: string | null;
+    fee_currency: string | null;
+    fee_state: 'due' | 'open' | 'paid' | null;
   }>(
     `SELECT a.id, a.school_id, s.name AS school_name, a.intake_id, it.school_year, it.grade,
             coalesce(p.given_name, a.child_given_name) AS child_given, coalesce(p.family_name, a.child_family_name) AS child_family,
             a.status, a.submitted_at, CASE WHEN a.status = 'offered' THEN a.offer_expires_at END AS offer_expires_at,
-            CASE WHEN a.status = 'waitlisted' THEN admissions.waitlist_position(a.id) END AS waitlist_position
+            CASE WHEN a.status = 'waitlisted' THEN admissions.waitlist_position(a.id) END AS waitlist_position,
+            CASE WHEN a.status = 'enrolled' THEN a.student_person_id END AS student_id,
+            it.fee_offering_id, fee.name AS fee_name, fee.unit_amount_minor AS fee_amount_minor, fee.currency AS fee_currency,
+            admissions.fee_state(a.id) AS fee_state
        FROM admissions.application a
        JOIN admissions.intake it ON it.id = a.intake_id
        JOIN org.school s ON s.id = a.school_id
+       ${FEE_JOIN}
        LEFT JOIN people.person p ON p.id = a.student_person_id
       WHERE a.applicant_person_id = app.current_person_id()
       ORDER BY a.submitted_at DESC`,
@@ -103,6 +136,17 @@ export async function familyAdmissions(tx: PersonTransaction): Promise<FamilyAdm
       submittedAt: row.submitted_at.toISOString(),
       offerExpiresAt: row.offer_expires_at?.toISOString() ?? null,
       waitlistPosition: row.waitlist_position,
+      studentId: row.student_id,
+      fee:
+        row.fee_state && row.fee_offering_id && row.fee_name
+          ? {
+              offeringId: row.fee_offering_id,
+              name: row.fee_name,
+              amountMinor: Number(row.fee_amount_minor),
+              currency: row.fee_currency ?? 'EUR',
+              state: row.fee_state,
+            }
+          : null,
     })),
     notice: notice ? { id: notice.id, version: notice.version, text: notice.notice_text } : null,
   };
@@ -146,6 +190,12 @@ export async function openIntake(tx: PersonTransaction, body: IntakeRequestBody)
   return { id: row!.id };
 }
 
+/** Sets or removes the enrolment fee of an intake (M5.8). */
+export async function setIntakeFee(tx: PersonTransaction, intakeId: string, offeringId: string | null) {
+  await tx.query('SELECT admissions.set_intake_fee($1, $2)', [intakeId, offeringId]);
+  return { feeOfferingId: offeringId };
+}
+
 export async function closeIntake(tx: PersonTransaction, intakeId: string) {
   await tx.query('SELECT admissions.close_intake($1)', [intakeId]);
   return { status: 'closed' as const };
@@ -180,6 +230,7 @@ export async function schoolApplications(
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'enrolled') AS enrolled,
             (SELECT count(*)::int FROM admissions.application a WHERE a.intake_id = it.id AND a.status = 'waitlisted') AS waitlisted
        FROM admissions.intake it JOIN org.school s ON s.id = it.school_id
+       ${FEE_JOIN}
       WHERE access.has_permission('admissions.manage', it.school_id)
       ORDER BY it.status, s.name, it.school_year, it.grade`,
   );
@@ -242,8 +293,32 @@ export async function schoolApplications(
         [applications.map((row) => row.id)],
       )
     : [];
+  const fees = await tx.query<{
+    id: string;
+    school_id: SchoolId;
+    name: string;
+    amount_minor: string;
+    currency: string;
+  }>(
+    `SELECT o.id, o.school_id, o.name, pv.unit_amount_minor AS amount_minor, pv.currency
+       FROM catalog.school_offering o
+       JOIN catalog.service_definition d ON d.id = o.service_definition_id AND d.kind = 'fee'
+       JOIN LATERAL (SELECT * FROM catalog.price_version p
+                      WHERE p.offering_id = o.id AND p.variant_id IS NULL
+                        AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
+                      ORDER BY p.valid_from DESC LIMIT 1) pv ON true
+      WHERE o.status = 'published' AND access.has_permission('admissions.manage', o.school_id)
+      ORDER BY o.name`,
+  );
   return {
     schools,
+    fees: fees.map((fee) => ({
+      id: fee.id,
+      schoolId: fee.school_id,
+      name: fee.name,
+      amountMinor: Number(fee.amount_minor),
+      currency: fee.currency,
+    })),
     intakes: intakes.map((row) => ({
       ...intakeOf(row),
       applications: {

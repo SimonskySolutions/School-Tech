@@ -71,8 +71,10 @@ const SCHOOL_FACTS = `
          (SELECT count(*)::int FROM scheduling.session x WHERE x.school_id = s.id) AS sessions,
          (SELECT count(*)::int FROM access.role_assignment r
            WHERE r.school_id = s.id AND r.role_code = 'principal' AND r.revoked_at IS NULL) AS principals,
+         -- Fees, uniforms and tuition are not sold by session, so they need none.
          coalesce((SELECT array_agg(o.name ORDER BY o.name) FROM catalog.school_offering o
-           WHERE o.school_id = s.id AND o.status = 'published'
+           JOIN catalog.service_definition d ON d.id = o.service_definition_id
+           WHERE o.school_id = s.id AND o.status = 'published' AND d.kind NOT IN ('fee', 'uniform', 'tuition')
              AND NOT EXISTS (SELECT 1 FROM scheduling.session x WHERE x.offering_id = o.id)), '{}') AS offerings_without_sessions
     FROM org.school s`;
 

@@ -287,6 +287,7 @@ export const APPLICATION_DONE: Record<string, string> = {
   declined: 'Offer declined.',
   'intake-opened': 'Intake opened.',
   'intake-closed': 'Intake closed.',
+  'fee-set': 'Enrolment fee set.',
 };
 
 // The pipeline (M5.5). ------------------------------------------------------

@@ -24,6 +24,7 @@ describe('basketFromForm', () => {
       ['uniform', 'mila|polo|polo-128|2'],
       ['uniform', 'mila|polo|polo-140|9'],
       ['uniform', ''],
+      ['fee', 'nia|enrolment-fee'],
     ]);
     expect(items).toEqual([
       { studentId: 'mila', offeringId: 'lunch-a', sessionIds: ['day-1', 'day-2'] },
@@ -32,6 +33,7 @@ describe('basketFromForm', () => {
       { studentId: 'mila', offeringId: 'piano' },
       { studentId: 'mila', offeringId: 'museum' },
       { studentId: 'mila', offeringId: 'bus', stopId: 'stop-2' },
+      { studentId: 'nia', offeringId: 'enrolment-fee' },
       { studentId: 'mila', offeringId: 'polo', variantId: 'polo-128', quantity: 2 },
     ]);
   });

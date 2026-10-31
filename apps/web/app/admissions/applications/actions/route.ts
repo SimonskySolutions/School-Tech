@@ -36,6 +36,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (action === 'open-intake') {
       call = { path: '/admissions/intakes', body: intakeBody(form), done: 'intake-opened' };
+    } else if (action === 'set-fee') {
+      const offeringId = text(form, 'offering_id');
+      if (offeringId && !UUID.test(offeringId)) throw new FormProblem('choose the fee');
+      call = {
+        path: `/admissions/intakes/${id('intake_id')}/fee`,
+        body: { offeringId: offeringId || null },
+        done: 'fee-set',
+      };
     } else if (action === 'close-intake') {
       call = { path: `/admissions/intakes/${id('intake_id')}/close`, done: 'intake-closed' };
     } else if (action === 'offer') {

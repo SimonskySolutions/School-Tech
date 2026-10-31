@@ -153,7 +153,8 @@ INSERT INTO catalog.service_definition (id, group_id, code, kind, name) VALUES
   ('d1000000-0000-7000-8000-000000000007', :G, 'museum',   'trip',     'Museum visit'),
   ('d1000000-0000-7000-8000-000000000008', :G, 'bus',      'transport', 'School bus'),
   ('d1000000-0000-7000-8000-000000000009', :G, 'polo',     'uniform',  'School polo shirt'),
-  ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition')
+  ('d1000000-0000-7000-8000-000000000004', :G, 'tuition',  'tuition',  'Tuition'),
+  ('d1000000-0000-7000-8000-00000000000a', :G, 'enrolment-fee', 'fee', 'Enrolment fee')
 ON CONFLICT (id) DO NOTHING;
 
 -- Offerings, all billed by Testing Company. Each school sets its own prices.
@@ -170,7 +171,8 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000a9', :G, :SA, 'd1000000-0000-7000-8000-000000000009', :CO, 'polo',     'School polo shirt, School A', 'published'),
   ('d2000000-0000-7000-8000-0000000000a4', :G, :SA, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School A',    'published'),
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
-  ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published')
+  ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published'),
+  ('d2000000-0000-7000-8000-0000000000af', :G, :SA, 'd1000000-0000-7000-8000-00000000000a', :CO, 'enrolment-fee', 'Enrolment fee, School A', 'published')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO catalog.price_version (id, group_id, offering_id, version, unit_amount_minor, vat_rate_bp, price_unit, valid_from)
@@ -186,7 +188,8 @@ FROM (VALUES
   ('d2000000-0000-7000-8000-0000000000a8',  9000, 'per_term'),
   ('d2000000-0000-7000-8000-0000000000a4', 45000, 'per_month'),
   ('d2000000-0000-7000-8000-0000000000b4', 42000, 'per_month'),
-  ('d2000000-0000-7000-8000-0000000000c4', 48000, 'per_month')
+  ('d2000000-0000-7000-8000-0000000000c4', 48000, 'per_month'),
+  ('d2000000-0000-7000-8000-0000000000af', 15000, 'one_off')
 ) AS v (offering, amount, unit)
 JOIN catalog.school_offering o ON o.id = v.offering::uuid
 ON CONFLICT (id) DO NOTHING;
@@ -405,6 +408,9 @@ INSERT INTO admissions.intake (id, group_id, school_id, school_year, grade, plac
 VALUES ('db000000-0000-7000-8000-0000000000a1', :G, :SA, '2027/28', '1', 20, current_date - 1, current_date + 90,
         'c1000000-0000-7000-8000-000000000006')
 ON CONFLICT (id) DO NOTHING;
+-- Its enrolment fee (M5.8): 150.00, paid once the child is enrolled.
+UPDATE admissions.intake SET fee_offering_id = 'd2000000-0000-7000-8000-0000000000af'
+ WHERE id = 'db000000-0000-7000-8000-0000000000a1' AND fee_offering_id IS NULL;
 -- Retention (M5.6): a draft policy for inquiries and applications that led to
 -- no enrolment. Draft, so the worker erases nothing until the DPO approves a
 -- period of their own (ADR 0006, 0026).

@@ -1015,6 +1015,8 @@ export interface Intake {
   status: IntakeStatus;
   /** Open and between its dates today, in the school's time zone. */
   takingApplications: boolean;
+  /** The enrolment fee families pay once their child is enrolled (M5.8). */
+  fee: { offeringId: string; name: string; amountMinor: number; currency: string } | null;
 }
 
 /** What a signed-in parent sees: open intakes, their children, their own applications. */
@@ -1033,6 +1035,16 @@ export interface FamilyAdmissions {
     offerExpiresAt: string | null;
     /** On the waiting list: 1 for the next to be offered a place. */
     waitlistPosition: number | null;
+    /** Once enrolled: the child's record, to book and pay for them. */
+    studentId: string | null;
+    /** Once enrolled from an intake with a fee: due, open (an order awaits payment) or paid. */
+    fee: {
+      offeringId: string;
+      name: string;
+      amountMinor: number;
+      currency: string;
+      state: 'due' | 'open' | 'paid';
+    } | null;
   }[];
   notice: { id: string; version: number; text: string } | null;
 }
@@ -1050,6 +1062,8 @@ export interface ApplicationRequestBody {
 /** What admissions staff see at their schools. */
 export interface SchoolApplications {
   schools: { id: SchoolId; name: string }[];
+  /** Published fee offerings at those schools, to charge on an intake. */
+  fees: { id: string; schoolId: SchoolId; name: string; amountMinor: number; currency: string }[];
   intakes: (Intake & {
     applications: {
       live: number;

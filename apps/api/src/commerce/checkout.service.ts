@@ -3,7 +3,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type CheckoutGroupView, type CheckoutResponse } from '@pythagoras/shared';
 import { type Principal } from '../auth/principal';
 import {
+  type FeeOfferingRow,
   findBookableOfferings,
+  findChildFees,
   findEligibilityProblems,
   findTripPermissions,
   findOpenSessions,
@@ -104,10 +106,11 @@ export class CheckoutService {
   ): Promise<{ groupId: string; orders: CreatedOrder[] }> {
     const offeringsByStudent = new Map<string, Map<string, OfferingRow>>();
     const openSessionsByOffering = new Map<string, SessionRow[]>();
+    const feesByStudent = new Map<string, Map<string, FeeOfferingRow>>();
 
     for (const studentId of new Set(items.map((item) => item.studentId))) {
       const found = await findStudentWithSchools(tx, studentId);
-      if (!found || found.schoolIds.length === 0) throw new CheckoutRejected(404, 'child not found');
+      if (!found) throw new CheckoutRejected(404, 'child not found');
       const [rights] = await tx.query<{ pay: boolean; book: boolean }>(
         `SELECT access.is_guardian_of($1, 'pay') AS pay, access.is_guardian_of($1, 'manage_bookings') AS book`,
         [studentId],
@@ -116,7 +119,15 @@ export class CheckoutService {
         throw new CheckoutRejected(403, 'you are not authorised to book and pay for this child');
       }
       const wanted = items.filter((item) => item.studentId === studentId).map((item) => item.offeringId);
-      const offerings = await findBookableOfferings(tx, found.schoolIds, wanted);
+      // An enrolment fee may be paid before the enrolment starts (M5.8).
+      const fees = (await findChildFees(tx, studentId)).filter((fee) => wanted.includes(fee.id));
+      feesByStudent.set(studentId, new Map(fees.map((fee) => [fee.id, fee])));
+      if (found.schoolIds.length === 0 && wanted.some((id) => !fees.some((fee) => fee.id === id))) {
+        throw new CheckoutRejected(404, 'child not found');
+      }
+      const offerings = found.schoolIds.length
+        ? await findBookableOfferings(tx, found.schoolIds, wanted)
+        : [];
       // A clear refusal before anything is written; the booking trigger checks each session again.
       const problems = await findEligibilityProblems(
         tx,
@@ -192,6 +203,7 @@ export class CheckoutService {
       openSessionsByOffering,
       routesByOffering,
       uniformsByStudent,
+      feesByStudent,
     });
     const groupId = randomUUID();
     const expiresAt = new Date(Date.now() + this.env.CHECKOUT_TTL_MINUTES * 60_000);

@@ -148,6 +148,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
    WHERE code = 'admissions.unsuccessful';
   ```
 
+### Enrolment fees (M5.8)
+
+- A school's enrolment fee is an offering like any other: on the school's set-up page add an offering of the "Enrolment fee" service with a one-off price; it is billed by the school's company.
+- On `/admissions/applications` choose the fee for each intake (or "No fee"). Once a child is enrolled from that intake the family sees "pay" on "Apply for a place" and pays through the normal checkout; afterwards it shows as paid. The database refuses a second fee for the same child.
+- If an expired order for the fee is paid late after the family has already bought it again, both payments are confirmed; refund one of them.
+
 ### Admissions in numbers (M5.5)
 
 - `/admissions/pipeline` shows applications per intake (places, free, new and in review, waiting, offered, accepted, enrolled, not placed, and how many came after an inquiry) and inquiries per website, optionally since a date. The CEO opens it from "Admissions per school" in the reports and sees every school's numbers, never names.

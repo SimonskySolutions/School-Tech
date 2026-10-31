@@ -27,7 +27,10 @@ export function basketFromForm(
       const item = lunch.get(key) ?? { studentId, offeringId, sessionIds: [] };
       if (!item.sessionIds.includes(sessionId)) item.sessionIds.push(sessionId);
       lunch.set(key, item);
-    } else if ((name === 'activity' || name === 'package' || name === 'trip') && parts.length === 2) {
+    } else if (
+      (name === 'activity' || name === 'package' || name === 'trip' || name === 'fee') &&
+      parts.length === 2
+    ) {
       const [studentId, offeringId] = parts as [string, string];
       activities.set(raw, { studentId, offeringId });
     } else if (name === 'transport' && parts.length === 3) {

@@ -39,6 +39,7 @@ import {
   makeOffer,
   openIntake,
   reviewApplication,
+  setIntakeFee,
   schoolApplications,
   submitApplication,
   withdrawApplication,
@@ -90,6 +91,7 @@ export const applicationNoteSchema = z.object({
 });
 const listSchema = z.object({ intakeId: z.uuid().optional() });
 const pipelineSchema = z.object({ since: day.optional() });
+export const feeSchema = z.object({ offeringId: z.uuid().nullable() });
 
 /** Intakes, applications and invitations to apply (M5.2, ADR 0027). */
 @Controller('admissions')
@@ -244,6 +246,17 @@ export class AdmissionsController {
   openIntake(@CurrentPrincipal() principal: Principal, @Body() body: unknown) {
     const data = parse(intakeSchema, body);
     return run(this.database, principal, (tx) => openIntake(tx, data));
+  }
+
+  @Post('intakes/:intakeId/fee')
+  @HttpCode(200)
+  setFee(
+    @CurrentPrincipal() principal: Principal,
+    @Param('intakeId', new ParseUUIDPipe()) intakeId: string,
+    @Body() body: unknown,
+  ) {
+    const { offeringId } = parse(feeSchema, body);
+    return run(this.database, principal, (tx) => setIntakeFee(tx, intakeId, offeringId));
   }
 
   @Post('intakes/:intakeId/close')

@@ -17,6 +17,7 @@ const MESSAGES: Record<string, () => HttpException> = {
   PY013: () => new ConflictException('the session has not started yet'),
   PY016: () => new ConflictException("a guardian's permission for the trip is needed first"),
   PY017: () => new ConflictException('a payment for this trip is still open'),
+  PY026: () => new ConflictException('the enrolment fee is already paid or being paid, or not due'),
   PY019: () => new ConflictException('one of the chosen items is no longer in stock'),
   '23505': () => new ConflictException('already booked or already submitted'),
   '23503': () =>

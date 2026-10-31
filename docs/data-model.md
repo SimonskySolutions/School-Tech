@@ -42,7 +42,7 @@ Status: implemented for milestone M0 (database foundation), 2026-10-29. Source o
 | Credit | `commerce.account_credit`, `commerce.credit_application` | Owed by one entity to one payer; usable only with the same entity |
 | Refund | `commerce.refund` | Requested, approved by a second person, processed; never above the payment |
 
-Not yet modelled (later milestones): the enrolment fee (inquiries, intakes, applications, offers, the waiting list and the enrolment hand-off exist, M5.1–M5.4), academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
+Not yet modelled (later milestones): academics and timetables, lunch menus, trips and consent forms, transport routes and seats, uniform variants and stock, lesson packages, HR records and qualifications, documents and approvals, tasks and projects.
 
 ## Schemas
 
@@ -89,6 +89,8 @@ The hand-off (M5.4): `admissions.enrol_application` turns an accepted applicatio
 Admissions numbers (M5.5): `admissions.intake_counts()` and `admissions.inquiry_counts(since)` are security-definer functions that return counts only (per intake and state; per school and website), to staff with `admissions.manage` for their schools and to holders of `admissions.report` (the CEO) for every school. No other access to admissions records comes with `admissions.report`.
 
 Admissions retention (M5.6): `admissions.apply_retention()` (worker only) erases, under the group's approved retention policy `admissions.unsuccessful`, inquiries closed or untouched for longer than its period (unless the parent's child was enrolled at that school) and applications that ended without a place; erasure empties every personal field and note text and sets `erased_at`, keeping the rows for counting. Admissions staff erase, export (`export_inquiry`, `export_application`, logged in `audit.access_log`) and record a withdrawn open-day consent; each erasure and export is a completed `privacy.data_subject_request`.
+
+The enrolment fee (M5.8): an intake may name a published offering of kind `fee` at its school (`fee_offering_id`). A trigger on `commerce.order_line` allows a line for a fee offering only for a child enrolled from an intake that charges it, one at a time per child and fee (a confirmed line, or a pending one in an order still open for payment, blocks another; `PY026`).
 
 Parent requests (M4.7): `people.family_request` (a child, the school, a kind, a subject, a status) with append-only `people.family_request_message`s. Writes only through `people.open_family_request`, `people.reply_to_family_request` and `people.set_family_request_status`; readable by the child's guardians and staff with `requests.manage` at that school. Subjects and messages may say why a child is absent or what they cannot eat, so the audit log records that they changed, never what they say.
 
@@ -138,6 +140,7 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY023` | An invitation to apply for an address the group already knows: nothing is created or linked |
 | `PY024` | No place left in the intake: offers out (offered or accepted) already equal its places |
 | `PY025` | The offer has expired and can no longer be accepted or declined |
+| `PY026` | An enrolment fee line for a child not enrolled from an intake that charges it, or already paid or being paid |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

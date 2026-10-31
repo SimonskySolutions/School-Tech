@@ -231,3 +231,54 @@ describe('planCheckout', () => {
     );
   });
 });
+
+describe('enrolment fees (M5.8)', () => {
+  const fee = {
+    ...offering('fee-a', {
+      name: 'Enrolment fee, School A',
+      price_unit: 'one_off',
+      unit_amount_minor: '15000',
+    }),
+    kind: 'fee' as const,
+  };
+
+  it('makes one line with nothing to book, for a fee the child owes', () => {
+    const [order] = planCheckout({
+      items: [{ studentId: 'nia', offeringId: 'fee-a' }],
+      offeringsByStudent: new Map(),
+      openSessionsByOffering: new Map(),
+      feesByStudent: new Map([['nia', new Map([['fee-a', fee]])]]),
+    });
+    expect(order).toMatchObject({ totalMinor: 15000, billingEntityId: 'company-1' });
+    expect(order!.lines).toEqual([
+      expect.objectContaining({
+        description: 'Enrolment fee, School A',
+        quantity: 1,
+        bookingSessionIds: [],
+        sessionId: null,
+      }),
+    ]);
+  });
+
+  it('refuses a fee the child does not owe, and the same fee twice in one basket', () => {
+    const plan =
+      (
+        items: { studentId: string; offeringId: string }[],
+        fees = new Map([['nia', new Map([['fee-a', fee]])]]),
+      ) =>
+      () =>
+        planCheckout({
+          items,
+          offeringsByStudent: new Map(),
+          openSessionsByOffering: new Map(),
+          feesByStudent: fees,
+        });
+    expect(plan([{ studentId: 'mila', offeringId: 'fee-a' }])).toThrow(CheckoutRejected);
+    expect(
+      plan([
+        { studentId: 'nia', offeringId: 'fee-a' },
+        { studentId: 'nia', offeringId: 'fee-a' },
+      ]),
+    ).toThrow(CheckoutRejected);
+  });
+});

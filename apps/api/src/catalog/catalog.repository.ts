@@ -95,6 +95,33 @@ export function findBookableOfferings(
   );
 }
 
+/**
+ * Enrolment fees charged for a child (M5.8): published fee offerings of the
+ * intakes they were enrolled from. The order-line guard refuses one that is
+ * already paid or open (PY026).
+ */
+export type FeeOfferingRow = Omit<OfferingRow, 'kind'> & { kind: 'fee' };
+
+export async function findChildFees(tx: PersonTransaction, studentId: string): Promise<FeeOfferingRow[]> {
+  return tx.query<FeeOfferingRow>(
+    `SELECT o.id, d.kind, o.name, o.school_id, s.name AS school_name,
+            o.billing_entity_id, le.legal_name AS billing_entity_name,
+            pv.id AS price_version_id, pv.unit_amount_minor, pv.currency, pv.price_unit, pv.vat_rate_bp,
+            pv.package_size, o.eligibility
+       FROM admissions.child_fees($1) f
+       JOIN catalog.school_offering o ON o.id = f.offering_id AND o.status = 'published'
+       JOIN catalog.service_definition d ON d.id = o.service_definition_id AND d.kind = 'fee'
+       JOIN org.school s ON s.id = o.school_id
+       JOIN org.legal_entity le ON le.id = o.billing_entity_id
+       JOIN LATERAL (
+              SELECT * FROM catalog.price_version p
+               WHERE p.offering_id = o.id AND p.variant_id IS NULL
+                 AND p.valid_from <= now() AND (p.valid_until IS NULL OR p.valid_until > now())
+               ORDER BY p.valid_from DESC LIMIT 1) pv ON true`,
+    [studentId],
+  );
+}
+
 /** Sessions still open for booking (scheduled, in the future, before their cutoff). */
 export function findOpenSessions(
   tx: PersonTransaction,

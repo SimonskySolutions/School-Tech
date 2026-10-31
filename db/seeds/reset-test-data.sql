@@ -47,7 +47,8 @@ DELETE FROM privacy.data_subject_request WHERE outcome_note LIKE 'Admissions % o
 DELETE FROM admissions.application_note;
 DELETE FROM admissions.application;
 DELETE FROM admissions.intake WHERE id <> 'db000000-0000-7000-8000-0000000000a1';
-UPDATE admissions.intake SET status = 'open' WHERE id = 'db000000-0000-7000-8000-0000000000a1';
+UPDATE admissions.intake SET status = 'open', fee_offering_id = 'd2000000-0000-7000-8000-0000000000af'
+ WHERE id = 'db000000-0000-7000-8000-0000000000a1';
 -- Parents the tests invited to apply, with their sign-in links. Their
 -- Keycloak users stay; the tests give each run its own address.
 CREATE TEMP TABLE invited_person ON COMMIT DROP AS
