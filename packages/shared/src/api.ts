@@ -1624,3 +1624,28 @@ export interface PreferenceRequestBody {
   kind: string;
   enabled: boolean;
 }
+
+// Accounting export (M7.4): the platform's own layout, not yet an import format.
+
+export interface AccountingCompanies {
+  companies: { id: string; legalName: string; registrationNumber: string }[];
+}
+
+export type LedgerEntryKind = 'payment' | 'refund' | 'credit_issued' | 'credit_applied';
+
+export interface AccountingSummary {
+  company: { id: string; legalName: string };
+  from: string;
+  to: string;
+  entries: number;
+  /** Per currency, payment mode and kind of entry, signed as in the ledger. */
+  totals: {
+    currency: string;
+    mode: 'live' | 'test';
+    kind: LedgerEntryKind;
+    amountMinor: number;
+    entries: number;
+  }[];
+  /** Per currency and mode: the sum of all entries (received + paid by credit − refunded − credited). */
+  net: { currency: string; mode: 'live' | 'test'; amountMinor: number }[];
+}

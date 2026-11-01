@@ -40,6 +40,8 @@ export interface HomeView {
   consentSchools: { id: string; name: string }[];
   /** The data protection officer publishes consent wording (M6.6). */
   showsConsentWording: boolean;
+  /** Group finance exports each company's ledger (M7.4). */
+  showsAccounting: boolean;
   /** Anyone with a role sees their own employment records. */
   showsMyEmployment: boolean;
   /** Roles that approve document versions (M6.5); the API decides which steps are theirs. */
@@ -151,6 +153,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],
     showsConsentWording: me.roles.some((role) => role.code === 'privacy_officer'),
+    showsAccounting: me.roles.some((role) => role.code === 'group_finance'),
     showsMyEmployment: me.roles.length > 0,
     showsApprovals: me.roles.some((role) => APPROVER_ROLES.has(role.code)),
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),

@@ -12,6 +12,7 @@ import {
 } from './privacy/consents.controller';
 import { ProjectsController, TasksController } from './work/tasks.controller';
 import { NotificationsController } from './notifications/notifications.controller';
+import { AccountingController } from './accounting/accounting.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
@@ -65,6 +66,7 @@ import { type Env } from './config/env';
     TasksController,
     ProjectsController,
     NotificationsController,
+    AccountingController,
     CatalogController,
     DietaryController,
     DietaryReviewController,

@@ -19,6 +19,8 @@ import {
   type MyApprovals,
   type MyTasks,
   type MyNotifications,
+  type AccountingCompanies,
+  type AccountingSummary,
   type ProjectView,
   type ConsentPurposes,
   type SchoolConsents,
@@ -351,3 +353,25 @@ export const fetchProject = (apiUrl: string, accessToken: string, projectId: str
 
 export const fetchMyNotifications = (apiUrl: string, accessToken: string) =>
   get<MyNotifications>(apiUrl, '/notifications', accessToken);
+
+// Accounting export (M7.4).
+
+export const fetchAccountingCompanies = (apiUrl: string, accessToken: string) =>
+  get<AccountingCompanies>(apiUrl, '/accounting/companies', accessToken);
+
+export const fetchAccountingSummary = (
+  apiUrl: string,
+  accessToken: string,
+  period: { companyId: string; from: string; to: string },
+) => get<AccountingSummary>(apiUrl, `/accounting/summary?${new URLSearchParams(period)}`, accessToken);
+
+/** The ledger CSV, passed on as the API sends it. */
+export const fetchLedgerCsv = (
+  apiUrl: string,
+  accessToken: string,
+  period: { companyId: string; from: string; to: string },
+) =>
+  fetch(new URL(`/accounting/export?${new URLSearchParams(period)}`, apiUrl), {
+    headers: { authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });

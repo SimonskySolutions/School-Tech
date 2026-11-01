@@ -112,6 +112,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
 - Professional development (M6.3) is on the same page: each person's hours for the school year (September to August), attended and planned, and the school's total; "Year before" and "Year after" show other years. Staff add their own training on "My employment"; the principal can add it for them. Mark planned training attended once it has taken place, or cancelled; cancelled training is not counted. Training recorded wrongly cannot be edited: cancel it if it was planned and record it again.
 
+### Accounting export (M7.4)
+
+- Group finance opens "Accounting export" on the home page, chooses the company and the period (last month by default, at most a year) and downloads the CSV. The layout is in `docs/accounting-export.md`; it is the platform's own until the accountants confirm their software and import format, so hand it over as a listing, not as a file to import.
+- Book only entries marked `live`. Entries marked `test` come from test payments and are never real money; in development every payment is a test payment.
+- The file names no payer or child; each entry has its order number. Every export is in the access log: `SELECT occurred_at, actor_person_id, record_count FROM audit.access_log WHERE resource = 'commerce.accounting_entries' ORDER BY occurred_at DESC`.
+
 ### Messages by e-mail (M7.1)
 
 - In development every message goes to the development mailbox: open `http://127.0.0.1:58025` to read what the platform sent. Nothing leaves the machine. Restarting `mailpit` empties it.

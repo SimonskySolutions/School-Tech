@@ -175,6 +175,13 @@ function Home({ view }: { view: HomeView }) {
           </Link>
         </p>
       ) : null}
+      {view.showsAccounting ? (
+        <p>
+          <Link href="/accounting" data-testid="accounting-link">
+            Accounting export
+          </Link>
+        </p>
+      ) : null}
       {view.showsConsentWording ? (
         <p>
           <Link href="/privacy/consents" data-testid="consent-wording-link">
