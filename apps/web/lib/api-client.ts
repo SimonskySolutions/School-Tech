@@ -17,6 +17,8 @@ import {
   type SchoolStaff,
   type SchoolDocuments,
   type MyApprovals,
+  type MyTasks,
+  type ProjectView,
   type ConsentPurposes,
   type SchoolConsents,
   type StudentConsents,
@@ -335,3 +337,11 @@ export const fetchSchoolConsents = (apiUrl: string, accessToken: string, schoolI
 
 export const fetchConsentPurposes = (apiUrl: string, accessToken: string) =>
   get<ConsentPurposes>(apiUrl, '/privacy/consent-purposes', accessToken);
+
+// Tasks and projects (M6.7).
+
+export const fetchMyTasks = (apiUrl: string, accessToken: string) =>
+  get<MyTasks>(apiUrl, '/tasks', accessToken);
+
+export const fetchProject = (apiUrl: string, accessToken: string, projectId: string) =>
+  get<ProjectView>(apiUrl, `/projects/${encodeURIComponent(projectId)}`, accessToken);

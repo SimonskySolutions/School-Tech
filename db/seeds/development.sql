@@ -502,6 +502,23 @@ INSERT INTO privacy.consent_record (id, group_id, subject_person_id, given_by_pe
    'e2000000-0000-7000-8000-000000000001', 'e2000000-0000-7000-8000-000000000101', '1', 'family_portal')
 ON CONFLICT (id) DO NOTHING;
 
+-- Tasks and projects (M6.7), relative to the day the seed first runs: School
+-- A's spring fair, with the kitchen's menu and the principal's stage booking
+-- (overdue), and a task the principal of School B gave the teacher. Synthetic.
+INSERT INTO work.project (id, group_id, school_id, name, description, owner_person_id) VALUES
+  ('e3000000-0000-7000-8000-000000000001', :G, :SA, 'Spring fair (synthetic)', 'Stalls, menu and stage for the spring fair',
+   'c1000000-0000-7000-8000-000000000006')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO work.task (id, group_id, project_id, school_id, title, details, assignee_person_id, created_by_person_id, due_on, status) VALUES
+  ('e3000000-0000-7000-8000-000000000101', :G, 'e3000000-0000-7000-8000-000000000001', :SA, 'Plan the fair menu (synthetic)',
+   'Snacks for 200, with the allergens marked', 'c1000000-0000-7000-8000-000000000009', 'c1000000-0000-7000-8000-000000000006',
+   current_date + 10, 'open'),
+  ('e3000000-0000-7000-8000-000000000102', :G, 'e3000000-0000-7000-8000-000000000001', :SA, 'Book the stage (synthetic)',
+   NULL, 'c1000000-0000-7000-8000-000000000006', 'c1000000-0000-7000-8000-000000000006', current_date - 3, 'in_progress'),
+  ('e3000000-0000-7000-8000-000000000103', :G, NULL, :SB, 'Submit the term plan for mathematics (synthetic)',
+   NULL, 'c1000000-0000-7000-8000-000000000010', 'c1000000-0000-7000-8000-000000000007', current_date + 5, 'open')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

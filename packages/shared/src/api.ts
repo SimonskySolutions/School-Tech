@@ -1511,3 +1511,93 @@ export interface WordingRequestBody {
   /** A change of substance: earlier consents stop counting and families are asked again. */
   renewalRequired: boolean;
 }
+
+// Tasks and projects (M6.7).
+
+export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export interface Task {
+  id: string;
+  title: string;
+  details: string | null;
+  status: TaskStatus;
+  dueOn: string | null;
+  /** Due before today and not finished. */
+  overdue: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  projectId: string | null;
+  projectName: string | null;
+  schoolId: SchoolId | null;
+  schoolName: string | null;
+  assignee: { personId: string; name: string };
+  createdBy: { personId: string; name: string };
+  /** The signed-in person may change, reassign or cancel it. */
+  mayManage: boolean;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  schoolId: SchoolId | null;
+  schoolName: string | null;
+  owner: { personId: string; name: string };
+  status: 'active' | 'closed';
+  createdAt: string;
+  closedAt: string | null;
+  openTasks: number;
+  overdueTasks: number;
+  doneTasks: number;
+  mayManage: boolean;
+}
+
+/** Where the signed-in person may give tasks, and to whom: a school, or the group (no school). */
+export interface AssignablePlace {
+  schoolId: SchoolId | null;
+  schoolName: string | null;
+  people: { personId: string; name: string }[];
+}
+
+export interface MyTasks {
+  /** Assigned to me, unfinished first, the soonest due first. */
+  assigned: Task[];
+  /** Set by me for someone else. */
+  setByMe: Task[];
+  /** Overdue tasks of others that I see as a leader. */
+  overdue: Task[];
+  projects: ProjectSummary[];
+  assignable: AssignablePlace[];
+  /** Where I may start a project. */
+  projectPlaces: { schoolId: SchoolId | null; schoolName: string | null }[];
+}
+
+export interface ProjectView {
+  project: ProjectSummary;
+  tasks: Task[];
+  /** Whom tasks in this project may be given to. */
+  assignable: { personId: string; name: string }[];
+}
+
+export interface TaskRequestBody {
+  title: string;
+  details?: string;
+  dueOn?: string;
+  assigneeId: string;
+  schoolId?: string;
+  projectId?: string;
+}
+
+export interface TaskUpdateBody {
+  title: string;
+  details?: string;
+  dueOn?: string | null;
+  assigneeId: string;
+}
+
+export interface ProjectRequestBody {
+  name: string;
+  description?: string;
+  schoolId?: string;
+}

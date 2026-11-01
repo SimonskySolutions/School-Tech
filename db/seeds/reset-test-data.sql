@@ -46,6 +46,13 @@ DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
 DELETE FROM documents.download_link;
 DELETE FROM documents.version;
 DELETE FROM documents.document;
+-- Tasks and projects the tests added (seeded ones: e3000000-), the seeded ones as seeded.
+DELETE FROM work.task WHERE id::text NOT LIKE 'e3000000-%';
+DELETE FROM work.project WHERE id::text NOT LIKE 'e3000000-%';
+UPDATE work.project SET status = 'active', closed_at = NULL WHERE id::text LIKE 'e3000000-%';
+UPDATE work.task SET status = CASE id WHEN 'e3000000-0000-7000-8000-000000000102' THEN 'in_progress' ELSE 'open' END,
+       completed_at = NULL
+ WHERE id::text LIKE 'e3000000-%';
 -- Consents and wording the tests gave or published (seeded ones: e2000000-);
 -- Anna's seeded consent for Mila given again.
 DELETE FROM privacy.consent_record WHERE id::text NOT LIKE 'e2000000-%';

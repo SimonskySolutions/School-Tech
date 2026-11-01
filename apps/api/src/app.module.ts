@@ -10,6 +10,7 @@ import {
   SchoolConsentsController,
   StudentConsentsController,
 } from './privacy/consents.controller';
+import { ProjectsController, TasksController } from './work/tasks.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
@@ -60,6 +61,8 @@ import { type Env } from './config/env';
     StudentConsentsController,
     SchoolConsentsController,
     ConsentPurposesController,
+    TasksController,
+    ProjectsController,
     CatalogController,
     DietaryController,
     DietaryReviewController,

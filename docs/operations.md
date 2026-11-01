@@ -112,6 +112,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
 - Professional development (M6.3) is on the same page: each person's hours for the school year (September to August), attended and planned, and the school's total; "Year before" and "Year after" show other years. Staff add their own training on "My employment"; the principal can add it for them. Mark planned training attended once it has taken place, or cancelled; cancelled training is not counted. Training recorded wrongly cannot be edited: cancel it if it was planned and record it again.
 
+### Tasks and projects (M6.7)
+
+- "Tasks" on the home page lists each person's own tasks (overdue ones marked), those they set for others and, for principals, school administrators, the group administrator and the CEO, the overdue tasks of others at their schools. Anyone who works in the group adds tasks for themselves; leaders give tasks to anyone who works at their school now (with a role or a current employment there).
+- Leaders start a project for their school (or, for group roles, for the group) and add its tasks on the project's page. A project closes once nothing in it is to do; cancel what will not be done first.
+- The person given a task starts it, puts it back, finishes or reopens it; whoever set it (or the project's owner, or the school's leaders) changes, reassigns or cancels it. Finished tasks are not changed: reopen one to work on it again.
+- Nobody is reminded of due or overdue tasks yet (M7): look at "Tasks".
+
 ### Consent from families (M6.6)
 
 - Guardians give or withdraw consent for each purpose on their child's "Consents" page (home page, next to the child). Only a verified guardian who may consent for the child can do it, and only for the wording shown; withdrawing takes one click and counts at once.

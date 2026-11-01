@@ -166,6 +166,10 @@ function Home({ view }: { view: HomeView }) {
           <Link href="/staff/me" data-testid="my-employment-link">
             My employment
           </Link>
+          {' · '}
+          <Link href="/tasks" data-testid="tasks-link">
+            Tasks
+          </Link>
         </p>
       ) : null}
       {view.showsConsentWording ? (
