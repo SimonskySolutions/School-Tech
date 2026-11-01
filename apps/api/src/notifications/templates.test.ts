@@ -15,9 +15,13 @@ describe('message templates', () => {
         'admissions.invited',
         'approval.waiting',
         'consent.asked_again',
+        'offer.expiring',
         'order.paid',
         'request.answered',
+        'staff.renewals',
         'task.assigned',
+        'task.due',
+        'task.overdue',
       ].sort(),
     );
   });
@@ -81,6 +85,43 @@ describe('message templates', () => {
         to,
         portal,
       ),
+    ).toThrow();
+  });
+});
+
+describe('reminder templates', () => {
+  it('remind of what is due, overdue or ending, and where to see to it', () => {
+    const due = renderMessage(
+      'task.due',
+      { title: 'Order bread', dueOn: '2026-11-03', schoolName: 'School A', projectName: null },
+      to,
+      portal,
+    );
+    expect(due.subject).toBe('Due tomorrow: Order bread');
+    expect(due.text).toContain('is due tomorrow, 2026-11-03.');
+    const overdue = renderMessage('task.overdue', { count: 5, titles: ['A', 'B', 'C'] }, to, portal);
+    expect(overdue.subject).toBe('You have 5 overdue tasks');
+    expect(overdue.text).toContain('- A\n- B\n- C\nand 2 more.');
+    expect(renderMessage('task.overdue', { count: 1, titles: ['A'] }, to, portal).subject).toBe(
+      'You have an overdue task',
+    );
+    const staff = renderMessage(
+      'staff.renewals',
+      { schoolName: 'School A', schoolId: ID, people: 1 },
+      to,
+      portal,
+    );
+    expect(staff.text).toContain('One member of staff at School A has a qualification or record check');
+    expect(staff.text).toContain(`${portal}/schools/${ID}/staff`);
+    const offer = renderMessage(
+      'offer.expiring',
+      { schoolName: 'School A', answerBy: '2026-11-05' },
+      to,
+      portal,
+    );
+    expect(offer.subject).toBe('Your offer of a place at School A ends on 2026-11-05');
+    expect(() =>
+      renderMessage('task.overdue', { count: 9, titles: ['A', 'B', 'C', 'D'] }, to, portal),
     ).toThrow();
   });
 });

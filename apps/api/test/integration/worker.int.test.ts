@@ -122,6 +122,7 @@ describe('worker', () => {
       'domain-verification': '* * * * *',
       'offer-expiry': '* * * * *',
       'admissions-retention': '0 4 * * *',
+      reminders: '0 5 * * *',
       'notification-purge': '15 4 * * *',
     });
   });

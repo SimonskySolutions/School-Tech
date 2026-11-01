@@ -44,6 +44,13 @@ export const MAINTENANCE_SCHEDULES = [
     pattern: '0 4 * * *',
   },
   {
+    // Reminders: tasks due and overdue, staff records, offers about to end (M7.3).
+    // 05:00 UTC is 07:00 or 08:00 in Sofia; each is queued once per person and thing.
+    id: 'reminders',
+    jobName: 'notify.queue-reminders',
+    pattern: '0 5 * * *',
+  },
+  {
     // Message parameters go after 90 days; who, what kind and when remain (ADR 0031).
     id: 'notification-purge',
     jobName: 'notify.purge-params',
@@ -86,6 +93,12 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
         tx.query<{ erased: number }>('SELECT admissions.apply_retention() AS erased'),
       );
       return { affected: row?.erased ?? 0 };
+    }
+    case 'notify.queue-reminders': {
+      const rows = await database.withSystem('worker:reminders', (tx) =>
+        tx.query<{ queued: number }>('SELECT queued FROM notify.queue_reminders(current_date)'),
+      );
+      return { affected: rows.reduce((sum, row) => sum + row.queued, 0) };
     }
     case 'notify.purge-params': {
       const [row] = await database.withSystem('worker:notification-purge', (tx) =>

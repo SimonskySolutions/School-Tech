@@ -124,6 +124,58 @@ const TEMPLATES = {
       `Apply (sign in first): ${portal}/admissions/apply`,
     ),
   })),
+  // Reminders (M7.3), queued by the worker once a day.
+  'task.due': template(
+    z.strictObject({ title: name, dueOn: day, schoolName: name.nullable(), projectName: name.nullable() }),
+    (params, to, portal) => ({
+      subject: `Due tomorrow: ${params.title}`,
+      text: lines(
+        greeting(to),
+        '',
+        `Your task "${params.title}"${params.projectName ? ` (project "${params.projectName}")` : ''}${params.schoolName ? ` at ${params.schoolName}` : ''} is due tomorrow, ${params.dueOn}.`,
+        '',
+        `Your tasks (sign in first): ${portal}/tasks`,
+      ),
+    }),
+  ),
+  'task.overdue': template(
+    z.strictObject({ count: z.number().int().min(1), titles: z.array(name).min(1).max(3) }),
+    (params, to, portal) => ({
+      subject: params.count === 1 ? 'You have an overdue task' : `You have ${params.count} overdue tasks`,
+      text: lines(
+        greeting(to),
+        '',
+        params.count === 1 ? 'This task is past its due date:' : `These tasks are past their due date:`,
+        ...params.titles.map((title) => `- ${title}`),
+        params.count > params.titles.length ? `and ${params.count - params.titles.length} more.` : null,
+        '',
+        `Your tasks (sign in first): ${portal}/tasks`,
+      ),
+    }),
+  ),
+  'staff.renewals': template(
+    z.strictObject({ schoolName: name, schoolId: id, people: z.number().int().min(1) }),
+    (params, to, portal) => ({
+      subject: `Staff records to see to at ${params.schoolName}`,
+      text: lines(
+        greeting(to),
+        '',
+        `${params.people === 1 ? 'One member' : `${params.people} members`} of staff at ${params.schoolName} ${params.people === 1 ? 'has' : 'have'} a qualification or record check that has ended, ends within 60 days or is missing.`,
+        '',
+        `Needs attention (sign in first): ${portal}/schools/${params.schoolId}/staff`,
+      ),
+    }),
+  ),
+  'offer.expiring': template(z.strictObject({ schoolName: name, answerBy: day }), (params, to, portal) => ({
+    subject: `Your offer of a place at ${params.schoolName} ends on ${params.answerBy}`,
+    text: lines(
+      greeting(to),
+      '',
+      `${params.schoolName} has offered your child a place. Please accept or decline it by the end of ${params.answerBy}; after that the place goes to the next family on the waiting list.`,
+      '',
+      `Your applications (sign in first): ${portal}/admissions/apply`,
+    ),
+  })),
 } as const;
 
 export type MessageKind = keyof typeof TEMPLATES;

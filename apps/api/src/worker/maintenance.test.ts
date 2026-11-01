@@ -17,6 +17,15 @@ function fakeDatabase(result: Record<string, number>) {
 }
 
 describe('maintenance jobs', () => {
+  it("queues the day's reminders once a day, in the morning in Sofia", async () => {
+    const { database, calls } = fakeDatabase({ queued: 3 });
+    expect(await runMaintenance(database, 'notify.queue-reminders')).toEqual({ affected: 3 });
+    expect(calls).toEqual([
+      { actor: 'worker:reminders', sql: 'SELECT queued FROM notify.queue_reminders(current_date)' },
+    ]);
+    expect(MAINTENANCE_SCHEDULES.find((schedule) => schedule.id === 'reminders')?.pattern).toBe('0 5 * * *');
+  });
+
   it('purges message parameters after 90 days, once a day', async () => {
     const { database, calls } = fakeDatabase({ purged: 4 });
     expect(await runMaintenance(database, 'notify.purge-params')).toEqual({ affected: 4 });
@@ -84,6 +93,7 @@ describe('maintenance jobs', () => {
       'domain-verification',
       'offer-expiry',
       'admissions-retention',
+      'reminders',
       'notification-purge',
     ]);
   });

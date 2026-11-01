@@ -48,9 +48,13 @@ describe('messages for staff and families', () => {
         'admissions.invited',
         'approval.waiting',
         'consent.asked_again',
+        'offer.expiring',
         'order.paid',
         'request.answered',
+        'staff.renewals',
         'task.assigned',
+        'task.due',
+        'task.overdue',
       ].sort(),
     );
     const title = `Count the plates (${run})`;
