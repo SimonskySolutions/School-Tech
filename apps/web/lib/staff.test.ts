@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FormProblem } from './admin';
-import { employmentBody, workingTimeLabel } from './staff';
+import { checkBody, employmentBody, qualificationBody, workingTimeLabel } from './staff';
 
 const form = (fields: Record<string, string>) => {
   const data = new FormData();
@@ -41,5 +41,36 @@ describe('the employment form', () => {
   it('says full time or a share of it', () => {
     expect(workingTimeLabel(1)).toBe('full time');
     expect(workingTimeLabel(0.75)).toBe('75% of full time');
+  });
+});
+
+describe('qualifications and checks in the portal', () => {
+  it('reads a qualification and an expiry after the award', () => {
+    expect(
+      qualificationBody(
+        form({ kind: 'first_aid', title: 'First aid', awarded_on: '2026-01-10', expires_on: '2029-01-10' }),
+      ),
+    ).toEqual({
+      kind: 'first_aid',
+      title: 'First aid',
+      awardedOn: '2026-01-10',
+      expiresOn: '2029-01-10',
+    });
+    expect(() =>
+      qualificationBody(
+        form({ kind: 'first_aid', title: 'x', awarded_on: '2026-01-10', expires_on: '2025-01-10' }),
+      ),
+    ).toThrow(FormProblem);
+    expect(() => qualificationBody(form({ kind: 'charm', title: 'x', awarded_on: '2026-01-10' }))).toThrow(
+      FormProblem,
+    );
+  });
+
+  it('reads only the dates of a record check', () => {
+    expect(checkBody(form({ seen_on: '2026-10-01', valid_until: '2027-04-01', outcome: 'clear' }))).toEqual({
+      seenOn: '2026-10-01',
+      validUntil: '2027-04-01',
+    });
+    expect(() => checkBody(form({ seen_on: '2026-10-01', valid_until: '2026-09-01' }))).toThrow(FormProblem);
   });
 });

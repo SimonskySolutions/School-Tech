@@ -109,6 +109,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Principals and school administrators keep their school's employment records at "Staff" (`/schools/[id]/staff`, linked on the home page); group administrators and the CEO reach every school's from "Across the group". Record the employer, position, contract, working time and dates; set an end when someone leaves. The page flags anyone with a role in the platform but no current employment, and the reverse: revoking access is a separate step on the school's set-up page.
 - Everyone with a role sees their own records at "My employment".
 - Do not keep payroll data here (national identification numbers, addresses, salaries, bank details): that stays with the payroll provider until its integration is agreed (M7).
+- Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
 
 ### Admissions inquiries (M5.1, ADR 0026)
 

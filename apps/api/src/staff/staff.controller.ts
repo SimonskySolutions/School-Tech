@@ -13,17 +13,25 @@ import {
   Post,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { CONTRACT_KINDS, type Employment, type SchoolStaff } from '@pythagoras/shared';
+import {
+  CONTRACT_KINDS,
+  type MyStaffRecords,
+  QUALIFICATION_KINDS,
+  type SchoolStaff,
+} from '@pythagoras/shared';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database, type PersonTransaction } from '../database/database';
 import {
   endEmployment,
-  myEmployments,
+  myRecords,
+  recordCheck,
   recordEmployment,
+  recordQualification,
   refusalsAsStaff,
   schoolStaff,
   StaffRejected,
+  withdrawQualification,
 } from './staff.repository';
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a date as YYYY-MM-DD');
@@ -50,6 +58,21 @@ export const employmentSchema = z
     message: 'a fixed-term contract needs its end date',
   });
 export const endSchema = z.object({ endDate: day });
+export const qualificationSchema = z
+  .strictObject({
+    kind: z.enum(QUALIFICATION_KINDS),
+    title: z.string().trim().min(1).max(200),
+    issuer: z.string().trim().min(1).max(200).optional(),
+    awardedOn: day,
+    expiresOn: day.optional(),
+  })
+  .refine((body) => !body.expiresOn || body.expiresOn > body.awardedOn, {
+    message: 'it expires after it is awarded',
+  });
+// Only the dates and who saw it: never an outcome or the certificate (Art. 10).
+export const checkSchema = z
+  .strictObject({ seenOn: day, validUntil: day })
+  .refine((body) => body.validUntil > body.seenOn, { message: 'it is valid after the day it was seen' });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
@@ -107,10 +130,41 @@ export class SchoolStaffController {
 export class StaffController {
   constructor(@Inject(Database) private readonly database: Database) {}
 
-  /** The signed-in person's own employments. */
+  /** The signed-in person's own employments, qualifications and latest check. */
   @Get('me')
-  mine(@CurrentPrincipal() principal: Principal): Promise<Employment[]> {
-    return run(this.database, principal, (tx) => myEmployments(tx));
+  mine(@CurrentPrincipal() principal: Principal): Promise<MyStaffRecords> {
+    return run(this.database, principal, (tx) => myRecords(tx));
+  }
+
+  @Post('people/:personId/qualifications')
+  @HttpCode(201)
+  qualify(
+    @CurrentPrincipal() principal: Principal,
+    @Param('personId', new ParseUUIDPipe()) personId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(qualificationSchema, body);
+    return run(this.database, principal, (tx) => recordQualification(tx, personId, data));
+  }
+
+  @Post('qualifications/:qualificationId/withdraw')
+  @HttpCode(200)
+  withdraw(
+    @CurrentPrincipal() principal: Principal,
+    @Param('qualificationId', new ParseUUIDPipe()) qualificationId: string,
+  ) {
+    return run(this.database, principal, (tx) => withdrawQualification(tx, qualificationId));
+  }
+
+  @Post('people/:personId/checks')
+  @HttpCode(201)
+  check(
+    @CurrentPrincipal() principal: Principal,
+    @Param('personId', new ParseUUIDPipe()) personId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(checkSchema, body);
+    return run(this.database, principal, (tx) => recordCheck(tx, personId, data));
   }
 
   @Post('employments/:employmentId/end')

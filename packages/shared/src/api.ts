@@ -1180,6 +1180,52 @@ export interface Employment {
   workPhone: string | null;
 }
 
+/** Qualifications and checks (M6.2). */
+export const QUALIFICATION_KINDS = [
+  'teaching_licence',
+  'degree',
+  'first_aid',
+  'food_hygiene',
+  'safeguarding',
+  'other',
+] as const;
+export type QualificationKind = (typeof QUALIFICATION_KINDS)[number];
+/** Valid, ending within the warning period (60 days), or past its end. */
+export type ExpiryState = 'valid' | 'expiring' | 'expired';
+
+export interface Qualification {
+  id: string;
+  kind: QualificationKind;
+  title: string;
+  issuer: string | null;
+  awardedOn: string;
+  expiresOn: string | null;
+  state: ExpiryState;
+}
+
+/** The latest criminal record check: only that a certificate was seen (Art. 10). */
+export interface RecordCheck {
+  seenOn: string;
+  validUntil: string;
+  seenBy: string | null;
+  state: ExpiryState;
+}
+
+export type StaffAttention =
+  | 'check_missing'
+  | 'check_expiring'
+  | 'check_expired'
+  | 'licence_missing'
+  | 'qualification_expiring'
+  | 'qualification_expired';
+
+/** A member of staff's own records. */
+export interface MyStaffRecords {
+  employments: Employment[];
+  qualifications: Qualification[];
+  recordCheck: RecordCheck | null;
+}
+
 export interface SchoolStaff {
   school: { id: SchoolId; name: string };
   canManage: boolean;
@@ -1193,6 +1239,10 @@ export interface SchoolStaff {
     employments: Employment[];
     /** A live role here but no current employment, or the reverse. */
     mismatch: 'role_without_employment' | 'employment_without_role' | null;
+    qualifications: Qualification[];
+    recordCheck: RecordCheck | null;
+    /** What the school's leaders should see to (M6.2). */
+    attention: StaffAttention[];
   }[];
 }
 

@@ -1,9 +1,17 @@
-import { CONTRACT_KINDS } from '@pythagoras/shared';
+import { CONTRACT_KINDS, QUALIFICATION_KINDS } from '@pythagoras/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchSchoolStaff } from '../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../lib/server';
-import { CONTRACT_LABELS, ROLE_LABELS, STAFF_DONE, workingTimeLabel } from '../../../../lib/staff';
+import {
+  ATTENTION_LABELS,
+  CONTRACT_LABELS,
+  QUALIFICATION_LABELS,
+  ROLE_LABELS,
+  STAFF_DONE,
+  STATE_LABELS,
+  workingTimeLabel,
+} from '../../../../lib/staff';
 import { DevelopmentBanner } from '../../../development-banner';
 
 export const dynamic = 'force-dynamic';
@@ -67,6 +75,20 @@ export default async function StaffPage({
           {error}
         </p>
       ) : null}
+      {view.people.some((person) => person.attention.length > 0) ? (
+        <section aria-labelledby="needs-attention" data-testid="needs-attention">
+          <h2 id="needs-attention">Needs attention</h2>
+          <ul>
+            {view.people
+              .filter((person) => person.attention.length > 0)
+              .map((person) => (
+                <li key={person.personId}>
+                  {`${person.name}: ${person.attention.map((item) => ATTENTION_LABELS[item].toLowerCase()).join('; ')}`}
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
       {view.people.length === 0 ? <p>No staff yet.</p> : null}
       {view.people.map((person) => (
         <article
@@ -112,6 +134,95 @@ export default async function StaffPage({
               </li>
             ))}
           </ul>
+          {person.attention.length > 0 ? (
+            <ul data-testid="attention" style={{ color: '#9b1c1c' }}>
+              {person.attention.map((item) => (
+                <li key={item}>{ATTENTION_LABELS[item]}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p data-testid="record-check">
+            {person.recordCheck
+              ? `Criminal record check: certificate seen ${person.recordCheck.seenOn}${person.recordCheck.seenBy ? ` by ${person.recordCheck.seenBy}` : ''}, valid until ${person.recordCheck.validUntil} (${STATE_LABELS[person.recordCheck.state]})`
+              : 'Criminal record check: none recorded'}
+          </p>
+          {person.qualifications.length > 0 ? (
+            <ul data-testid="qualifications">
+              {person.qualifications.map((qualification) => (
+                <li key={qualification.id} data-testid={`qualification-${qualification.id}`}>
+                  {`${QUALIFICATION_LABELS[qualification.kind]}: ${qualification.title}${qualification.issuer ? `, ${qualification.issuer}` : ''}, from ${qualification.awardedOn}${qualification.expiresOn ? ` until ${qualification.expiresOn} (${STATE_LABELS[qualification.state]})` : ''}`}
+                  {view.canManage ? (
+                    <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                      <input type="hidden" name="action" value="withdraw" />
+                      <input type="hidden" name="qualification_id" value={qualification.id} />
+                      <button type="submit" data-testid="withdraw-qualification">
+                        Recorded in error
+                      </button>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {view.canManage ? (
+            <details style={{ marginTop: '0.5rem' }}>
+              <summary>Add a qualification or a record check</summary>
+              <form
+                method="post"
+                action={action}
+                style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem' }}
+              >
+                <input type="hidden" name="action" value="qualify" />
+                <input type="hidden" name="person_id" value={person.personId} />
+                <label>
+                  Kind{' '}
+                  <select name="kind" defaultValue="first_aid">
+                    {QUALIFICATION_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {QUALIFICATION_LABELS[kind]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Title <input name="title" required maxLength={200} />
+                </label>
+                <label>
+                  Issued by (optional) <input name="issuer" maxLength={200} />
+                </label>
+                <label>
+                  Awarded on <input name="awarded_on" type="date" required />
+                </label>
+                <label>
+                  Expires on (if it does) <input name="expires_on" type="date" />
+                </label>
+                <button type="submit" data-testid="add-qualification">
+                  Add the qualification
+                </button>
+              </form>
+              <form
+                method="post"
+                action={action}
+                style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem', marginTop: '0.5rem' }}
+              >
+                <input type="hidden" name="action" value="check" />
+                <input type="hidden" name="person_id" value={person.personId} />
+                <p style={{ margin: 0 }}>
+                  A criminal record certificate allowing the work was seen. Record only the dates: never keep
+                  the certificate or what it says.
+                </p>
+                <label>
+                  Seen on <input name="seen_on" type="date" required />
+                </label>
+                <label>
+                  Valid until <input name="valid_until" type="date" required />
+                </label>
+                <button type="submit" data-testid="add-check">
+                  Note the check
+                </button>
+              </form>
+            </details>
+          ) : null}
         </article>
       ))}
 

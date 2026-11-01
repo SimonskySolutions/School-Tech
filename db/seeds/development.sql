@@ -436,6 +436,27 @@ INSERT INTO staff.employment (id, group_id, person_id, employer_id, school_id, p
    DATE '2023-09-01', NULL, NULL, NULL, 'c1000000-0000-7000-8000-000000000002')
 ON CONFLICT (id) DO NOTHING;
 
+-- Qualifications and checks (M6.2), relative to the day the seed first runs:
+-- the principal of School A has first aid and a record check both ending
+-- within 60 days; the School A kitchen has food hygiene but no record check;
+-- the School B teacher has a licence and a valid check. Synthetic.
+INSERT INTO staff.qualification (id, group_id, person_id, kind, title, issuer, awarded_on, expires_on, recorded_by_person_id) VALUES
+  ('dd000000-0000-7000-8000-000000000006', :G, 'c1000000-0000-7000-8000-000000000006', 'first_aid', 'First aid at work',
+   'Red Cross training (synthetic)', current_date - 700, current_date + 30, 'c1000000-0000-7000-8000-000000000002'),
+  ('dd000000-0000-7000-8000-000000000009', :G, 'c1000000-0000-7000-8000-000000000009', 'food_hygiene', 'Food hygiene, level 2',
+   'Training centre (synthetic)', current_date - 300, current_date + 400, 'c1000000-0000-7000-8000-000000000006'),
+  ('dd000000-0000-7000-8000-000000000010', :G, 'c1000000-0000-7000-8000-000000000010', 'teaching_licence', 'Teacher of mathematics',
+   'University (synthetic)', DATE '2019-07-01', NULL, 'c1000000-0000-7000-8000-000000000007')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO staff.record_check (id, group_id, person_id, seen_on, valid_until, seen_by_person_id) VALUES
+  ('de000000-0000-7000-8000-000000000006', :G, 'c1000000-0000-7000-8000-000000000006', current_date - 150, current_date + 30,
+   'c1000000-0000-7000-8000-000000000002'),
+  ('de000000-0000-7000-8000-000000000010', :G, 'c1000000-0000-7000-8000-000000000010', current_date - 20, current_date + 160,
+   'c1000000-0000-7000-8000-000000000007'),
+  ('de000000-0000-7000-8000-000000000007', :G, 'c1000000-0000-7000-8000-000000000007', current_date - 60, current_date + 120,
+   'c1000000-0000-7000-8000-000000000002')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

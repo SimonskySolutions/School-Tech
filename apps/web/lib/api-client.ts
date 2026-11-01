@@ -12,7 +12,7 @@ import {
   type AdmissionsPipeline,
   type FamilyAdmissions,
   type SchoolApplications,
-  type Employment,
+  type MyStaffRecords,
   type SchoolInquiries,
   type SchoolStaff,
   type SchoolLessons,
@@ -269,4 +269,4 @@ export const fetchSchoolStaff = (apiUrl: string, accessToken: string, schoolId: 
   get<SchoolStaff>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/staff`, accessToken);
 
 export const fetchMyEmployments = (apiUrl: string, accessToken: string) =>
-  get<Employment[]>(apiUrl, '/staff/me', accessToken);
+  get<MyStaffRecords>(apiUrl, '/staff/me', accessToken);

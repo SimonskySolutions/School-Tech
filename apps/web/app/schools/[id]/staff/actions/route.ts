@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { FormProblem, text } from '../../../../../lib/admin';
 import { writeApi } from '../../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../../lib/server';
-import { employmentBody } from '../../../../../lib/staff';
+import { checkBody, employmentBody, qualificationBody } from '../../../../../lib/staff';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +41,22 @@ export async function POST(
       if (!UUID.test(employmentId)) throw new FormProblem('no such employment');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new FormProblem('give the end date');
       call = { path: `/staff/employments/${employmentId}/end`, body: { endDate }, done: 'ended' };
+    } else if (action === 'qualify') {
+      const personId = text(form, 'person_id');
+      if (!UUID.test(personId)) throw new FormProblem('no such member of staff');
+      call = {
+        path: `/staff/people/${personId}/qualifications`,
+        body: qualificationBody(form),
+        done: 'qualified',
+      };
+    } else if (action === 'withdraw') {
+      const qualificationId = text(form, 'qualification_id');
+      if (!UUID.test(qualificationId)) throw new FormProblem('no such qualification');
+      call = { path: `/staff/qualifications/${qualificationId}/withdraw`, body: {}, done: 'withdrawn' };
+    } else if (action === 'check') {
+      const personId = text(form, 'person_id');
+      if (!UUID.test(personId)) throw new FormProblem('no such member of staff');
+      call = { path: `/staff/people/${personId}/checks`, body: checkBody(form), done: 'checked' };
     } else {
       return outcome({ error: 'unknown action' });
     }

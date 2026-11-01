@@ -41,6 +41,10 @@ DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_appl
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Qualifications and checks the tests recorded; the seeded ones (dd000000-, de000000-) as seeded.
+DELETE FROM staff.qualification WHERE id::text NOT LIKE 'dd000000-%';
+UPDATE staff.qualification SET withdrawn_at = NULL WHERE withdrawn_at IS NOT NULL;
+DELETE FROM staff.record_check WHERE id::text NOT LIKE 'de000000-%';
 -- Employments the tests recorded; the seeded ones (ids dc000000-) as seeded.
 DELETE FROM staff.employment WHERE id::text NOT LIKE 'dc000000-%';
 UPDATE staff.employment SET end_date = CASE WHEN id = 'dc000000-0000-7000-8000-000000000010' THEN DATE '2027-08-31' END

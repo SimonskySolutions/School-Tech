@@ -1,4 +1,4 @@
-import { type Employment, type SchoolStaff } from '@pythagoras/shared';
+import { type MyStaffRecords, type SchoolStaff } from '@pythagoras/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { get, post, tokenFor } from './helpers';
 
@@ -108,7 +108,7 @@ describe('recording and ending employments', () => {
     expect((await end('principal.a', '2026-12-31')).status).toBe(200);
     expect((await end('principal.a', '2027-01-31')).status).toBe(409);
 
-    const mine = (await get<Employment[]>('/staff/me', tokens['kitchen.a']!)).body;
+    const mine = (await get<MyStaffRecords>('/staff/me', tokens['kitchen.a']!)).body.employments;
     expect(mine.map((employment) => employment.position)).toEqual(
       expect.arrayContaining(['Cook', 'Kitchen assistant (integration test)']),
     );
@@ -116,6 +116,10 @@ describe('recording and ending employments', () => {
       id: SCHOOL_A,
       name: 'School A',
     });
-    expect((await get<Employment[]>('/staff/me', tokens['anna.ivanova']!)).body).toEqual([]);
+    expect((await get<MyStaffRecords>('/staff/me', tokens['anna.ivanova']!)).body).toEqual({
+      employments: [],
+      qualifications: [],
+      recordCheck: null,
+    });
   });
 });

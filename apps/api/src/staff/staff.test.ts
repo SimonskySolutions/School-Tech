@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { employmentSchema, endSchema } from './staff.controller';
-import { mismatchOf } from './staff.repository';
+import { checkSchema, employmentSchema, endSchema, qualificationSchema } from './staff.controller';
+import { attentionFor, expiryState, mismatchOf } from './staff.repository';
 
 const valid = {
   personId: 'c1000000-0000-7000-8000-000000000009',
@@ -40,5 +40,72 @@ describe('employments', () => {
     expect(mismatchOf([], [{ current: true }])).toBe('employment_without_role');
     expect(mismatchOf(['teacher'], [{ current: true }])).toBeNull();
     expect(mismatchOf([], [{ current: false }])).toBeNull();
+  });
+});
+
+describe('qualifications and checks', () => {
+  const TODAY = '2026-11-01';
+
+  it('calls an end within 60 days expiring, and a past one expired', () => {
+    expect(expiryState(null, TODAY)).toBe('valid');
+    expect(expiryState('2026-10-31', TODAY)).toBe('expired');
+    expect(expiryState('2026-11-01', TODAY)).toBe('expiring');
+    expect(expiryState('2026-12-31', TODAY)).toBe('expiring');
+    expect(expiryState('2027-01-01', TODAY)).toBe('valid');
+  });
+
+  it('asks for a valid check for everyone employed, and a licence for teachers', () => {
+    const employed = { roles: ['teacher'], employments: [{ current: true }] };
+    const licence = {
+      id: 'q',
+      kind: 'teaching_licence' as const,
+      title: 'Licence',
+      issuer: null,
+      awardedOn: '2020-01-01',
+      expiresOn: null,
+      state: 'valid' as const,
+    };
+    const check = (state: 'valid' | 'expiring' | 'expired') => ({
+      seenOn: '2026-06-01',
+      validUntil: '2026-12-01',
+      seenBy: null,
+      state,
+    });
+    expect(attentionFor(employed, [], null)).toEqual(['check_missing', 'licence_missing']);
+    expect(attentionFor(employed, [licence], check('valid'))).toEqual([]);
+    expect(attentionFor(employed, [licence], check('expiring'))).toEqual(['check_expiring']);
+    expect(attentionFor(employed, [{ ...licence, state: 'expired' }], check('expired'))).toEqual([
+      'check_expired',
+      'licence_missing',
+      'qualification_expired',
+    ]);
+    // Without a current employment there is nobody to check yet.
+    expect(attentionFor({ roles: ['kitchen'], employments: [] }, [], null)).toEqual([]);
+  });
+
+  it('takes a qualification and a check with nothing beyond their dates', () => {
+    expect(
+      qualificationSchema.safeParse({
+        kind: 'first_aid',
+        title: 'First aid',
+        awardedOn: '2026-01-01',
+        expiresOn: '2028-01-01',
+      }).success,
+    ).toBe(true);
+    expect(
+      qualificationSchema.safeParse({
+        kind: 'first_aid',
+        title: 'First aid',
+        awardedOn: '2026-01-01',
+        expiresOn: '2025-01-01',
+      }).success,
+    ).toBe(false);
+    expect(checkSchema.safeParse({ seenOn: '2026-10-01', validUntil: '2027-04-01' }).success).toBe(true);
+    expect(
+      checkSchema.safeParse({ seenOn: '2026-10-01', validUntil: '2027-04-01', outcome: 'clear' }).success,
+    ).toBe(false);
+    expect(
+      checkSchema.safeParse({ seenOn: '2026-10-01', validUntil: '2027-04-01', certificate: 'scan' }).success,
+    ).toBe(false);
   });
 });
