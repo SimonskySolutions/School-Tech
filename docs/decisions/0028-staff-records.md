@@ -18,6 +18,8 @@ Employee data is personal data processed for the employment contract and under l
 
 **Checks and qualifications (M6.2).** Criminal record certificates are data about convictions (Art. 10): the platform records only that a valid certificate was seen, when, until when it is valid and by whom, never its content or a copy.
 
+**Professional development (M6.3).** Training belongs to the person, like qualifications: they record their own and the leaders where they work now record it for them. Only the title, provider, kind, days, hours and whether it was planned, attended or cancelled are kept; no assessment, cost or certificate. Hours are counted per school year (September to August).
+
 ## Consequences
 
 - HR reporting (head counts, working time per school) can be built from employments without touching payroll data.

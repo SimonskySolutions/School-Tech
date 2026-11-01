@@ -110,6 +110,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Everyone with a role sees their own records at "My employment".
 - Do not keep payroll data here (national identification numbers, addresses, salaries, bank details): that stays with the payroll provider until its integration is agreed (M7).
 - Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
+- Professional development (M6.3) is on the same page: each person's hours for the school year (September to August), attended and planned, and the school's total; "Year before" and "Year after" show other years. Staff add their own training on "My employment"; the principal can add it for them. Mark planned training attended once it has taken place, or cancelled; cancelled training is not counted. Training recorded wrongly cannot be edited: cancel it if it was planned and record it again.
 
 ### Admissions inquiries (M5.1, ADR 0026)
 

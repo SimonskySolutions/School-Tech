@@ -41,6 +41,9 @@ DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_appl
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Training the tests recorded; the seeded planned conference planned again.
+DELETE FROM staff.training WHERE id::text NOT LIKE 'df000000-%';
+UPDATE staff.training SET status = 'planned' WHERE id = 'df000000-0000-7000-8000-000000000102';
 -- Qualifications and checks the tests recorded; the seeded ones (dd000000-, de000000-) as seeded.
 DELETE FROM staff.qualification WHERE id::text NOT LIKE 'dd000000-%';
 UPDATE staff.qualification SET withdrawn_at = NULL WHERE withdrawn_at IS NOT NULL;

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { FormProblem } from './admin';
-import { checkBody, employmentBody, qualificationBody, workingTimeLabel } from './staff';
+import {
+  checkBody,
+  employmentBody,
+  qualificationBody,
+  shiftSchoolYear,
+  trainingBody,
+  workingTimeLabel,
+} from './staff';
 
 const form = (fields: Record<string, string>) => {
   const data = new FormData();
@@ -72,5 +79,41 @@ describe('qualifications and checks in the portal', () => {
       validUntil: '2027-04-01',
     });
     expect(() => checkBody(form({ seen_on: '2026-10-01', valid_until: '2026-09-01' }))).toThrow(FormProblem);
+  });
+});
+
+describe('professional development in the portal', () => {
+  it('reads training in half hours, one day when no end is given', () => {
+    expect(
+      trainingBody(
+        form({
+          title: 'Workshop',
+          kind: 'workshop',
+          starts_on: '2026-10-05',
+          hours: '3,5',
+          status: 'attended',
+        }),
+      ),
+    ).toEqual({
+      title: 'Workshop',
+      kind: 'workshop',
+      startsOn: '2026-10-05',
+      endsOn: '2026-10-05',
+      hours: 3.5,
+      status: 'attended',
+    });
+    expect(() =>
+      trainingBody(form({ title: 'x', kind: 'workshop', starts_on: '2026-10-05', hours: '3.3' })),
+    ).toThrow(FormProblem);
+    expect(() =>
+      trainingBody(
+        form({ title: 'x', kind: 'workshop', starts_on: '2026-10-05', ends_on: '2026-10-01', hours: '2' }),
+      ),
+    ).toThrow(FormProblem);
+  });
+
+  it('moves between school years', () => {
+    expect(shiftSchoolYear('2026/27', -1)).toBe('2025/26');
+    expect(shiftSchoolYear('2099/00', 1)).toBe('2100/01');
   });
 });

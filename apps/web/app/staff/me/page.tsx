@@ -2,20 +2,40 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchMyEmployments } from '../../../lib/api-client';
 import { currentSession, runtime } from '../../../lib/server';
-import { CONTRACT_LABELS, QUALIFICATION_LABELS, STATE_LABELS, workingTimeLabel } from '../../../lib/staff';
+import { TRAINING_KINDS } from '@pythagoras/shared';
+import {
+  CONTRACT_LABELS,
+  hoursLabel,
+  QUALIFICATION_LABELS,
+  STAFF_DONE,
+  STATE_LABELS,
+  TRAINING_LABELS,
+  TRAINING_STATUS_LABELS,
+  workingTimeLabel,
+} from '../../../lib/staff';
 import { DevelopmentBanner } from '../../development-banner';
 
 export const dynamic = 'force-dynamic';
 
 /** A member of staff's own employment records, qualifications and check (M6.1, M6.2, ADR 0028). */
-export default async function MyEmploymentPage() {
+export default async function MyEmploymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const query = await searchParams;
+  const done = typeof query.done === 'string' ? (STAFF_DONE[query.done] ?? null) : null;
+  const error = typeof query.error === 'string' ? query.error : null;
   const session = await currentSession();
   if (!session) redirect('/auth/sign-in');
   const { config } = runtime();
   const result = await fetchMyEmployments(config.API_INTERNAL_URL, session.accessToken);
   if (result.kind === 'signed-out') redirect('/auth/sign-in');
   const records =
-    result.kind === 'ok' ? result.value : { employments: [], qualifications: [], recordCheck: null };
+    result.kind === 'ok'
+      ? result.value
+      : { employments: [], qualifications: [], recordCheck: null, training: [], schoolYear: '' };
+  const action = '/staff/me/actions';
   const employments = records.employments;
   return (
     <main>
@@ -24,6 +44,16 @@ export default async function MyEmploymentPage() {
         <Link href="/">Home</Link>
       </p>
       <h1>My employment</h1>
+      {done ? (
+        <p role="status" data-testid="done">
+          {done}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" data-testid="error">
+          {error}
+        </p>
+      ) : null}
       {employments.length === 0 ? <p data-testid="none">No employment is recorded for you.</p> : null}
       <ul data-testid="my-employments">
         {employments.map((employment) => (
@@ -47,6 +77,76 @@ export default async function MyEmploymentPage() {
           ? `Certificate seen ${records.recordCheck.seenOn}, valid until ${records.recordCheck.validUntil} (${STATE_LABELS[records.recordCheck.state]}).`
           : 'None recorded.'}
       </p>
+      <h2>{`Professional development (this year ${records.schoolYear})`}</h2>
+      {records.training.length === 0 ? <p>None recorded.</p> : null}
+      <ul data-testid="my-training">
+        {records.training.map((training) => (
+          <li key={training.id}>
+            {`${training.schoolYear}: ${TRAINING_LABELS[training.kind]}: ${training.title}${training.provider ? `, ${training.provider}` : ''}, ${training.startsOn}${training.endsOn !== training.startsOn ? ` to ${training.endsOn}` : ''}, ${hoursLabel(training.hours)} (${TRAINING_STATUS_LABELS[training.status]})`}
+            {training.status === 'planned' ? (
+              <>
+                <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                  <input type="hidden" name="action" value="training-attended" />
+                  <input type="hidden" name="training_id" value={training.id} />
+                  <button type="submit">Attended</button>
+                </form>
+                <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                  <input type="hidden" name="action" value="training-cancelled" />
+                  <input type="hidden" name="training_id" value={training.id} />
+                  <button type="submit">Cancelled</button>
+                </form>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {records.employments.length > 0 ? (
+        <details>
+          <summary>Add training you attended or plan to attend</summary>
+          <form
+            method="post"
+            action={action}
+            style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem', marginTop: '0.5rem' }}
+          >
+            <input type="hidden" name="action" value="train" />
+
+            <label>
+              Training <input name="title" required maxLength={200} />
+            </label>
+            <label>
+              By (optional) <input name="provider" maxLength={200} />
+            </label>
+            <label>
+              Kind{' '}
+              <select name="kind" defaultValue="course">
+                {TRAINING_KINDS.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {TRAINING_LABELS[kind]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              From <input name="starts_on" type="date" required />
+            </label>
+            <label>
+              To (if more than a day) <input name="ends_on" type="date" />
+            </label>
+            <label>
+              Hours <input name="hours" type="number" min={0.5} max={500} step={0.5} required />
+            </label>
+            <label>
+              <input type="radio" name="status" value="attended" defaultChecked /> Attended
+            </label>
+            <label>
+              <input type="radio" name="status" value="planned" /> Planned
+            </label>
+            <button type="submit" data-testid="add-training">
+              Add the training
+            </button>
+          </form>
+        </details>
+      ) : null}
       <p>If something here is wrong, ask your school&apos;s office to correct it.</p>
     </main>
   );

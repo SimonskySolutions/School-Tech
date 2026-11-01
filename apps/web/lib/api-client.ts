@@ -265,8 +265,17 @@ export const fetchAdmissionsPipeline = (apiUrl: string, accessToken: string, sin
     accessToken,
   );
 
-export const fetchSchoolStaff = (apiUrl: string, accessToken: string, schoolId: string) =>
-  get<SchoolStaff>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/staff`, accessToken);
+export const fetchSchoolStaff = (
+  apiUrl: string,
+  accessToken: string,
+  schoolId: string,
+  year: string | null = null,
+) =>
+  get<SchoolStaff>(
+    apiUrl,
+    `/schools/${encodeURIComponent(schoolId)}/staff${year ? `?${new URLSearchParams({ year })}` : ''}`,
+    accessToken,
+  );
 
 export const fetchMyEmployments = (apiUrl: string, accessToken: string) =>
   get<MyStaffRecords>(apiUrl, '/staff/me', accessToken);

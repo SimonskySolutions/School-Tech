@@ -11,6 +11,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
@@ -18,6 +19,7 @@ import {
   type MyStaffRecords,
   QUALIFICATION_KINDS,
   type SchoolStaff,
+  TRAINING_KINDS,
 } from '@pythagoras/shared';
 import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
@@ -28,8 +30,10 @@ import {
   recordCheck,
   recordEmployment,
   recordQualification,
+  recordTraining,
   refusalsAsStaff,
   schoolStaff,
+  setTrainingStatus,
   StaffRejected,
   withdrawQualification,
 } from './staff.repository';
@@ -58,6 +62,25 @@ export const employmentSchema = z
     message: 'a fixed-term contract needs its end date',
   });
 export const endSchema = z.object({ endDate: day });
+export const trainingSchema = z
+  .strictObject({
+    title: z.string().trim().min(1).max(200),
+    provider: z.string().trim().min(1).max(200).optional(),
+    kind: z.enum(TRAINING_KINDS),
+    startsOn: day,
+    endsOn: day,
+    hours: z.number().gt(0).max(500).multipleOf(0.5),
+    status: z.enum(['planned', 'attended']),
+  })
+  .refine((body) => body.endsOn >= body.startsOn, { message: 'it ends on or after the day it starts' });
+export const trainingStatusSchema = z.object({ status: z.enum(['attended', 'cancelled']) });
+const yearSchema = z.object({
+  year: z
+    .string()
+    .regex(/^\d{4}\/\d{2}$/, 'a school year like 2026/27')
+    .optional(),
+});
+
 export const qualificationSchema = z
   .strictObject({
     kind: z.enum(QUALIFICATION_KINDS),
@@ -106,9 +129,11 @@ export class SchoolStaffController {
   list(
     @CurrentPrincipal() principal: Principal,
     @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query() query: unknown,
   ): Promise<SchoolStaff> {
+    const { year } = parse(yearSchema, query);
     return run(this.database, principal, async (tx) => {
-      const found = await schoolStaff(tx, schoolId);
+      const found = await schoolStaff(tx, schoolId, year ?? null);
       if (!found) throw new StaffRejected(404, 'no such school, or not yours to see');
       return found;
     });
@@ -145,6 +170,28 @@ export class StaffController {
   ) {
     const data = parse(qualificationSchema, body);
     return run(this.database, principal, (tx) => recordQualification(tx, personId, data));
+  }
+
+  @Post('people/:personId/training')
+  @HttpCode(201)
+  train(
+    @CurrentPrincipal() principal: Principal,
+    @Param('personId', new ParseUUIDPipe()) personId: string,
+    @Body() body: unknown,
+  ) {
+    const data = parse(trainingSchema, body);
+    return run(this.database, principal, (tx) => recordTraining(tx, personId, data));
+  }
+
+  @Post('training/:trainingId/status')
+  @HttpCode(200)
+  trainingStatus(
+    @CurrentPrincipal() principal: Principal,
+    @Param('trainingId', new ParseUUIDPipe()) trainingId: string,
+    @Body() body: unknown,
+  ) {
+    const { status } = parse(trainingStatusSchema, body);
+    return run(this.database, principal, (tx) => setTrainingStatus(tx, trainingId, status));
   }
 
   @Post('qualifications/:qualificationId/withdraw')

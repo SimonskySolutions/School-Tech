@@ -10,6 +10,10 @@ import {
   type SchoolId,
   type SchoolStaff,
   type StaffAttention,
+  type Training,
+  type TrainingKind,
+  type TrainingRequestBody,
+  type TrainingStatus,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
 
@@ -188,6 +192,47 @@ async function qualificationsOf(tx: PersonTransaction, personIds: readonly strin
   };
 }
 
+interface TrainingRow {
+  id: string;
+  person_id: string;
+  title: string;
+  provider: string | null;
+  kind: TrainingKind;
+  starts_on: string;
+  ends_on: string;
+  hours: string;
+  status: TrainingStatus;
+  school_year: string;
+}
+
+const TRAINING_SELECT = `
+  SELECT id, person_id, title, provider, kind, to_char(starts_on, 'YYYY-MM-DD') AS starts_on,
+         to_char(ends_on, 'YYYY-MM-DD') AS ends_on, hours::text, status, school_year
+    FROM staff.training`;
+
+const trainingOf = (row: TrainingRow): Training => ({
+  id: row.id,
+  title: row.title,
+  provider: row.provider,
+  kind: row.kind,
+  startsOn: row.starts_on,
+  endsOn: row.ends_on,
+  hours: Number(row.hours),
+  status: row.status,
+  schoolYear: row.school_year,
+});
+
+/** Pure: hours attended and planned; cancelled training counts for nothing. */
+export function trainingHours(training: readonly Pick<Training, 'hours' | 'status'>[]) {
+  const sum = (status: TrainingStatus) =>
+    Math.round(training.filter((t) => t.status === status).reduce((total, t) => total + t.hours, 0) * 10) /
+    10;
+  return { attended: sum('attended'), planned: sum('planned') };
+}
+
+const currentSchoolYear = async (tx: PersonTransaction) =>
+  (await tx.query<{ year: string }>('SELECT staff.school_year(current_date) AS year'))[0]!.year;
+
 const today = async (tx: PersonTransaction) =>
   (await tx.query<{ today: string }>(`SELECT to_char(current_date, 'YYYY-MM-DD') AS today`))[0]!.today;
 
@@ -206,7 +251,11 @@ export function mismatchOf(
 }
 
 /** A school's staff with their roles there and their employments there, or null without staff.read. */
-export async function schoolStaff(tx: PersonTransaction, schoolId: string): Promise<SchoolStaff | null> {
+export async function schoolStaff(
+  tx: PersonTransaction,
+  schoolId: string,
+  year: string | null = null,
+): Promise<SchoolStaff | null> {
   const [school] = await tx.query<{ id: SchoolId; name: string; read: boolean; manage: boolean }>(
     `SELECT id, name, staff.may('staff.read', id) AS read, staff.may('staff.manage', id) AS manage
        FROM org.school WHERE id = $1`,
@@ -233,9 +282,18 @@ export async function schoolStaff(tx: PersonTransaction, schoolId: string): Prom
     people.map((person) => person.person_id),
     day,
   );
+  const schoolYear = year ?? (await currentSchoolYear(tx));
+  const training = (
+    await tx.query<TrainingRow>(
+      `${TRAINING_SELECT} WHERE person_id = ANY ($1::uuid[]) AND school_year = $2 ORDER BY starts_on`,
+      [people.map((person) => person.person_id), schoolYear],
+    )
+  ).map((row) => ({ ...trainingOf(row), personId: row.person_id }));
   return {
     school: { id: school.id, name: school.name },
     canManage: school.manage,
+    schoolYear,
+    trainingHours: trainingHours(training),
     employers: employers.map((row) => ({ id: row.id, name: row.legal_name })),
     people: people.map((person) => {
       const own = employments.filter((row) => row.person_id === person.person_id).map(employmentOf);
@@ -253,6 +311,8 @@ export async function schoolStaff(tx: PersonTransaction, schoolId: string): Prom
         qualifications,
         recordCheck,
         attention: attentionFor({ roles: person.roles, employments: own }, qualifications, recordCheck),
+        training: training.filter((t) => t.personId === person.person_id).map(({ personId: _p, ...t }) => t),
+        trainingHours: trainingHours(training.filter((t) => t.personId === person.person_id)),
       };
     }),
   };
@@ -265,11 +325,47 @@ export async function myRecords(tx: PersonTransaction): Promise<MyStaffRecords> 
   );
   const [me] = await tx.query<{ id: string }>('SELECT app.current_person_id() AS id');
   const held = await qualificationsOf(tx, me?.id ? [me.id] : [], await today(tx));
+  const training = await tx.query<TrainingRow>(
+    `${TRAINING_SELECT} WHERE person_id = app.current_person_id() ORDER BY starts_on DESC`,
+  );
   return {
     employments: rows.map(employmentOf),
     qualifications: held.qualifications.map(withoutPerson),
     recordCheck: me?.id ? (held.checks.get(me.id) ?? null) : null,
+    training: training.map(trainingOf),
+    schoolYear: await currentSchoolYear(tx),
   };
+}
+
+/** The person's own training, or a member of staff's by their school's leaders. */
+export async function recordTraining(
+  tx: PersonTransaction,
+  personId: string,
+  body: TrainingRequestBody,
+): Promise<{ id: string }> {
+  const [row] = await tx.query<{ id: string }>(
+    'SELECT staff.record_training($1, $2, $3, $4, $5::date, $6::date, $7, $8) AS id',
+    [
+      personId,
+      body.title,
+      body.provider ?? null,
+      body.kind,
+      body.startsOn,
+      body.endsOn,
+      body.hours,
+      body.status,
+    ],
+  );
+  return { id: row!.id };
+}
+
+export async function setTrainingStatus(
+  tx: PersonTransaction,
+  trainingId: string,
+  status: 'attended' | 'cancelled',
+) {
+  await tx.query('SELECT staff.set_training_status($1, $2)', [trainingId, status]);
+  return { status };
 }
 
 export async function recordQualification(

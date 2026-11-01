@@ -6,6 +6,10 @@ import {
   QUALIFICATION_KINDS,
   type QualificationKind,
   type StaffAttention,
+  TRAINING_KINDS,
+  type TrainingKind,
+  type TrainingRequestBody,
+  type TrainingStatus,
 } from '@pythagoras/shared';
 import { type Form, FormProblem, text } from './admin';
 
@@ -76,7 +80,67 @@ export const STAFF_DONE: Record<string, string> = {
   qualified: 'Qualification recorded.',
   withdrawn: 'Qualification withdrawn.',
   checked: 'Record check noted.',
+  trained: 'Training recorded.',
+  attended: 'Marked as attended.',
+  cancelled: 'Marked as cancelled.',
 };
+
+// Professional development (M6.3). ------------------------------------------
+
+export const TRAINING_LABELS: Record<TrainingKind, string> = {
+  course: 'Course',
+  conference: 'Conference',
+  workshop: 'Workshop',
+  in_school: 'In school',
+  online: 'Online',
+  other: 'Other',
+};
+
+export const TRAINING_STATUS_LABELS: Record<TrainingStatus, string> = {
+  planned: 'planned',
+  attended: 'attended',
+  cancelled: 'cancelled',
+};
+
+/** "8 h" or "2.5 h". */
+export const hoursLabel = (hours: number) => `${hours.toLocaleString('en-GB')} h`;
+
+/** The school year before or after "2026/27". */
+export function shiftSchoolYear(year: string, by: -1 | 1): string {
+  const start = Number(year.slice(0, 4)) + by;
+  return `${start}/${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+export const readSchoolYear = (value: unknown) =>
+  typeof value === 'string' && /^\d{4}\/\d{2}$/.test(value) ? value : null;
+
+/** Training in half hours, planned or attended. */
+export function trainingBody(form: Form): TrainingRequestBody {
+  const title = text(form, 'title');
+  if (!title || title.length > 200) throw new FormProblem('give the title');
+  const kind = text(form, 'kind');
+  if (!(TRAINING_KINDS as readonly string[]).includes(kind)) throw new FormProblem('choose the kind');
+  const startsOn = text(form, 'starts_on');
+  const endsOn = text(form, 'ends_on') || startsOn;
+  if (!DAY.test(startsOn) || !DAY.test(endsOn) || endsOn < startsOn) {
+    throw new FormProblem('give the days it starts and ends, in that order');
+  }
+  const hours = Number(text(form, 'hours').replace(',', '.'));
+  if (!(hours > 0 && hours <= 500 && Number.isInteger(hours * 2))) {
+    throw new FormProblem('give the hours, in half hours, up to 500');
+  }
+  const status = text(form, 'status') === 'attended' ? 'attended' : 'planned';
+  const provider = text(form, 'provider');
+  return {
+    title,
+    ...(provider ? { provider: provider.slice(0, 200) } : {}),
+    kind: kind as TrainingKind,
+    startsOn,
+    endsOn,
+    hours,
+    status,
+  };
+}
 
 // Qualifications and checks (M6.2). -----------------------------------------
 

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { checkSchema, employmentSchema, endSchema, qualificationSchema } from './staff.controller';
-import { attentionFor, expiryState, mismatchOf } from './staff.repository';
+import {
+  checkSchema,
+  employmentSchema,
+  endSchema,
+  qualificationSchema,
+  trainingSchema,
+  trainingStatusSchema,
+} from './staff.controller';
+import { attentionFor, expiryState, mismatchOf, trainingHours } from './staff.repository';
 
 const valid = {
   personId: 'c1000000-0000-7000-8000-000000000009',
@@ -107,5 +114,35 @@ describe('qualifications and checks', () => {
     expect(
       checkSchema.safeParse({ seenOn: '2026-10-01', validUntil: '2027-04-01', certificate: 'scan' }).success,
     ).toBe(false);
+  });
+});
+
+describe('professional development', () => {
+  it('adds up attended and planned hours, leaving cancelled training out', () => {
+    expect(
+      trainingHours([
+        { hours: 8, status: 'attended' },
+        { hours: 2.5, status: 'attended' },
+        { hours: 12, status: 'planned' },
+        { hours: 6, status: 'cancelled' },
+      ]),
+    ).toEqual({ attended: 10.5, planned: 12 });
+    expect(trainingHours([])).toEqual({ attended: 0, planned: 0 });
+  });
+
+  it('takes training in half hours, planned or attended, ending after it starts', () => {
+    const training = {
+      title: 'Course',
+      kind: 'course',
+      startsOn: '2026-10-01',
+      endsOn: '2026-10-02',
+      hours: 7.5,
+      status: 'attended',
+    };
+    expect(trainingSchema.safeParse(training).success).toBe(true);
+    expect(trainingSchema.safeParse({ ...training, hours: 7.3 }).success).toBe(false);
+    expect(trainingSchema.safeParse({ ...training, endsOn: '2026-09-30' }).success).toBe(false);
+    expect(trainingSchema.safeParse({ ...training, status: 'cancelled' }).success).toBe(false);
+    expect(trainingStatusSchema.safeParse({ status: 'planned' }).success).toBe(false);
   });
 });

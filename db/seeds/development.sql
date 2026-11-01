@@ -457,6 +457,18 @@ INSERT INTO staff.record_check (id, group_id, person_id, seen_on, valid_until, s
    'c1000000-0000-7000-8000-000000000002')
 ON CONFLICT (id) DO NOTHING;
 
+-- Professional development (M6.3), relative to the day the seed first runs:
+-- the School B teacher attended a course and plans a conference; the
+-- principal of School A attended a workshop. Synthetic.
+INSERT INTO staff.training (id, group_id, person_id, title, provider, kind, starts_on, ends_on, hours, status, recorded_by_person_id) VALUES
+  ('df000000-0000-7000-8000-000000000101', :G, 'c1000000-0000-7000-8000-000000000010', 'Teaching with manipulatives (synthetic)',
+   'Regional teacher centre (synthetic)', 'course', current_date - 40, current_date - 39, 8, 'attended', 'c1000000-0000-7000-8000-000000000010'),
+  ('df000000-0000-7000-8000-000000000102', :G, 'c1000000-0000-7000-8000-000000000010', 'Mathematics teachers'' conference (synthetic)',
+   NULL, 'conference', current_date + 20, current_date + 21, 12, 'planned', 'c1000000-0000-7000-8000-000000000010'),
+  ('df000000-0000-7000-8000-000000000103', :G, 'c1000000-0000-7000-8000-000000000006', 'Leading inclusive schools (synthetic)',
+   NULL, 'workshop', current_date - 25, current_date - 25, 4, 'attended', 'c1000000-0000-7000-8000-000000000006')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

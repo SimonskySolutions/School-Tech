@@ -1,4 +1,4 @@
-import { CONTRACT_KINDS, QUALIFICATION_KINDS } from '@pythagoras/shared';
+import { CONTRACT_KINDS, QUALIFICATION_KINDS, TRAINING_KINDS } from '@pythagoras/shared';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { fetchSchoolStaff } from '../../../../lib/api-client';
@@ -6,10 +6,15 @@ import { currentSession, runtime } from '../../../../lib/server';
 import {
   ATTENTION_LABELS,
   CONTRACT_LABELS,
+  hoursLabel,
   QUALIFICATION_LABELS,
+  readSchoolYear,
   ROLE_LABELS,
+  shiftSchoolYear,
   STAFF_DONE,
   STATE_LABELS,
+  TRAINING_LABELS,
+  TRAINING_STATUS_LABELS,
   workingTimeLabel,
 } from '../../../../lib/staff';
 import { DevelopmentBanner } from '../../../development-banner';
@@ -38,7 +43,12 @@ export default async function StaffPage({
   if (!session) redirect('/auth/sign-in');
 
   const { config } = runtime();
-  const result = await fetchSchoolStaff(config.API_INTERNAL_URL, session.accessToken, id);
+  const result = await fetchSchoolStaff(
+    config.API_INTERNAL_URL,
+    session.accessToken,
+    id,
+    readSchoolYear(query.year),
+  );
   if (result.kind === 'signed-out') redirect('/auth/sign-in');
   if (result.kind !== 'ok') {
     return (
@@ -75,6 +85,28 @@ export default async function StaffPage({
           {error}
         </p>
       ) : null}
+      <section aria-labelledby="development" data-testid="development">
+        <h2 id="development">{`Professional development, ${view.schoolYear}`}</h2>
+        <p>
+          <Link href={`/schools/${view.school.id}/staff?year=${shiftSchoolYear(view.schoolYear, -1)}`}>
+            Year before
+          </Link>{' '}
+          ·{' '}
+          <Link href={`/schools/${view.school.id}/staff?year=${shiftSchoolYear(view.schoolYear, 1)}`}>
+            Year after
+          </Link>
+        </p>
+        <p data-testid="development-total">
+          {`${hoursLabel(view.trainingHours.attended)} attended, ${hoursLabel(view.trainingHours.planned)} planned`}
+        </p>
+        <ul>
+          {view.people.map((person) => (
+            <li key={person.personId}>
+              {`${person.name}: ${hoursLabel(person.trainingHours.attended)} attended, ${hoursLabel(person.trainingHours.planned)} planned`}
+            </li>
+          ))}
+        </ul>
+      </section>
       {view.people.some((person) => person.attention.length > 0) ? (
         <section aria-labelledby="needs-attention" data-testid="needs-attention">
           <h2 id="needs-attention">Needs attention</h2>
@@ -163,6 +195,76 @@ export default async function StaffPage({
                 </li>
               ))}
             </ul>
+          ) : null}
+          {person.training.length > 0 ? (
+            <ul data-testid="training">
+              {person.training.map((training) => (
+                <li key={training.id} data-testid={`training-${training.id}`}>
+                  {`${TRAINING_LABELS[training.kind]}: ${training.title}${training.provider ? `, ${training.provider}` : ''}, ${training.startsOn}${training.endsOn !== training.startsOn ? ` to ${training.endsOn}` : ''}, ${hoursLabel(training.hours)} (${TRAINING_STATUS_LABELS[training.status]})`}
+                  {view.canManage && training.status === 'planned' ? (
+                    <>
+                      <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                        <input type="hidden" name="action" value="training-attended" />
+                        <input type="hidden" name="training_id" value={training.id} />
+                        <button type="submit">Attended</button>
+                      </form>
+                      <form method="post" action={action} style={{ display: 'inline', marginLeft: '0.5rem' }}>
+                        <input type="hidden" name="action" value="training-cancelled" />
+                        <input type="hidden" name="training_id" value={training.id} />
+                        <button type="submit">Cancelled</button>
+                      </form>
+                    </>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {view.canManage ? (
+            <details style={{ marginTop: '0.5rem' }}>
+              <summary>Add training</summary>
+              <form
+                method="post"
+                action={action}
+                style={{ display: 'grid', gap: '0.5rem', maxWidth: '36rem', marginTop: '0.5rem' }}
+              >
+                <input type="hidden" name="action" value="train" />
+                <input type="hidden" name="person_id" value={person.personId} />
+                <label>
+                  Training <input name="title" required maxLength={200} />
+                </label>
+                <label>
+                  By (optional) <input name="provider" maxLength={200} />
+                </label>
+                <label>
+                  Kind{' '}
+                  <select name="kind" defaultValue="course">
+                    {TRAINING_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {TRAINING_LABELS[kind]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  From <input name="starts_on" type="date" required />
+                </label>
+                <label>
+                  To (if more than a day) <input name="ends_on" type="date" />
+                </label>
+                <label>
+                  Hours <input name="hours" type="number" min={0.5} max={500} step={0.5} required />
+                </label>
+                <label>
+                  <input type="radio" name="status" value="attended" defaultChecked /> Attended
+                </label>
+                <label>
+                  <input type="radio" name="status" value="planned" /> Planned
+                </label>
+                <button type="submit" data-testid="add-training">
+                  Add the training
+                </button>
+              </form>
+            </details>
           ) : null}
           {view.canManage ? (
             <details style={{ marginTop: '0.5rem' }}>

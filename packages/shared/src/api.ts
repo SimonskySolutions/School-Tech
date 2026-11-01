@@ -1219,16 +1219,51 @@ export type StaffAttention =
   | 'qualification_expiring'
   | 'qualification_expired';
 
+/** Professional development (M6.3). */
+export const TRAINING_KINDS = ['course', 'conference', 'workshop', 'in_school', 'online', 'other'] as const;
+export type TrainingKind = (typeof TRAINING_KINDS)[number];
+export type TrainingStatus = 'planned' | 'attended' | 'cancelled';
+
+export interface Training {
+  id: string;
+  title: string;
+  provider: string | null;
+  kind: TrainingKind;
+  startsOn: string;
+  endsOn: string;
+  hours: number;
+  status: TrainingStatus;
+  /** "2026/27": September to August. */
+  schoolYear: string;
+}
+
+export interface TrainingRequestBody {
+  title: string;
+  provider?: string;
+  kind: TrainingKind;
+  startsOn: string;
+  endsOn: string;
+  hours: number;
+  status: 'planned' | 'attended';
+}
+
 /** A member of staff's own records. */
 export interface MyStaffRecords {
   employments: Employment[];
   qualifications: Qualification[];
   recordCheck: RecordCheck | null;
+  /** All their training, the latest first. */
+  training: Training[];
+  schoolYear: string;
 }
 
 export interface SchoolStaff {
   school: { id: SchoolId; name: string };
   canManage: boolean;
+  /** The school year the training figures are for. */
+  schoolYear: string;
+  /** Hours of training attended and planned that year, by everyone listed. */
+  trainingHours: { attended: number; planned: number };
   /** Legal entities of the group, as possible employers. */
   employers: { id: string; name: string }[];
   people: {
@@ -1243,6 +1278,9 @@ export interface SchoolStaff {
     recordCheck: RecordCheck | null;
     /** What the school's leaders should see to (M6.2). */
     attention: StaffAttention[];
+    /** Training in the school year (M6.3). */
+    training: Training[];
+    trainingHours: { attended: number; planned: number };
   }[];
 }
 

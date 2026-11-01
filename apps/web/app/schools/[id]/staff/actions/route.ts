@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { FormProblem, text } from '../../../../../lib/admin';
 import { writeApi } from '../../../../../lib/api-client';
 import { currentSession, runtime } from '../../../../../lib/server';
-import { checkBody, employmentBody, qualificationBody } from '../../../../../lib/staff';
+import { checkBody, employmentBody, qualificationBody, trainingBody } from '../../../../../lib/staff';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +53,15 @@ export async function POST(
       const qualificationId = text(form, 'qualification_id');
       if (!UUID.test(qualificationId)) throw new FormProblem('no such qualification');
       call = { path: `/staff/qualifications/${qualificationId}/withdraw`, body: {}, done: 'withdrawn' };
+    } else if (action === 'train') {
+      const personId = text(form, 'person_id');
+      if (!UUID.test(personId)) throw new FormProblem('no such member of staff');
+      call = { path: `/staff/people/${personId}/training`, body: trainingBody(form), done: 'trained' };
+    } else if (action === 'training-attended' || action === 'training-cancelled') {
+      const trainingId = text(form, 'training_id');
+      if (!UUID.test(trainingId)) throw new FormProblem('no such training');
+      const status = action === 'training-attended' ? 'attended' : 'cancelled';
+      call = { path: `/staff/training/${trainingId}/status`, body: { status }, done: status };
     } else if (action === 'check') {
       const personId = text(form, 'person_id');
       if (!UUID.test(personId)) throw new FormProblem('no such member of staff');
