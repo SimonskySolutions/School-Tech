@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+import { FormProblem } from './admin';
+import { employmentBody, workingTimeLabel } from './staff';
+
+const form = (fields: Record<string, string>) => {
+  const data = new FormData();
+  for (const [name, value] of Object.entries(fields)) data.set(name, value);
+  return data;
+};
+const filled = {
+  person_id: 'c1000000-0000-7000-8000-000000000009',
+  employer_id: 'b2000000-0000-7000-8000-000000000001',
+  position: 'Cook',
+  contract_kind: 'permanent',
+  working_time: '75',
+  start_date: '2026-09-01',
+};
+
+describe('the employment form', () => {
+  it('reads working time as a percentage and leaves out what is empty', () => {
+    expect(employmentBody(form({ ...filled, work_phone: '+359 888 000 001' }))).toEqual({
+      personId: filled.person_id,
+      employerId: filled.employer_id,
+      position: 'Cook',
+      contractKind: 'permanent',
+      workingTime: 0.75,
+      startDate: '2026-09-01',
+      workPhone: '+359888000001',
+    });
+  });
+
+  it('asks for the person, the position, a working time and dates in order', () => {
+    const problem = (fields: Record<string, string>) => () => employmentBody(form({ ...filled, ...fields }));
+    expect(problem({ person_id: '' })).toThrow(FormProblem);
+    expect(problem({ position: '' })).toThrow(FormProblem);
+    expect(problem({ working_time: '120' })).toThrow(FormProblem);
+    expect(problem({ end_date: '2026-08-01' })).toThrow(FormProblem);
+    expect(problem({ contract_kind: 'fixed_term' })).toThrow('end date');
+  });
+
+  it('says full time or a share of it', () => {
+    expect(workingTimeLabel(1)).toBe('full time');
+    expect(workingTimeLabel(0.75)).toBe('75% of full time');
+  });
+});

@@ -13,6 +13,8 @@ export interface HomeView {
     studentsHref: string | null;
     lessonsHref: string | null;
     uniformsHref: string | null;
+    /** The school's staff records, for roles with staff.read there (M6.1). */
+    staffHref: string | null;
   }[];
   groupRoles: string[];
   groupSchools: string[];
@@ -28,6 +30,10 @@ export interface HomeView {
   showsAdmissionsReport: boolean;
   /** Group roles that see School Life: the lessons page of each school. */
   lessonSchools: { id: string; name: string }[];
+  /** Group roles that read staff records: each school's staff page. */
+  staffSchools: { id: string; name: string }[];
+  /** Anyone with a role sees their own employment records. */
+  showsMyEmployment: boolean;
   /** Revenue and balances per school; the API decides which schools. */
   showsReports: boolean;
   /** Setting up schools (org.manage); the API enforces it. */
@@ -53,6 +59,9 @@ const DIETARY_REVIEW_ROLES = new Set(['school_life_coordinator', 'principal']);
 
 // Roles that hold requests.manage; a hint for links only.
 const REQUEST_ROLES = new Set(['school_life_coordinator', 'principal', 'school_admin']);
+
+// Roles that hold staff.read (school roles at their school, group roles everywhere); a hint for links only.
+const STAFF_ROLES = new Set(['principal', 'school_admin', 'group_admin', 'group_ceo']);
 
 // Roles that hold admissions.manage; a hint for links only.
 const ADMISSIONS_ROLES = new Set(['principal', 'school_admin', 'group_admin']);
@@ -95,6 +104,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       // Every school role holds bookings.read or catalog.read there (access.role_permission).
       lessonsHref: `/schools/${role.school!.id}/lessons`,
       uniformsHref: `/schools/${role.school!.id}/uniforms`,
+      staffHref: STAFF_ROLES.has(role.code) ? `/schools/${role.school!.id}/staff` : null,
     }));
 
   return {
@@ -111,6 +121,10 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     lessonSchools: me.roles.some((role) => role.scope === 'group' && SCHOOL_LIFE_ROLES.has(role.code))
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],
+    staffSchools: me.roles.some((role) => role.scope === 'group' && STAFF_ROLES.has(role.code))
+      ? schools.map((school) => ({ id: school.id, name: school.name }))
+      : [],
+    showsMyEmployment: me.roles.length > 0,
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),
     showsSchoolSetup: me.roles.some((role) => SETUP_ROLES.has(role.code)),
     hasNothing: children.length === 0 && schoolRoles.length === 0 && groupRoles.length === 0,

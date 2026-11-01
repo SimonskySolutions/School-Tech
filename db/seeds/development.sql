@@ -421,6 +421,21 @@ VALUES (:G, 'admissions.unsuccessful',
         'To be set by the data protection officer before production.')
 ON CONFLICT (group_id, code) DO NOTHING;
 
+-- Staff records (M6.1, ADR 0028): employments of some of the seeded staff,
+-- all with Testing Company. The principal of School C has none yet, so the
+-- staff page shows a role without an employment. Synthetic contacts.
+INSERT INTO staff.employment (id, group_id, person_id, employer_id, school_id, position, contract_kind, working_time,
+                              start_date, end_date, work_email, work_phone, created_by_person_id) VALUES
+  ('dc000000-0000-7000-8000-000000000006', :G, 'c1000000-0000-7000-8000-000000000006', :CO, :SA, 'Principal', 'permanent', 1.00,
+   DATE '2024-09-01', NULL, 'principal.a@school-a.pythagoras.test', '+359888000006', 'c1000000-0000-7000-8000-000000000002'),
+  ('dc000000-0000-7000-8000-000000000009', :G, 'c1000000-0000-7000-8000-000000000009', :CO, :SA, 'Cook', 'permanent', 0.75,
+   DATE '2025-01-15', NULL, NULL, NULL, 'c1000000-0000-7000-8000-000000000006'),
+  ('dc000000-0000-7000-8000-000000000010', :G, 'c1000000-0000-7000-8000-000000000010', :CO, :SB, 'Teacher of mathematics', 'fixed_term', 1.00,
+   DATE '2026-09-01', DATE '2027-08-31', NULL, NULL, 'c1000000-0000-7000-8000-000000000007'),
+  ('dc000000-0000-7000-8000-000000000007', :G, 'c1000000-0000-7000-8000-000000000007', :CO, :SB, 'Principal', 'permanent', 1.00,
+   DATE '2023-09-01', NULL, NULL, NULL, 'c1000000-0000-7000-8000-000000000002')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

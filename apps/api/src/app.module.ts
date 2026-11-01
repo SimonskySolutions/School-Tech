@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdmissionsController } from './admissions/applications.controller';
 import { InquiriesController, PublicInquiriesController } from './admissions/inquiries.controller';
 import { AuthModule } from './auth/auth.module';
+import { SchoolStaffController, StaffController } from './staff/staff.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
@@ -45,6 +46,8 @@ import { type Env } from './config/env';
     PublicInquiriesController,
     InquiriesController,
     AdmissionsController,
+    SchoolStaffController,
+    StaffController,
     CatalogController,
     DietaryController,
     DietaryReviewController,

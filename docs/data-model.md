@@ -57,6 +57,7 @@ Not yet modelled (later milestones): academics and timetables, lunch menus, trip
 | `integration` | Transactional outbox, verified inbound provider events, external references |
 | `privacy` | Processing purposes, retention policies, consent records, data subject requests |
 | `admissions` | Prospective families (ADR 0026, 0027): admissions privacy notices, inquiries from school websites and their contact log, intakes, applications |
+| `staff` | Staff records (ADR 0028): employments, separate from the role assignments that give access; no payroll data |
 | `sensitive` | Dietary and health requirements (special-category data) |
 | `audit` | Change log (monthly partitions), access log |
 | `reporting` | Read models: `school_revenue_daily` (per school, local day and `payment_mode`: test-mode money is never live revenue), `outstanding_balance` |
@@ -91,6 +92,8 @@ Admissions numbers (M5.5): `admissions.intake_counts()` and `admissions.inquiry_
 Admissions retention (M5.6): `admissions.apply_retention()` (worker only) erases, under the group's approved retention policy `admissions.unsuccessful`, inquiries closed or untouched for longer than its period (unless the parent's child was enrolled at that school) and applications that ended without a place; erasure empties every personal field and note text and sets `erased_at`, keeping the rows for counting. Admissions staff erase, export (`export_inquiry`, `export_application`, logged in `audit.access_log`) and record a withdrawn open-day consent; each erasure and export is a completed `privacy.data_subject_request`.
 
 The enrolment fee (M5.8): an intake may name a published offering of kind `fee` at its school (`fee_offering_id`). A trigger on `commerce.order_line` allows a line for a fee offering only for a child enrolled from an intake that charges it, one at a time per child and fee (a confirmed line, or a pending one in an order still open for payment, blocks another; `PY026`).
+
+Staff records (M6.1, ADR 0028): `staff.employment` says that a legal entity of the group employs a person at a school (or group-wide) in a position, on a contract (permanent, fixed term with its end, temporary) and working-time fraction, between two dates, with optional work contacts. It is independent of `access.role_assignment`. Writes only through `staff.record_employment` and `staff.end_employment` (with `staff.manage` at the workplace); readable by the person and holders of `staff.read` at the workplace (group-wide employments: group-level `staff.read`). No national identification number, address, salary or bank details are stored.
 
 Parent requests (M4.7): `people.family_request` (a child, the school, a kind, a subject, a status) with append-only `people.family_request_message`s. Writes only through `people.open_family_request`, `people.reply_to_family_request` and `people.set_family_request_status`; readable by the child's guardians and staff with `requests.manage` at that school. Subjects and messages may say why a child is absent or what they cannot eat, so the audit log records that they changed, never what they say.
 

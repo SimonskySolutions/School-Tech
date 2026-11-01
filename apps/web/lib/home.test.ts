@@ -80,8 +80,10 @@ describe('buildHome', () => {
         studentsHref: '/schools/a/students',
         lessonsHref: '/schools/a/lessons',
         uniformsHref: '/schools/a/uniforms',
+        staffHref: '/schools/a/staff',
       },
     ]);
+    expect(view.showsMyEmployment).toBe(true);
     expect(view.groupSchools).toEqual([]);
     expect(view.showsSchoolLife).toBe(true);
   });
@@ -97,6 +99,7 @@ describe('buildHome', () => {
     );
     expect(view.groupRoles).toEqual(['CEO']);
     expect(view.groupSchools).toEqual(['School A', 'School B', 'School C']);
+    expect(view.staffSchools.map((school) => school.name)).toEqual(['School A', 'School B', 'School C']);
   });
 
   it('offers School Life pages only to roles that can read bookings', () => {

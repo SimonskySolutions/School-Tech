@@ -24,10 +24,15 @@ let companyName: string;
 let kalinaId: string;
 let annaId: string;
 
+/**
+ * A Monday at least two days ahead: lunch booking closes at 10:00 the day
+ * before, so on a Sunday the very next Monday may already be closed.
+ */
 function nextMonday(): string {
   const day = new Date();
   day.setUTCHours(0, 0, 0, 0);
-  day.setUTCDate(day.getUTCDate() + ((8 - day.getUTCDay()) % 7 || 7));
+  const ahead = (8 - day.getUTCDay()) % 7 || 7;
+  day.setUTCDate(day.getUTCDate() + (ahead < 2 ? ahead + 7 : ahead));
   return day.toISOString().slice(0, 10);
 }
 

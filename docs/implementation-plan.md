@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-10-31. Current milestone: **M6 · Staff, documents, tasks** (not planned in detail yet). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for M5.1–M5.7, runs #64–#76). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
+Last updated: 2026-10-31. Current milestone: **M6 · Staff, documents, tasks** (planned below; M6.1 done, M6.2 next). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M5 commit, runs #64–#78). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. Each milestone is planned in detail when it starts; later milestones are outlined.
 
@@ -225,11 +225,36 @@ Tests added for M5.8: 17 database checks (only a fee offering of the school, onl
 6. Met: the worker erases unsuccessful inquiries and applications only under an approved retention policy and after its period, and staff erase on request; with no policy or a draft one nothing is erased (M5.6 tests). The seed's policy is a draft: the DPO's period must be approved before anything is erased.
 7. Met: the whole path, from an inquiry on the website to a paid lunch for the enrolled child, works at School E, set up through the admin pages during the test, with no code change (M5.7).
 
+## M6 · Staff, documents, tasks — in progress
+
+**Goal:** the brief's supporting areas for staff and for the group's own work: staff records, qualifications and professional development; private documents with consent and approvals; tasks and projects. Each school's staff data stays with that school and the group's leaders, and nothing here pretends to be payroll, which stays an external integration (M7). Built on people and roles (M1), schools and companies (M3) and the privacy records (ADR 0006).
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M6.1 Staff records | M1, M3 | ADR first. Employment records separate from access: employer (legal entity), workplace, position, contract kind, working-time fraction, dates, work contacts; seen by the person, their school's leaders and the group's; a staff page per school that shows who has a role but no employment record, and the reverse | **Done** (2026-11-01), ADR 0028: migration `20261118090000` adds the schema `staff` with `staff.employment` (employer: a legal entity of the group; workplace: a school, or the group; position; contract permanent, fixed term with its end, or temporary; working time as a fraction of full time; dates; work e-mail and telephone, redacted from the audit log), the permissions `staff.read` (principals, school administrators, group administrators, the CEO) and `staff.manage` (principals, school administrators, group administrators), `staff.record_employment` (only for someone registered at the school or with a role there), `staff.end_employment` (sets or brings forward the end; roles stay as they are) and `staff.school_staff` (names and roles for the staff page, to `staff.read` only). Readable by the person themself and `staff.read` where they work; teachers, the kitchen, School Life and finance see no colleague's record. No payroll data. API: `GET /schools/:id/staff`, `POST /schools/:id/staff/employments`, `POST /staff/employments/:id/end`, `GET /staff/me`. Pages: `/schools/[id]/staff` (each person's roles and employments, a role without an employment and the reverse flagged, record and end forms), "My employment" (`/staff/me`) for everyone with a role, links on the home page. Group-wide employments exist in the database and API only, with no page yet. The seed has employments for the principals of Schools A and B, the School A kitchen and the School B teacher, and none for the principal of School C |
+| M6.2 Qualifications and checks | M6.1 | Teaching licences, degrees, first aid and the like, with expiry dates; criminal record certificates recorded only as seen, when and until when (Art. 10), never stored; expiring and missing ones flagged per school | Planned |
+| M6.3 Professional development | M6.1 | Training attended or planned, with hours per person and school year; each school's totals for its leaders | Planned |
+| M6.4 Private document store | M3 | ADR first: an S3-compatible object store as a container, chosen after checking current versions and licences. Documents attached to a school, a member of staff or a student, versioned, downloaded only through short-lived links by those allowed, every download in the access log | Planned |
+| M6.5 Approvals | M6.4 | Approval steps on a document version (for example a school policy approved by the principal, then the CEO), in order; an approved version never changes, a new version needs approval again | Planned |
+| M6.6 Consent from families | M6.4, ADR 0006 | Per-purpose consents (photos on the website, outings and the like) that a guardian gives or withdraws in the portal, with the wording version, in `privacy.consent_record`; staff see who may appear in photos | Planned |
+| M6.7 Tasks and projects | M6.1 | Tasks with an assignee, a due date and a state, alone or in projects of a school or the group; my tasks, overdue tasks; seen by those involved and the project's school leaders | Planned |
+| M6.8 Staff end to end | M6.1–M6.7 | An end-to-end test at a school added through administration: a new member of staff with an employment, a qualification, a document approved, a task done | Planned |
+
+Tests added for M6.1: 27 database checks (recording at one's own school only and for someone who works there, contract, working-time and telephone rules, no writes except through the functions, group-wide employments, who reads them (the person, the principal, the group administrator and the CEO; not teachers, School Life, finance or parents), the staff list to `staff.read` only, ending and bringing an end forward, roles unchanged, work contacts not in the audit log), 3 API unit tests, 4 API integration tests (the principal's page with roles and employments, the role-without-employment flag, the group's leaders and refusals, recording and ending with payroll fields refused) and 3 web unit tests and 3 end-to-end tests (the staff page, recording a fixed-term employment and setting its end, the kitchen's own page, colleagues refused, the flag at School C). Fixed on the way: the M3.3 families test booked lunch for the next Monday, which on a Sunday after 10:00 is already closed for booking; it now takes a Monday at least two days ahead.
+
+**Acceptance criteria**
+1. A member of staff's employment record is seen only by them, their school's leaders and the group's; colleagues such as teachers and the kitchen never see it; no payroll data is stored.
+2. Qualifications that expire within 60 days or have expired are flagged to the school's leaders; a criminal record check is held only as its dates and who saw it.
+3. Documents are stored privately and reached only through short-lived links by those allowed; every download is logged.
+4. An approval follows its steps in order; an approved version cannot be changed, and a new version needs approval again.
+5. A guardian's consent per purpose is recorded with the wording version and can be withdrawn; staff see the current state per child.
+6. Tasks are seen by their assignee, the people in their project and the project's school leaders only; overdue tasks are listed.
+7. The staff path works at a school added through administration, without code changes.
+
 ## Later milestones (outline)
 
 | Milestone | Depends on | Outcome |
 | --- | --- | --- |
-| M6 · Staff, documents, tasks | M1 | Staff records and qualifications, documents and approvals, tasks and projects |
 | M7 · Integrations | Contracts in `docs/integration-register.md` | Shkolo, accounting export, e-signature, notifications: only after each contract is confirmed |
 | M8 · Production deployment | M2 | Production Compose, TLS, PgBouncer, pgBackRest, monitoring, restore drills |
 

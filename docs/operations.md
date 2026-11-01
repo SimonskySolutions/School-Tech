@@ -104,6 +104,12 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Dietary needs: parents use "Dietary needs" next to each child on the home page; School Life and principals see `/school-life/dietary`, unverified first, and School Life verifies there. The kitchen list shows "(not yet verified)" until then, and lists children whose declared allergen is on their lunch first.
 - Who read a child's dietary data: `SELECT occurred_at, actor_person_id, resource FROM audit.access_log WHERE subject_person_id = '<child>' ORDER BY occurred_at DESC` (needs `audit.read`, or the superuser).
 
+### Staff records (M6.1, ADR 0028)
+
+- Principals and school administrators keep their school's employment records at "Staff" (`/schools/[id]/staff`, linked on the home page); group administrators and the CEO reach every school's from "Across the group". Record the employer, position, contract, working time and dates; set an end when someone leaves. The page flags anyone with a role in the platform but no current employment, and the reverse: revoking access is a separate step on the school's set-up page.
+- Everyone with a role sees their own records at "My employment".
+- Do not keep payroll data here (national identification numbers, addresses, salaries, bank details): that stays with the payroll provider until its integration is agreed (M7).
+
 ### Admissions inquiries (M5.1, ADR 0026)
 
 - Every school website has "Ask about a place" (`/inquiry` on the website's host, e.g. `http://school-a.pythagoras.localhost:53000/inquiry`). Families send it without signing in; principals, school administrators and group administrators answer at `/admissions/inquiries` in the portal ("Admissions" on the home page): log calls, e-mails and meetings, and close each inquiry with its outcome.

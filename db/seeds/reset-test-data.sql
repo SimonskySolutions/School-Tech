@@ -41,6 +41,10 @@ DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_appl
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Employments the tests recorded; the seeded ones (ids dc000000-) as seeded.
+DELETE FROM staff.employment WHERE id::text NOT LIKE 'dc000000-%';
+UPDATE staff.employment SET end_date = CASE WHEN id = 'dc000000-0000-7000-8000-000000000010' THEN DATE '2027-08-31' END
+ WHERE id::text LIKE 'dc000000-%';
 -- Requests the tests recorded by erasing or exporting admissions records.
 DELETE FROM privacy.data_subject_request WHERE outcome_note LIKE 'Admissions % on request';
 -- Applications and intakes the tests made, and the seeded intake open again.

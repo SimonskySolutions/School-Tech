@@ -1159,3 +1159,51 @@ export interface AdmissionsPipeline {
       }[]
     | null;
 }
+
+/** Staff records (M6.1, ADR 0028): employments, separate from access. */
+export const CONTRACT_KINDS = ['permanent', 'fixed_term', 'temporary'] as const;
+export type ContractKind = (typeof CONTRACT_KINDS)[number];
+
+export interface Employment {
+  id: string;
+  employer: { id: string; name: string };
+  school: { id: SchoolId; name: string } | null;
+  position: string;
+  contractKind: ContractKind;
+  /** 1 is full time. */
+  workingTime: number;
+  startDate: string;
+  endDate: string | null;
+  /** Running today: started and not ended. */
+  current: boolean;
+  workEmail: string | null;
+  workPhone: string | null;
+}
+
+export interface SchoolStaff {
+  school: { id: SchoolId; name: string };
+  canManage: boolean;
+  /** Legal entities of the group, as possible employers. */
+  employers: { id: string; name: string }[];
+  people: {
+    personId: string;
+    name: string;
+    email: string | null;
+    roles: string[];
+    employments: Employment[];
+    /** A live role here but no current employment, or the reverse. */
+    mismatch: 'role_without_employment' | 'employment_without_role' | null;
+  }[];
+}
+
+export interface EmploymentRequestBody {
+  personId: string;
+  employerId: string;
+  position: string;
+  contractKind: ContractKind;
+  workingTime: number;
+  startDate: string;
+  endDate?: string;
+  workEmail?: string;
+  workPhone?: string;
+}

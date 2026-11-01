@@ -131,10 +131,26 @@ function Home({ view }: { view: HomeView }) {
                     </Link>
                   </>
                 ) : null}
+                {entry.staffHref ? (
+                  <>
+                    {' · '}
+                    <Link href={entry.staffHref} data-testid="staff-link">
+                      Staff
+                    </Link>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {view.showsMyEmployment ? (
+        <p>
+          <Link href="/staff/me" data-testid="my-employment-link">
+            My employment
+          </Link>
+        </p>
       ) : null}
 
       {view.groupRoles.length > 0 ? (
@@ -143,7 +159,20 @@ function Home({ view }: { view: HomeView }) {
           <p>{view.groupRoles.join(', ')}: all schools</p>
           <ul>
             {view.groupSchools.map((school) => (
-              <li key={school}>{school}</li>
+              <li key={school}>
+                {school}
+                {view.staffSchools.some((entry) => entry.name === school) ? (
+                  <>
+                    {' · '}
+                    <Link
+                      href={`/schools/${view.staffSchools.find((entry) => entry.name === school)!.id}/staff`}
+                      data-testid="group-staff-link"
+                    >
+                      Staff
+                    </Link>
+                  </>
+                ) : null}
+              </li>
             ))}
           </ul>
         </section>

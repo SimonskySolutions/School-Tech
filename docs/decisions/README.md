@@ -31,3 +31,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0025](0025-uniforms-and-stock.md) | Uniforms: variants, prices and stock | Accepted |
 | [0026](0026-admissions-and-prospective-families.md) | Admissions: prospective families' data | Accepted |
 | [0027](0027-intakes-applications-invitations.md) | Intakes, applications and invitations to apply | Accepted |
+| [0028](0028-staff-records.md) | Staff records separate from access | Accepted |
