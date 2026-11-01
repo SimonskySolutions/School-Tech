@@ -112,6 +112,15 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
 - Professional development (M6.3) is on the same page: each person's hours for the school year (September to August), attended and planned, and the school's total; "Year before" and "Year after" show other years. Staff add their own training on "My employment"; the principal can add it for them. Mark planned training attended once it has taken place, or cancelled; cancelled training is not counted. Training recorded wrongly cannot be edited: cancel it if it was planned and record it again.
 
+### Documents (M6.4)
+
+- Each school's documents are at "Documents" on the home page (`/schools/<id>/documents`): the school's own, its staff's and its pupils'. Principals, school administrators and the group administrator file them and add versions; every member of staff reads the school's documents marked "for all staff"; a member of staff finds their own under "My documents" on "My employment".
+- Files: at most 10 MB, PDF, PNG, JPEG, text, Word, Excel or OpenDocument. A new file is a new version; earlier versions stay. A document no longer in use is archived, not deleted. Do not file health or dietary information: it belongs in the dietary records.
+- "Download" makes a link for you alone that lasts two minutes and works once; every download is in the access log: `SELECT occurred_at, actor_person_id, resource, subject_person_id FROM audit.access_log WHERE action = 'download' ORDER BY occurred_at DESC` (needs `audit.read`).
+- The store (`garage`) has no host port and no gateway route. `storage-init` gives the node its role, imports the API's key and creates the bucket; it runs before the API and is safe to run again. Its status: `docker compose exec garage /garage status`; the bucket: `docker compose exec garage /garage bucket info pythagoras-documents`.
+- Test data: the reset removes the documents the tests filed; their objects stay in the development bucket under keys nothing refers to. `docker compose down -v` clears everything.
+- Objects nothing refers to (a commit that failed after its upload) are found by listing the bucket's keys and comparing them with `SELECT object_key FROM documents.version`; delete those keys only, never a key the table holds.
+
 ### Admissions inquiries (M5.1, ADR 0026)
 
 - Every school website has "Ask about a place" (`/inquiry` on the website's host, e.g. `http://school-a.pythagoras.localhost:53000/inquiry`). Families send it without signing in; principals, school administrators and group administrators answer at `/admissions/inquiries` in the portal ("Admissions" on the home page): log calls, e-mails and meetings, and close each inquiry with its outcome.
@@ -332,6 +341,7 @@ bash scripts/db-restore-check.sh
 - **Retention**: at least 30 days of point-in-time recovery; monthly logical dumps kept per the DPO-approved retention policy.
 - **Restore drills**: monthly automated restore to a scratch host with the row-count check; quarterly full disaster-recovery rehearsal with timings recorded.
 - **Targets to agree with the business**: recovery point objective (data that may be lost) and recovery time objective (time to restore service). With WAL archiving, the RPO is typically under 5 minutes.
+- **Documents**: the bytes live in the object store, not the database. Copy the bucket off-site (for example `rclone sync` to an encrypted bucket in the EU with object versioning) **before** each database backup, so every version the database knows has its object; restore the objects first, then the database. Garage also snapshots its metadata every 6 hours (`metadata_auto_snapshot_interval`).
 - **Redis**: no backup is needed for correctness. PostgreSQL's outbox is the source of truth; after losing Redis, the worker re-enqueues unpublished outbox events and expiry jobs from PostgreSQL. RDB snapshots and the AOF on the volume cover ordinary restarts.
 
 ## Upgrades
@@ -339,6 +349,7 @@ bash scripts/db-restore-check.sh
 - **PostgreSQL minor release** (quarterly): change the image tag and digest in `compose.yaml`, `docker compose up -d postgres`. No data change.
 - **PostgreSQL major release** (19 is due late 2026): wait for 19.1 or 19.2; test with `pg_upgrade --link` on a restored copy (the volume is mounted at `/var/lib/postgresql` for this), run the full test suite, then upgrade with a backup taken immediately before.
 - **Redis**: change the tag and digest, restart; run `scripts/redis-test.sh`.
+- **Garage**: v2.4.1 now; v2.5.0 (2026-10-24) rewrites the resync manager, so wait for a patch release, read its notes, then change the tag and digest, restart, and run the documents integration test. A major release needs its migration notes followed on a copy first.
 - **Rotating a password**: write the new value to the secret file, re-run `db/bootstrap/cluster.sql` as the superuser (it applies `ALTER ROLE … PASSWORD` from the secrets), restart the services that use that role. For Redis, restart the container: the ACL file is regenerated from the secrets on start.
 
 ## Production configuration differences
@@ -352,6 +363,7 @@ bash scripts/db-restore-check.sh
 | Secrets | Files in `secrets/` | Host secret store or the platform's secret manager; never in images or the repository |
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |
+| Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | Three Garage nodes with `replication_factor = 3`, or one node with frequent off-site copies; secrets mounted `0400` with `allow_world_readable_secrets` off; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
 
 ## Availability limits of the initial topology
 

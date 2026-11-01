@@ -110,6 +110,47 @@ services:
       retries: 20
       start_period: 5s
 
+  # Private document store (ADR 0029): Garage, reachable only on the Compose
+  # network (no host port, no gateway route); only the API holds a key.
+  garage:
+    <<: *hardening
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # Gives the node its role, imports the API's key and creates the bucket, once.
+  storage-init:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      STORAGE_ACCESS_KEY_ID: GKd0c500000000000000000001
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+    secrets:
+      - garage_admin_token
+      - storage_secret_access_key
+    volumes:
+      - ./infra/garage/init.mjs:/opt/pythagoras/storage-init.mjs:ro
+    command: ["node", "/opt/pythagoras/storage-init.mjs"]
+
   # Identity provider (ADR 0009). Development mode imports the development realm
   # with synthetic users on first start; production uses `start --optimized`
   # behind the gateway with a user-free realm (see docs/operations.md).
@@ -214,10 +255,16 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     environment:
       <<: *workspace-env
       NODE_ENV: development
       DB_PASSWORD_FILE: /run/secrets/pg_api_password
+      # Documents (ADR 0029): the store on the Compose network, one key, one bucket.
+      STORAGE_ENDPOINT: http://garage:3900
+      STORAGE_ACCESS_KEY_ID: GKd0c500000000000000000001
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
       # No Stripe keys in development: the development payment provider (ADR 0010).
       PAYMENT_PROVIDER: development
       DEV_PAYMENTS_SECRET_FILE: /run/secrets/dev_payments_secret
@@ -230,6 +277,7 @@ services:
       - dev_payments_secret
       - keycloak_provisioning_client_secret
       - cms_platform_api_key
+      - storage_secret_access_key
     volumes: *workspace-volumes
     ports:
       - "127.0.0.1:${API_HOST_PORT:-53001}:3000"
@@ -422,11 +470,19 @@ secrets:
     file: ./secrets/keycloak_provisioning_client_secret
   keycloak_cms_client_secret:
     file: ./secrets/keycloak_cms_client_secret
+  garage_rpc_secret:
+    file: ./secrets/garage_rpc_secret
+  garage_admin_token:
+    file: ./secrets/garage_admin_token
+  storage_secret_access_key:
+    file: ./secrets/storage_secret_access_key
 
 volumes:
   pg_data:
   pg_backups:
   redis_data:
+  garage_meta:
+  garage_data:
   ws_node_modules:
   ws_api_node_modules:
   ws_api_dist:

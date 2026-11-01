@@ -15,6 +15,7 @@ import {
   type MyStaffRecords,
   type SchoolInquiries,
   type SchoolStaff,
+  type SchoolDocuments,
   type SchoolLessons,
   type SchoolLifeDay,
   type SchoolRequests,
@@ -279,3 +280,40 @@ export const fetchSchoolStaff = (
 
 export const fetchMyEmployments = (apiUrl: string, accessToken: string) =>
   get<MyStaffRecords>(apiUrl, '/staff/me', accessToken);
+
+// Documents (M6.4, ADR 0029).
+
+export const fetchSchoolDocuments = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolDocuments>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/documents`, accessToken);
+
+/** The file as the request body, its name percent-encoded in X-File-Name. */
+export async function uploadDocumentFile(
+  apiUrl: string,
+  accessToken: string,
+  documentId: string,
+  file: { bytes: ArrayBuffer; type: string; name: string },
+): Promise<AdminResult<{ versionId: string; versionNo: number }>> {
+  const response = await fetch(new URL(`/documents/${encodeURIComponent(documentId)}/file`, apiUrl), {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': file.type,
+      'x-file-name': encodeURIComponent(file.name),
+    },
+    body: file.bytes,
+    cache: 'no-store',
+  });
+  const json = (await response.json().catch(() => ({}))) as { message?: unknown };
+  if (!response.ok) {
+    const message = typeof json.message === 'string' ? json.message : `the API answered ${response.status}`;
+    return { kind: 'refused', status: response.status, message };
+  }
+  return { kind: 'ok', value: json as { versionId: string; versionNo: number } };
+}
+
+/** Redeems a download link for the signed-in person: the API's response, streamed on as it is. */
+export const fetchDocumentFile = (apiUrl: string, accessToken: string, token: string) =>
+  fetch(new URL(`/documents/files/${encodeURIComponent(token)}`, apiUrl), {
+    headers: { authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });

@@ -1255,6 +1255,87 @@ export interface MyStaffRecords {
   /** All their training, the latest first. */
   training: Training[];
   schoolYear: string;
+  /** Documents attached to them as a member of staff (M6.4), the latest first. */
+  documents: DocumentSummary[];
+}
+
+// Private documents (M6.4, ADR 0029).
+
+export const DOCUMENT_CATEGORIES = [
+  'policy',
+  'plan',
+  'contract',
+  'certificate',
+  'report',
+  'letter',
+  'other',
+] as const;
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+export type DocumentAttachedTo = 'school' | 'staff' | 'student';
+
+/** The file types kept, with the extension each one is given. */
+export const DOCUMENT_TYPES = {
+  'application/pdf': 'pdf',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'text/plain': 'txt',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+} as const;
+export type DocumentContentType = keyof typeof DOCUMENT_TYPES;
+export const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+export interface DocumentVersion {
+  id: string;
+  versionNo: number;
+  fileName: string;
+  contentType: DocumentContentType;
+  sizeBytes: number;
+  uploadedAt: string;
+}
+
+export interface DocumentSummary {
+  id: string;
+  attachedTo: DocumentAttachedTo;
+  schoolId: SchoolId | null;
+  personId: string | null;
+  /** The member of staff's or student's name, when the reader may see it. */
+  personName: string | null;
+  title: string;
+  category: DocumentCategory;
+  forAllStaff: boolean;
+  createdAt: string;
+  archivedAt: string | null;
+  canManage: boolean;
+  /** The latest first. */
+  versions: DocumentVersion[];
+}
+
+export interface SchoolDocuments {
+  school: { id: SchoolId; name: string };
+  /** May file the school's and its students' documents. */
+  canManage: boolean;
+  documents: DocumentSummary[];
+  /** Whom documents may be filed for: staff working there now, students enrolled now. */
+  staff: { personId: string; name: string }[];
+  students: { personId: string; name: string }[];
+}
+
+export interface DocumentRequestBody {
+  attachedTo: DocumentAttachedTo;
+  schoolId?: string;
+  personId?: string;
+  title: string;
+  category: DocumentCategory;
+  forAllStaff?: boolean;
+}
+
+/** A single-use link for the person who asked, valid for two minutes. */
+export interface DownloadLink {
+  token: string;
+  expiresAt: string;
 }
 
 export interface SchoolStaff {

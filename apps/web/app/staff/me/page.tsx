@@ -13,7 +13,9 @@ import {
   TRAINING_STATUS_LABELS,
   workingTimeLabel,
 } from '../../../lib/staff';
+import { CATEGORY_LABELS, sizeLabel } from '../../../lib/documents';
 import { DevelopmentBanner } from '../../development-banner';
+import { DownloadButton } from '../../documents/download-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +36,14 @@ export default async function MyEmploymentPage({
   const records =
     result.kind === 'ok'
       ? result.value
-      : { employments: [], qualifications: [], recordCheck: null, training: [], schoolYear: '' };
+      : {
+          employments: [],
+          qualifications: [],
+          recordCheck: null,
+          training: [],
+          schoolYear: '',
+          documents: [],
+        };
   const action = '/staff/me/actions';
   const employments = records.employments;
   return (
@@ -147,6 +156,27 @@ export default async function MyEmploymentPage({
           </form>
         </details>
       ) : null}
+      <h2>My documents</h2>
+      {records.documents.length === 0 ? <p>None filed.</p> : null}
+      <ul data-testid="my-documents">
+        {records.documents.map((document) => {
+          const latest = document.versions[0];
+          return (
+            <li key={document.id}>
+              {`${CATEGORY_LABELS[document.category]}: ${document.title}`}
+              {document.archivedAt ? ' (archived)' : ''}
+              {latest ? (
+                <>
+                  {`, version ${latest.versionNo}, ${latest.fileName}, ${sizeLabel(latest.sizeBytes)}`}
+                  <DownloadButton versionId={latest.id} back="/staff/me" label="Download" />
+                </>
+              ) : (
+                ', no file yet'
+              )}
+            </li>
+          );
+        })}
+      </ul>
       <p>If something here is wrong, ask your school&apos;s office to correct it.</p>
     </main>
   );

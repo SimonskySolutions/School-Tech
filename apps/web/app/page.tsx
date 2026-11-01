@@ -139,6 +139,10 @@ function Home({ view }: { view: HomeView }) {
                     </Link>
                   </>
                 ) : null}
+                {' · '}
+                <Link href={entry.documentsHref} data-testid="documents-link">
+                  Documents
+                </Link>
               </li>
             ))}
           </ul>
@@ -169,6 +173,13 @@ function Home({ view }: { view: HomeView }) {
                       data-testid="group-staff-link"
                     >
                       Staff
+                    </Link>
+                    {' · '}
+                    <Link
+                      href={`/schools/${view.staffSchools.find((entry) => entry.name === school)!.id}/documents`}
+                      data-testid="group-documents-link"
+                    >
+                      Documents
                     </Link>
                   </>
                 ) : null}

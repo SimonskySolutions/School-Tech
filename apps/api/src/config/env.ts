@@ -77,6 +77,17 @@ const schema = z
       .string()
       .regex(/^([a-z0-9-]+\.)*(localhost|test)$/, 'must end in .localhost or .test')
       .default('pythagoras.localhost'),
+
+    // M6.4: private documents in an S3-compatible store (ADR 0029), reached only
+    // by the API. Without a key the document endpoints answer 503.
+    STORAGE_ENDPOINT: z.url().default('http://garage:3900'),
+    STORAGE_REGION: z.string().min(1).default('garage'),
+    STORAGE_BUCKET: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
+      .default('pythagoras-documents'),
+    STORAGE_ACCESS_KEY_ID: z.string().min(16).optional(),
+    STORAGE_SECRET_ACCESS_KEY: z.string().min(32).optional(),
   })
   .superRefine((env, ctx) => {
     const production = env.NODE_ENV === 'production';
@@ -87,6 +98,8 @@ const schema = z
         'OIDC_ISSUER',
         'OIDC_JWKS_URL',
         'OIDC_ALLOWED_CLIENTS',
+        'STORAGE_ACCESS_KEY_ID',
+        'STORAGE_SECRET_ACCESS_KEY',
       ] as const) {
         if (env[key] === undefined) {
           ctx.addIssue({ code: 'custom', path: [key], message: 'required in production' });
@@ -156,6 +169,7 @@ const FILE_BACKED = [
   'DEV_PAYMENTS_SECRET',
   'PROVISIONING_CLIENT_SECRET',
   'CMS_PLATFORM_API_KEY',
+  'STORAGE_SECRET_ACCESS_KEY',
 ] as const;
 
 /** Resolves NAME_FILE variables (Docker secrets) into NAME, then validates. */

@@ -81,6 +81,7 @@ describe('buildHome', () => {
         lessonsHref: '/schools/a/lessons',
         uniformsHref: '/schools/a/uniforms',
         staffHref: '/schools/a/staff',
+        documentsHref: '/schools/a/documents',
       },
     ]);
     expect(view.showsMyEmployment).toBe(true);

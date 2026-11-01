@@ -119,6 +119,12 @@ describe('recording and ending employments', () => {
     const { schoolYear, ...parentRecords } = (await get<MyStaffRecords>('/staff/me', tokens['anna.ivanova']!))
       .body;
     expect(schoolYear).toMatch(/^\d{4}\/\d{2}$/);
-    expect(parentRecords).toEqual({ employments: [], qualifications: [], recordCheck: null, training: [] });
+    expect(parentRecords).toEqual({
+      employments: [],
+      qualifications: [],
+      recordCheck: null,
+      training: [],
+      documents: [],
+    });
   });
 });

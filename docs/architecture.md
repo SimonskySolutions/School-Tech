@@ -16,7 +16,7 @@ One modular monolith, organised by business capability, deployed as a small set 
 | identity | Keycloak 26.8.1, own database and role, realm `pythagoras` (ADR 0009) | **Built** (development realm) |
 | postgres | System of record, RLS, outbox | **Built** |
 | redis | BullMQ queues only | **Built** |
-| object storage | Private documents and files (S3-compatible) | Planned |
+| object storage | Garage v2.4.1, S3-compatible, private: Compose network only, one key held by the API (ADR 0029) | **Built**: documents (M6.4) |
 | migrate | One-off migration job (dbmate) | **Built** |
 
 ## Data layer (built)

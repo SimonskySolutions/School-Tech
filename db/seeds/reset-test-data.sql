@@ -41,6 +41,11 @@ DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_appl
 DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
 DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Documents the tests filed (none are seeded). Their objects stay in the
+-- development bucket, under keys nothing refers to any more.
+DELETE FROM documents.download_link;
+DELETE FROM documents.version;
+DELETE FROM documents.document;
 -- Training the tests recorded; the seeded planned conference planned again.
 DELETE FROM staff.training WHERE id::text NOT LIKE 'df000000-%';
 UPDATE staff.training SET status = 'planned' WHERE id = 'df000000-0000-7000-8000-000000000102';

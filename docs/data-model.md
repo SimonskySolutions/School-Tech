@@ -58,6 +58,7 @@ Not yet modelled (later milestones): academics and timetables, lunch menus, trip
 | `privacy` | Processing purposes, retention policies, consent records, data subject requests |
 | `admissions` | Prospective families (ADR 0026, 0027): admissions privacy notices, inquiries from school websites and their contact log, intakes, applications |
 | `staff` | Staff records (ADR 0028): employments, separate from the role assignments that give access; qualifications; criminal record checks as dates only; professional development; no payroll data |
+| `documents` | Private documents (ADR 0029): documents attached to a school, a member of staff or a student, append-only versions whose bytes live in the object store, single-use download links stored as hashes |
 | `sensitive` | Dietary and health requirements (special-category data) |
 | `audit` | Change log (monthly partitions), access log |
 | `reporting` | Read models: `school_revenue_daily` (per school, local day and `payment_mode`: test-mode money is never live revenue), `outstanding_balance` |
@@ -98,6 +99,8 @@ Staff records (M6.1, ADR 0028): `staff.employment` says that a legal entity of t
 Qualifications and checks (M6.2): `staff.qualification` (kind, title, issuer, awarded and expiry dates, `withdrawn_at`) and `staff.record_check` (append-only: seen on, valid until, seen by; nothing about the certificate's content, Art. 10). Both belong to the person and are readable by them and by holders of `staff.read` at a school where they work now (`staff.may_for_person`); written only by `staff.manage` there through `staff.record_qualification`, `staff.withdraw_qualification` and `staff.record_check`.
 
 Professional development (M6.3): `staff.training` (title, provider, kind, first and last day, hours, status planned → attended or cancelled, and `school_year` generated from the first day by `staff.school_year`, September to August). Read like qualifications; written through `staff.record_training` and `staff.set_training_status` by the person themself or by `staff.manage` where they work now. Hours per school year count attended and planned training, never cancelled.
+
+Documents (M6.4): `documents.document` (attached to a school, a member of staff or a student, `for_all_staff` for school documents, `archived_at`), `documents.version` (append-only; file name, type, size, SHA-256 and `object_key` = `v1/<document id>/<version id>`, the object in the store's `pythagoras-documents` bucket) and `documents.download_link` (`token_hash`, person, expiry at most two minutes ahead, `used_at`; no grants: functions only). `documents.may(action, ...)` decides read and manage for every row; `documents.redeem_link` writes `audit.access_log` with `resource` `documents.version:<school|staff|student>`. The bytes are never in PostgreSQL, and no personal data is in the store's keys.
 
 Parent requests (M4.7): `people.family_request` (a child, the school, a kind, a subject, a status) with append-only `people.family_request_message`s. Writes only through `people.open_family_request`, `people.reply_to_family_request` and `people.set_family_request_status`; readable by the child's guardians and staff with `requests.manage` at that school. Subjects and messages may say why a child is absent or what they cannot eat, so the audit log records that they changed, never what they say.
 

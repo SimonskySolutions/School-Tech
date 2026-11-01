@@ -25,6 +25,11 @@ describe('architecture', () => {
     expect(importers.sort()).toEqual(['database/database.ts', 'database/system-database.ts']);
   });
 
+  it('only the object store module talks to the document store (ADR 0029)', () => {
+    const importers = files.filter((file) => /from ['"]@aws-sdk\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['documents/object-store.ts']);
+  });
+
   it('only the worker uses system database access', () => {
     const importers = files
       .filter((file) => file.text.includes('system-database') && !file.path.startsWith('database/'))

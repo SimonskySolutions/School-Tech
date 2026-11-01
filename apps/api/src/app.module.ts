@@ -3,6 +3,8 @@ import { AdmissionsController } from './admissions/applications.controller';
 import { InquiriesController, PublicInquiriesController } from './admissions/inquiries.controller';
 import { AuthModule } from './auth/auth.module';
 import { SchoolStaffController, StaffController } from './staff/staff.controller';
+import { DocumentsController, SchoolDocumentsController } from './documents/documents.controller';
+import { OBJECT_STORE, S3ObjectStore } from './documents/object-store';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
@@ -48,6 +50,8 @@ import { type Env } from './config/env';
     AdmissionsController,
     SchoolStaffController,
     StaffController,
+    SchoolDocumentsController,
+    DocumentsController,
     CatalogController,
     DietaryController,
     DietaryReviewController,
@@ -78,6 +82,20 @@ import { type Env } from './config/env';
       useFactory: (env: Env) =>
         env.CMS_PLATFORM_API_KEY
           ? new CmsWebsitesClient(env.CMS_INTERNAL_URL, env.CMS_PLATFORM_API_KEY)
+          : null,
+    },
+    {
+      provide: OBJECT_STORE,
+      inject: [ENV],
+      useFactory: (env: Env) =>
+        env.STORAGE_ACCESS_KEY_ID && env.STORAGE_SECRET_ACCESS_KEY
+          ? new S3ObjectStore({
+              endpoint: env.STORAGE_ENDPOINT,
+              region: env.STORAGE_REGION,
+              bucket: env.STORAGE_BUCKET,
+              accessKeyId: env.STORAGE_ACCESS_KEY_ID,
+              secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
+            })
           : null,
     },
   ],

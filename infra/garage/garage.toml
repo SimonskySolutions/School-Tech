@@ -1,0 +1,26 @@
+# Development object store (ADR 0029): one Garage node on the Compose network.
+# Production runs three nodes with replication_factor = 3, or one node with
+# frequent off-site copies (docs/operations.md).
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+metadata_auto_snapshot_interval = "6h"
+
+replication_factor = 1
+consistency_mode = "consistent"
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret_file = "/run/secrets/garage_rpc_secret"
+# Docker secrets bind-mounted from Windows or from CI's chmod a+r files look
+# world-readable; production mounts them 0400 and leaves this off.
+allow_world_readable_secrets = true
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token_file = "/run/secrets/garage_admin_token"
+metrics_token_file = "/run/secrets/garage_admin_token"

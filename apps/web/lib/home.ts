@@ -15,6 +15,8 @@ export interface HomeView {
     uniformsHref: string | null;
     /** The school's staff records, for roles with staff.read there (M6.1). */
     staffHref: string | null;
+    /** The school's documents (M6.4): every school role may read those for all staff. */
+    documentsHref: string;
   }[];
   groupRoles: string[];
   groupSchools: string[];
@@ -30,7 +32,7 @@ export interface HomeView {
   showsAdmissionsReport: boolean;
   /** Group roles that see School Life: the lessons page of each school. */
   lessonSchools: { id: string; name: string }[];
-  /** Group roles that read staff records: each school's staff page. */
+  /** Group roles that read staff records: each school's staff and documents pages. */
   staffSchools: { id: string; name: string }[];
   /** Anyone with a role sees their own employment records. */
   showsMyEmployment: boolean;
@@ -105,6 +107,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       lessonsHref: `/schools/${role.school!.id}/lessons`,
       uniformsHref: `/schools/${role.school!.id}/uniforms`,
       staffHref: STAFF_ROLES.has(role.code) ? `/schools/${role.school!.id}/staff` : null,
+      documentsHref: `/schools/${role.school!.id}/documents`,
     }));
 
   return {

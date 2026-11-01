@@ -15,6 +15,7 @@ import {
   type TrainingRequestBody,
   type TrainingStatus,
 } from '@pythagoras/shared';
+import { myDocuments } from '../documents/documents.repository';
 import { type PersonTransaction } from '../database/database';
 
 // Staff records (M6.1, ADR 0028). The database functions decide who may
@@ -334,6 +335,7 @@ export async function myRecords(tx: PersonTransaction): Promise<MyStaffRecords> 
     recordCheck: me?.id ? (held.checks.get(me.id) ?? null) : null,
     training: training.map(trainingOf),
     schoolYear: await currentSchoolYear(tx),
+    documents: await myDocuments(tx),
   };
 }
 

@@ -23,6 +23,9 @@ check "the CMS has its own host (public website list)" test "$(status "http://cm
 check "school websites reach the web app"              test "$(status "http://school-c.pythagoras.localhost:$PORT/")" = "200"
 check "the API answers its health check publicly"      test "$(status "http://api.pythagoras.localhost:$PORT/health/ready")" = "200"
 check "the API's other routes are not public"          test "$(status "http://api.pythagoras.localhost:$PORT/me")" = "404"
+check "document files are not public on the API host"  test "$(status "http://api.pythagoras.localhost:$PORT/documents/files/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")" = "404"
+check "the object store has no host of its own"        bash -c "! curl -s http://garage.pythagoras.localhost:$PORT/pythagoras-documents/ | grep -q '<Code>'"
+check "the object store has no port on the host"       bash -c "! docker compose port garage 3900 >/dev/null 2>&1"
 # Provider webhooks reach the API (which refuses this unsigned one), as does the
 # development provider's checkout page (an unknown token is the API's 404 page).
 check "provider webhooks reach the API"                test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "http://api.pythagoras.localhost:$PORT/webhooks/development")" = "400"
