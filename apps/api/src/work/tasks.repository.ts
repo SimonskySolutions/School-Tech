@@ -161,7 +161,10 @@ export async function myTasks(tx: PersonTransaction): Promise<MyTasks> {
   return {
     assigned: rows.filter(mine),
     setByMe: rows.filter((task) => !mine(task) && task.createdBy.personId === me?.id),
-    overdue: rows.filter((task) => task.overdue && !mine(task) && task.createdBy.personId !== me?.id),
+    // For those who manage them (leaders, project owners), not colleagues in a project.
+    overdue: rows.filter(
+      (task) => task.overdue && task.mayManage && !mine(task) && task.createdBy.personId !== me?.id,
+    ),
     projects: projects.map(projectOf),
     assignable: await assignablePlaces(tx),
     projectPlaces: places.map((place) => ({ schoolId: place.school_id, schoolName: place.school_name })),

@@ -33,6 +33,9 @@ describe('tasks and projects', () => {
       mayManage: false,
     });
     expect(kitchen.assigned.some((task) => task.title === 'Book the stage (synthetic)')).toBe(false);
+    expect(kitchen.overdue).toEqual([]);
+    const fair = (await get<ProjectView>(`/projects/${FAIR}`, tokens['kitchen.a']!)).body;
+    expect(fair.tasks.map((task) => task.title)).toContain('Book the stage (synthetic)');
     expect(kitchen.projects.find((project) => project.id === FAIR)).toMatchObject({ mayManage: false });
     expect(kitchen.assignable.flatMap((place) => place.people.map((person) => person.personId))).toEqual([
       KITCHEN_A,

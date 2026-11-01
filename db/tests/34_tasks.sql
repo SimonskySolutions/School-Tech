@@ -43,8 +43,9 @@ INSERT INTO k SELECT 'review', work.create_task(NULL, pg_temp.id('group'), 'Revi
 
 -- Seen by those involved and the school's leaders.
 RESET ROLE; SELECT test.as_person(:KITA);
-SELECT test.ok((SELECT array_agg(title ORDER BY title) FROM work.task) = ARRAY['Order aprons (synthetic)', 'Plan the fair menu (synthetic)'],
-  'the kitchen sees its own tasks, not the principal''s in the same project');
+SELECT test.ok((SELECT array_agg(title ORDER BY title) FROM work.task)
+               = ARRAY['Book the stage (synthetic)', 'Order aprons (synthetic)', 'Plan the fair menu (synthetic)'],
+  'the kitchen sees its own tasks and those of the project it is in (criterion 6)');
 SELECT test.ok((SELECT array_agg(name) FROM work.project) = ARRAY['Spring fair (synthetic)'], 'and the project it has a task in');
 SELECT test.ok((SELECT owner_name = 'Petar Principal' AND open_tasks = 2 AND NOT may_manage FROM work.visible_projects()),
   'with its owner and how far along it is, to look at only');

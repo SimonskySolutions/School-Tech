@@ -115,7 +115,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 ### Tasks and projects (M6.7)
 
 - "Tasks" on the home page lists each person's own tasks (overdue ones marked), those they set for others and, for principals, school administrators, the group administrator and the CEO, the overdue tasks of others at their schools. Anyone who works in the group adds tasks for themselves; leaders give tasks to anyone who works at their school now (with a role or a current employment there).
-- Leaders start a project for their school (or, for group roles, for the group) and add its tasks on the project's page. A project closes once nothing in it is to do; cancel what will not be done first.
+- Leaders start a project for their school (or, for group roles, for the group) and add its tasks on the project's page. Everyone with a task in a project sees all its tasks there. A project closes once nothing in it is to do; cancel what will not be done first.
 - The person given a task starts it, puts it back, finishes or reopens it; whoever set it (or the project's owner, or the school's leaders) changes, reassigns or cancels it. Finished tasks are not changed: reopen one to work on it again.
 - Nobody is reminded of due or overdue tasks yet (M7): look at "Tasks".
 
