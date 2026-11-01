@@ -34,3 +34,4 @@ Checked on 2026-11-01 for development and sending:
 - SMS and Viber are not built; they would be further transports behind the same queue once a provider is chosen.
 - Keycloak's own e-mails (setting a password) are configured in Keycloak with the same SMTP settings when production is set up; they do not go through this queue.
 - Messages are in English, as the rest of the interface for now.
+- M7.2 adds messages for approvals, tasks, replies to families, consent asked again and invitations to apply. Each is noted by a trigger as an outbox event with identifiers only, and the worker asks one `notify.on_*` function who is told, so who receives what is decided in the database next to the access rules it follows.

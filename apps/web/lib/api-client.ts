@@ -18,6 +18,7 @@ import {
   type SchoolDocuments,
   type MyApprovals,
   type MyTasks,
+  type MyNotifications,
   type ProjectView,
   type ConsentPurposes,
   type SchoolConsents,
@@ -345,3 +346,8 @@ export const fetchMyTasks = (apiUrl: string, accessToken: string) =>
 
 export const fetchProject = (apiUrl: string, accessToken: string, projectId: string) =>
   get<ProjectView>(apiUrl, `/projects/${encodeURIComponent(projectId)}`, accessToken);
+
+// Notifications (M7.2, ADR 0031).
+
+export const fetchMyNotifications = (apiUrl: string, accessToken: string) =>
+  get<MyNotifications>(apiUrl, '/notifications', accessToken);

@@ -11,6 +11,7 @@ import { PaymentEventProcessor } from './payment-confirmation';
 import { smtpTransport } from './mail-transport';
 import { NotificationSender } from './notification-sender';
 import { orderPaidNotice } from './order-paid-notice';
+import { MESSAGE_EVENTS, messageEventHandler } from './message-events';
 import { loadWorkerEnv } from './worker-env';
 
 // Background worker (ADR 0002, 0004). Same package and image as the API, its
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
   const dispatcher = new EventDispatcher()
     .on('commerce.order_line.cancelled', cancellationCreditHandler(database))
     .on('commerce.order.paid', orderPaidNotice(database));
+  for (const eventType of MESSAGE_EVENTS) dispatcher.on(eventType, messageEventHandler(database, eventType));
   const eventWorker = new Worker<OutboxJobData>('events', (job) => dispatcher.dispatch(job.data), {
     connection: connect(),
     prefix,

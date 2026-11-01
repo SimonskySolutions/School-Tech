@@ -55,6 +55,9 @@ function Home({ view }: { view: HomeView }) {
       <DevelopmentBanner />
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h1>{view.greeting}</h1>
+        <Link href="/notifications" data-testid="notifications-link">
+          Notifications
+        </Link>
         <form method="post" action="/auth/sign-out">
           <button type="submit" data-testid="sign-out">
             Sign out

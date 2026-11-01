@@ -1601,3 +1601,26 @@ export interface ProjectRequestBody {
   description?: string;
   schoolId?: string;
 }
+
+// Notifications by e-mail (M7.1, M7.2, ADR 0031).
+
+export type MessageStatus = 'queued' | 'sending' | 'sent' | 'skipped' | 'failed';
+
+export interface MyNotifications {
+  /** Every kind of message, and whether this person receives it. */
+  kinds: { code: string; description: string; essential: boolean; enabled: boolean }[];
+  /** The latest messages for this person, newest first. */
+  recent: {
+    id: string;
+    kind: string;
+    description: string;
+    status: MessageStatus;
+    createdAt: string;
+    sentAt: string | null;
+  }[];
+}
+
+export interface PreferenceRequestBody {
+  kind: string;
+  enabled: boolean;
+}
