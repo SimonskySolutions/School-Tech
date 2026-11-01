@@ -1,6 +1,12 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { describeUpload, documentSchema, readUpload } from './documents.controller';
+import {
+  approvalSchema,
+  decisionSchema,
+  describeUpload,
+  documentSchema,
+  readUpload,
+} from './documents.controller';
 import { DocumentRejected } from './documents.repository';
 import { cleanFileName, contentDisposition, looksLike, newToken, TOKEN, tokenHash } from './files';
 
@@ -123,5 +129,25 @@ describe('documents', () => {
     expect(newToken()).not.toBe(token);
     expect(tokenHash(token)).toHaveLength(32);
     expect(tokenHash(token).toString('base64url')).not.toContain(token);
+  });
+});
+
+describe('approvals', () => {
+  it('name one to four approvers by role', () => {
+    expect(approvalSchema.safeParse({ steps: ['principal', 'group_ceo'] }).success).toBe(true);
+    expect(approvalSchema.safeParse({ steps: [] }).success).toBe(false);
+    expect(approvalSchema.safeParse({ steps: ['teacher'] }).success).toBe(false);
+    expect(
+      approvalSchema.safeParse({
+        steps: ['principal', 'school_admin', 'group_admin', 'group_ceo', 'principal'],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('are rejected only with a reason', () => {
+    expect(decisionSchema.safeParse({ decision: 'approved' }).success).toBe(true);
+    expect(decisionSchema.safeParse({ decision: 'rejected', note: '  ' }).success).toBe(false);
+    expect(decisionSchema.safeParse({ decision: 'rejected', note: 'Out of date' }).success).toBe(true);
+    expect(decisionSchema.safeParse({ decision: 'maybe' }).success).toBe(false);
   });
 });

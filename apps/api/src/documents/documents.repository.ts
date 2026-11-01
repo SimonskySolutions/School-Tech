@@ -9,6 +9,7 @@ import {
   type SchoolId,
 } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
+import { approvalsOf } from './approvals.repository';
 
 // Documents and their versions (M6.4, ADR 0029). Row-level security decides
 // what the signed-in person sees; every write goes through the documents.*
@@ -28,6 +29,7 @@ const DATABASE_REFUSALS: Record<string, [DocumentRejected['status'], string]> = 
   '42501': [403, 'not permitted'],
   '23514': [422, 'a value is not allowed here'],
   PY001: [409, 'not possible in its present state'],
+  '23505': [409, 'this version is already waiting for approval or approved'],
 };
 
 export async function refusalsAsDocuments<T>(work: () => Promise<T>): Promise<T> {
@@ -79,6 +81,10 @@ async function withVersions(tx: PersonTransaction, rows: DocumentRow[]): Promise
        FROM documents.version WHERE document_id = ANY($1::uuid[]) ORDER BY version_no DESC`,
     [rows.map((row) => row.id)],
   );
+  const approvals = await approvalsOf(
+    tx,
+    versions.map((version) => version.id),
+  );
   const byDocument = new Map<string, DocumentVersion[]>();
   for (const version of versions) {
     const list = byDocument.get(version.document_id) ?? [];
@@ -89,6 +95,7 @@ async function withVersions(tx: PersonTransaction, rows: DocumentRow[]): Promise
       contentType: version.content_type,
       sizeBytes: Number(version.size_bytes),
       uploadedAt: version.uploaded_at.toISOString(),
+      approval: approvals.get(version.id) ?? null,
     });
     byDocument.set(version.document_id, list);
   }

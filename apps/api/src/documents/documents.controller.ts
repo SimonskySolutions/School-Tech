@@ -21,6 +21,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  APPROVER_ROLES,
+  type MyApprovals,
   DOCUMENT_CATEGORIES,
   DOCUMENT_MAX_BYTES,
   type DownloadLink,
@@ -51,6 +53,7 @@ import {
   tokenHash,
 } from './files';
 import { OBJECT_STORE, type ObjectStore } from './object-store';
+import { decideStep, myApprovals, requestApproval, withdrawApproval } from './approvals.repository';
 
 export const documentSchema = z
   .strictObject({
@@ -69,6 +72,13 @@ export const documentSchema = z
   })
   .refine((body) => !body.forAllStaff || body.attachedTo === 'school', {
     message: 'only a school document is for all staff',
+  });
+
+export const approvalSchema = z.strictObject({ steps: z.array(z.enum(APPROVER_ROLES)).min(1).max(4) });
+export const decisionSchema = z
+  .strictObject({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).optional() })
+  .refine((body) => body.decision === 'approved' || (body.note ?? '') !== '', {
+    message: 'say why it is rejected',
   });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -221,6 +231,44 @@ export class DocumentsController {
       token,
       expiresAt: (await issueLink(tx, versionId, tokenHash(token))).toISOString(),
     }));
+  }
+
+  /** Asks for the version to be approved by these roles, in this order (M6.5). */
+  @Post('versions/:versionId/approvals')
+  @HttpCode(201)
+  requestApproval(
+    @CurrentPrincipal() principal: Principal,
+    @Param('versionId', new ParseUUIDPipe()) versionId: string,
+    @Body() body: unknown,
+  ) {
+    const { steps } = parse(approvalSchema, body);
+    return run(this.database, principal, (tx) => requestApproval(tx, versionId, steps));
+  }
+
+  @Post('approvals/:requestId/withdraw')
+  @HttpCode(200)
+  withdrawApproval(
+    @CurrentPrincipal() principal: Principal,
+    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+  ) {
+    return run(this.database, principal, (tx) => withdrawApproval(tx, requestId));
+  }
+
+  @Post('approval-steps/:stepId/decision')
+  @HttpCode(200)
+  decide(
+    @CurrentPrincipal() principal: Principal,
+    @Param('stepId', new ParseUUIDPipe()) stepId: string,
+    @Body() body: unknown,
+  ) {
+    const { decision, note } = parse(decisionSchema, body);
+    return run(this.database, principal, (tx) => decideStep(tx, stepId, decision, note || null));
+  }
+
+  /** The approval steps waiting for the signed-in person. */
+  @Get('approvals/waiting')
+  waiting(@CurrentPrincipal() principal: Principal): Promise<MyApprovals> {
+    return run(this.database, principal, (tx) => myApprovals(tx));
   }
 
   /** Redeems a link: the file, as an attachment, once. */

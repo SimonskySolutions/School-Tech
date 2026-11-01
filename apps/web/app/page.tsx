@@ -156,6 +156,13 @@ function Home({ view }: { view: HomeView }) {
           </Link>
         </p>
       ) : null}
+      {view.showsApprovals ? (
+        <p>
+          <Link href="/documents/approvals" data-testid="approvals-link">
+            Approvals
+          </Link>
+        </p>
+      ) : null}
 
       {view.groupRoles.length > 0 ? (
         <section aria-labelledby="group-roles" data-testid="group-roles">

@@ -1294,6 +1294,72 @@ export interface DocumentVersion {
   contentType: DocumentContentType;
   sizeBytes: number;
   uploadedAt: string;
+  /** The latest approval request for this version (M6.5), or none. */
+  approval: Approval | null;
+}
+
+// Approvals of document versions (M6.5, ADR 0029).
+
+export const APPROVER_ROLES = ['principal', 'school_admin', 'group_admin', 'group_ceo'] as const;
+export type ApproverRole = (typeof APPROVER_ROLES)[number];
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+export type ApprovalStepStatus = 'pending' | 'approved' | 'rejected' | 'skipped';
+
+export interface ApprovalStep {
+  id: string;
+  stepNo: number;
+  role: ApproverRole;
+  status: ApprovalStepStatus;
+  /** Who decided, when the reader may see their name. */
+  decidedBy: string | null;
+  decidedAt: string | null;
+  note: string | null;
+  /** The signed-in person may decide this step now. */
+  mayDecide: boolean;
+}
+
+export interface Approval {
+  id: string;
+  status: ApprovalStatus;
+  requestedAt: string;
+  decidedAt: string | null;
+  /** In order. */
+  steps: ApprovalStep[];
+}
+
+export interface ApprovalRequestBody {
+  steps: ApproverRole[];
+}
+
+export interface ApprovalDecisionBody {
+  decision: 'approved' | 'rejected';
+  /** Required when rejecting. */
+  note?: string;
+}
+
+/** A step waiting for the signed-in person, with what it is about. */
+export interface WaitingApproval {
+  stepId: string;
+  stepNo: number;
+  role: ApproverRole;
+  requestId: string;
+  requestedAt: string;
+  documentId: string;
+  title: string;
+  category: DocumentCategory;
+  attachedTo: DocumentAttachedTo;
+  schoolId: SchoolId | null;
+  schoolName: string | null;
+  personName: string | null;
+  versionId: string;
+  versionNo: number;
+  fileName: string;
+  /** Every step of the request, in order. */
+  steps: ApprovalStep[];
+}
+
+export interface MyApprovals {
+  waiting: WaitingApproval[];
 }
 
 export interface DocumentSummary {

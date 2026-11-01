@@ -16,6 +16,7 @@ import {
   type SchoolInquiries,
   type SchoolStaff,
   type SchoolDocuments,
+  type MyApprovals,
   type SchoolLessons,
   type SchoolLifeDay,
   type SchoolRequests,
@@ -310,6 +311,9 @@ export async function uploadDocumentFile(
   }
   return { kind: 'ok', value: json as { versionId: string; versionNo: number } };
 }
+
+export const fetchMyApprovals = (apiUrl: string, accessToken: string) =>
+  get<MyApprovals>(apiUrl, '/documents/approvals/waiting', accessToken);
 
 /** Redeems a download link for the signed-in person: the API's response, streamed on as it is. */
 export const fetchDocumentFile = (apiUrl: string, accessToken: string, token: string) =>

@@ -36,6 +36,8 @@ export interface HomeView {
   staffSchools: { id: string; name: string }[];
   /** Anyone with a role sees their own employment records. */
   showsMyEmployment: boolean;
+  /** Roles that approve document versions (M6.5); the API decides which steps are theirs. */
+  showsApprovals: boolean;
   /** Revenue and balances per school; the API decides which schools. */
   showsReports: boolean;
   /** Setting up schools (org.manage); the API enforces it. */
@@ -64,6 +66,9 @@ const REQUEST_ROLES = new Set(['school_life_coordinator', 'principal', 'school_a
 
 // Roles that hold staff.read (school roles at their school, group roles everywhere); a hint for links only.
 const STAFF_ROLES = new Set(['principal', 'school_admin', 'group_admin', 'group_ceo']);
+
+// Roles that may be asked to approve a document version (documents.approval_step).
+const APPROVER_ROLES = new Set(['principal', 'school_admin', 'group_admin', 'group_ceo']);
 
 // Roles that hold admissions.manage; a hint for links only.
 const ADMISSIONS_ROLES = new Set(['principal', 'school_admin', 'group_admin']);
@@ -128,6 +133,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],
     showsMyEmployment: me.roles.length > 0,
+    showsApprovals: me.roles.some((role) => APPROVER_ROLES.has(role.code)),
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),
     showsSchoolSetup: me.roles.some((role) => SETUP_ROLES.has(role.code)),
     hasNothing: children.length === 0 && schoolRoles.length === 0 && groupRoles.length === 0,

@@ -1,4 +1,9 @@
 import {
+  type Approval,
+  type ApprovalDecisionBody,
+  type ApprovalStatus,
+  type ApproverRole,
+  APPROVER_ROLES,
   type DocumentAttachedTo,
   type DocumentCategory,
   type DocumentContentType,
@@ -50,9 +55,69 @@ export const ACCEPT = [...new Set([...Object.values(DOCUMENT_TYPES), 'jpeg'])]
 
 export const DOCUMENTS_DONE: Record<string, string> = {
   filed: 'The document is filed.',
-  versioned: 'The new version is kept; earlier ones stay as they were.',
+  versioned: 'The new version is kept; earlier ones stay as they were. It needs its own approval.',
   archived: 'The document is archived. It stays on record.',
+  asked: 'Approval is asked for. Each approver sees it under "Approvals" in turn.',
+  withdrawn: 'The request for approval is withdrawn.',
+  pending: 'Your approval is recorded. The next step is waiting.',
+  approved: 'Approved. This version stays approved; a new version needs approval again.',
+  rejected: 'Rejected, with your reason. A new version can be put up for approval.',
 };
+
+export const APPROVER_LABELS: Record<ApproverRole, string> = {
+  principal: 'the principal',
+  school_admin: 'the school administrator',
+  group_admin: 'the group administrator',
+  group_ceo: 'the CEO',
+};
+
+export const APPROVAL_LABELS: Record<ApprovalStatus, string> = {
+  pending: 'waiting for approval',
+  approved: 'approved',
+  rejected: 'rejected',
+  withdrawn: 'request withdrawn',
+};
+
+/** "approved: the principal (Petar Nikolov, 2026-11-01), then the CEO (waiting)". */
+export function approvalLabel(approval: Approval): string {
+  const steps = approval.steps.map((step) => {
+    const who = APPROVER_LABELS[step.role];
+    if (step.status === 'pending') return `${who} (waiting)`;
+    if (step.status === 'skipped') return `${who} (not needed)`;
+    const decided = [
+      step.decidedBy ? `${step.status} by ${step.decidedBy}` : step.status,
+      step.decidedAt?.slice(0, 10),
+    ]
+      .filter(Boolean)
+      .join(', ');
+    return `${who} (${decided}${step.note ? `: ${step.note}` : ''})`;
+  });
+  return `${APPROVAL_LABELS[approval.status]}: ${steps.join(', then ')}`;
+}
+
+/** Who may be asked: school roles only for a school's or a pupil's document. */
+export const approversFor = (attachedTo: DocumentAttachedTo): ApproverRole[] =>
+  attachedTo === 'staff' ? ['group_admin', 'group_ceo'] : [...APPROVER_ROLES];
+
+/** The approvers chosen, in order (step_1 to step_4, empty ones left out). */
+export function approvalSteps(form: Form): ApproverRole[] {
+  const chosen = [1, 2, 3, 4].map((no) => text(form, `step_${no}`)).filter(Boolean);
+  if (chosen.length === 0) throw new FormProblem('choose who approves first');
+  if (chosen.some((role) => !(APPROVER_ROLES as readonly string[]).includes(role))) {
+    throw new FormProblem('choose the approvers from the list');
+  }
+  if (new Set(chosen).size !== chosen.length) throw new FormProblem('each approver once');
+  return chosen as ApproverRole[];
+}
+
+export function decisionBody(form: Form): ApprovalDecisionBody {
+  const decision = text(form, 'decision');
+  const note = text(form, 'note').slice(0, 500);
+  if (decision === 'approved') return note ? { decision, note } : { decision };
+  if (decision !== 'rejected') throw new FormProblem('approve or reject');
+  if (!note) throw new FormProblem('say why it is rejected');
+  return { decision, note };
+}
 
 export function sizeLabel(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

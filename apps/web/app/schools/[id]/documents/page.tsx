@@ -12,6 +12,7 @@ import {
 } from '../../../../lib/documents';
 import { currentSession, runtime } from '../../../../lib/server';
 import { DevelopmentBanner } from '../../../development-banner';
+import { ApprovalControls } from '../../../documents/approval-controls';
 import { DownloadButton } from '../../../documents/download-button';
 
 export const dynamic = 'force-dynamic';
@@ -47,13 +48,23 @@ function DocumentEntry({
       <strong>{document.title}</strong>
       {` · ${about.join(' · ')}`}
       {latest ? <DownloadButton versionId={latest.id} back={back} label="Download" /> : null}
+      {latest ? (
+        <ApprovalControls
+          approval={latest.approval}
+          versionId={latest.id}
+          attachedTo={document.attachedTo}
+          canAsk={document.canManage && !document.archivedAt}
+          canManage={document.canManage}
+          back={back}
+        />
+      ) : null}
       {earlier.length > 0 ? (
         <details>
           <summary>Earlier versions</summary>
           <ul>
             {earlier.map((version) => (
               <li key={version.id}>
-                {`Version ${version.versionNo}: ${version.fileName}, ${sizeLabel(version.sizeBytes)}, ${version.uploadedAt.slice(0, 10)}`}
+                {`Version ${version.versionNo}: ${version.fileName}, ${sizeLabel(version.sizeBytes)}, ${version.uploadedAt.slice(0, 10)}${version.approval?.status === 'approved' ? ', approved' : ''}`}
                 <DownloadButton versionId={version.id} back={back} label="Download" />
               </li>
             ))}
