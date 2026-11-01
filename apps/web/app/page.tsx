@@ -89,6 +89,10 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={`/children/${child.id}/requests`} data-testid="child-requests-link">
                   Messages to the school
                 </Link>
+                {' · '}
+                <Link href={`/children/${child.id}/consents`} data-testid="child-consents-link">
+                  Consents
+                </Link>
               </li>
             ))}
           </ul>
@@ -143,6 +147,14 @@ function Home({ view }: { view: HomeView }) {
                 <Link href={entry.documentsHref} data-testid="documents-link">
                   Documents
                 </Link>
+                {entry.consentsHref ? (
+                  <>
+                    {' · '}
+                    <Link href={entry.consentsHref} data-testid="consents-link">
+                      Photo consents
+                    </Link>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -153,6 +165,13 @@ function Home({ view }: { view: HomeView }) {
         <p>
           <Link href="/staff/me" data-testid="my-employment-link">
             My employment
+          </Link>
+        </p>
+      ) : null}
+      {view.showsConsentWording ? (
+        <p>
+          <Link href="/privacy/consents" data-testid="consent-wording-link">
+            Consent wording
           </Link>
         </p>
       ) : null}
@@ -187,6 +206,17 @@ function Home({ view }: { view: HomeView }) {
                       data-testid="group-documents-link"
                     >
                       Documents
+                    </Link>
+                  </>
+                ) : null}
+                {view.consentSchools.some((entry) => entry.name === school) ? (
+                  <>
+                    {' · '}
+                    <Link
+                      href={`/schools/${view.consentSchools.find((entry) => entry.name === school)!.id}/consents`}
+                      data-testid="group-consents-link"
+                    >
+                      Photo consents
                     </Link>
                   </>
                 ) : null}

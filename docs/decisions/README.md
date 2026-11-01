@@ -33,3 +33,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0027](0027-intakes-applications-invitations.md) | Intakes, applications and invitations to apply | Accepted |
 | [0028](0028-staff-records.md) | Staff records separate from access | Accepted |
 | [0029](0029-private-document-store.md) | Private document store: Garage, links for one person | Accepted |
+| [0030](0030-consent-from-families.md) | Consent from families: wording versions, asking again | Accepted |

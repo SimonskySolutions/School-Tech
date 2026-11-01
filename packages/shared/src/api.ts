@@ -1442,3 +1442,72 @@ export interface EmploymentRequestBody {
   workEmail?: string;
   workPhone?: string;
 }
+
+// Consent from families (M6.6, ADR 0030).
+
+/** Whether a child's consent for a purpose counts: given, not given, or asked again after new wording. */
+export type ConsentState = 'given' | 'none' | 'renewal';
+
+export interface ConsentWording {
+  id: string;
+  version: number;
+  text: string;
+  publishedAt: string;
+}
+
+export interface ChildConsent {
+  purposeId: string;
+  code: string;
+  name: string;
+  description: string;
+  /** The wording a guardian agrees to now. */
+  wording: ConsentWording;
+  state: ConsentState;
+  /** The consent in force (or asked again), when there is one. */
+  givenAt: string | null;
+  givenBy: string | null;
+  givenForVersion: number | null;
+}
+
+export interface StudentConsents {
+  student: { id: string; givenName: string; familyName: string };
+  /** This guardian may give and withdraw consent for the child. */
+  mayConsent: boolean;
+  consents: ChildConsent[];
+}
+
+export interface ConsentRequestBody {
+  purposeId: string;
+  wordingId: string;
+}
+
+/** For the school's staff: who may appear, per purpose; never who gave it or when. */
+export interface SchoolConsents {
+  school: { id: SchoolId; name: string };
+  purposes: { purposeId: string; code: string; name: string }[];
+  pupils: {
+    personId: string;
+    name: string;
+    classLabel: string | null;
+    states: Record<string, ConsentState>;
+  }[];
+}
+
+/** For the data protection officer: the purposes families are asked about, with every wording. */
+export interface ConsentPurposes {
+  purposes: {
+    purposeId: string;
+    code: string;
+    name: string;
+    description: string;
+    status: 'draft' | 'approved' | 'retired';
+    wordings: { id: string; version: number; text: string; renewalRequired: boolean; publishedAt: string }[];
+    given: number;
+  }[];
+}
+
+export interface WordingRequestBody {
+  wording: string;
+  /** A change of substance: earlier consents stop counting and families are asked again. */
+  renewalRequired: boolean;
+}

@@ -469,6 +469,39 @@ INSERT INTO staff.training (id, group_id, person_id, title, provider, kind, star
    NULL, 'workshop', current_date - 25, current_date - 25, 4, 'attended', 'c1000000-0000-7000-8000-000000000006')
 ON CONFLICT (id) DO NOTHING;
 
+-- Consent from families (M6.6, ADR 0030): three purposes approved by the data
+-- protection officer with synthetic wording to be replaced, and Anna's consent
+-- for Mila's photos on the website.
+INSERT INTO privacy.processing_purpose (id, group_id, code, name, description, lawful_basis, status, approved_by_person_id, approved_at) VALUES
+  ('e2000000-0000-7000-8000-000000000001', :G, 'photos.website', 'Photos on the school website',
+   'Photos of pupils at school events on the school''s website and social media pages', 'consent', 'approved',
+   'c1000000-0000-7000-8000-000000000005', now()),
+  ('e2000000-0000-7000-8000-000000000002', :G, 'photos.print', 'Photos in printed school materials',
+   'Photos of pupils in the school newsletter, yearbook and displays', 'consent', 'approved',
+   'c1000000-0000-7000-8000-000000000005', now()),
+  ('e2000000-0000-7000-8000-000000000003', :G, 'recordings.events', 'Recordings of performances',
+   'Video recordings of school performances shared with the families of the class', 'consent', 'approved',
+   'c1000000-0000-7000-8000-000000000005', now())
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO privacy.consent_wording (id, group_id, purpose_id, version, wording, published_by_person_id) VALUES
+  ('e2000000-0000-7000-8000-000000000101', :G, 'e2000000-0000-7000-8000-000000000001', 1,
+   'The school may publish photos of your child taken at school events on its website and social media pages. '
+   || 'We never publish your child''s full name with a photo. You can withdraw this consent at any time (synthetic wording).',
+   'c1000000-0000-7000-8000-000000000005'),
+  ('e2000000-0000-7000-8000-000000000102', :G, 'e2000000-0000-7000-8000-000000000002', 1,
+   'The school may use photos of your child in its printed newsletter, yearbook and displays in the school. '
+   || 'You can withdraw this consent at any time; printed copies already handed out cannot be recalled (synthetic wording).',
+   'c1000000-0000-7000-8000-000000000005'),
+  ('e2000000-0000-7000-8000-000000000103', :G, 'e2000000-0000-7000-8000-000000000003', 1,
+   'The school may record performances your child takes part in and share the recording with the families of the class only, '
+   || 'through the family portal. You can withdraw this consent at any time (synthetic wording).',
+   'c1000000-0000-7000-8000-000000000005')
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO privacy.consent_record (id, group_id, subject_person_id, given_by_person_id, purpose_id, wording_id, wording_version, channel) VALUES
+  ('e2000000-0000-7000-8000-000000000201', :G, 'c1000000-0000-7000-8000-000000000030', 'c1000000-0000-7000-8000-000000000020',
+   'e2000000-0000-7000-8000-000000000001', 'e2000000-0000-7000-8000-000000000101', '1', 'family_portal')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 SELECT 'seeded: ' || (SELECT count(*) FROM org.school WHERE group_id = 'a1000000-0000-7000-8000-000000000001') || ' schools, '

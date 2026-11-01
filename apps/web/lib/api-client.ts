@@ -17,6 +17,9 @@ import {
   type SchoolStaff,
   type SchoolDocuments,
   type MyApprovals,
+  type ConsentPurposes,
+  type SchoolConsents,
+  type StudentConsents,
   type SchoolLessons,
   type SchoolLifeDay,
   type SchoolRequests,
@@ -321,3 +324,14 @@ export const fetchDocumentFile = (apiUrl: string, accessToken: string, token: st
     headers: { authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
   });
+
+// Consent from families (M6.6, ADR 0030).
+
+export const fetchStudentConsents = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentConsents>(apiUrl, `/students/${encodeURIComponent(studentId)}/consents`, accessToken);
+
+export const fetchSchoolConsents = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolConsents>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/consents`, accessToken);
+
+export const fetchConsentPurposes = (apiUrl: string, accessToken: string) =>
+  get<ConsentPurposes>(apiUrl, '/privacy/consent-purposes', accessToken);

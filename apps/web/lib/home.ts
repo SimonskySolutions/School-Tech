@@ -17,6 +17,8 @@ export interface HomeView {
     staffHref: string | null;
     /** The school's documents (M6.4): every school role may read those for all staff. */
     documentsHref: string;
+    /** Who may appear in photos (M6.6), for roles that read the school's enrolments. */
+    consentsHref: string | null;
   }[];
   groupRoles: string[];
   groupSchools: string[];
@@ -34,6 +36,10 @@ export interface HomeView {
   lessonSchools: { id: string; name: string }[];
   /** Group roles that read staff records: each school's staff and documents pages. */
   staffSchools: { id: string; name: string }[];
+  /** Group roles that read enrolments: each school's photo consents (M6.6). */
+  consentSchools: { id: string; name: string }[];
+  /** The data protection officer publishes consent wording (M6.6). */
+  showsConsentWording: boolean;
   /** Anyone with a role sees their own employment records. */
   showsMyEmployment: boolean;
   /** Roles that approve document versions (M6.5); the API decides which steps are theirs. */
@@ -69,6 +75,14 @@ const STAFF_ROLES = new Set(['principal', 'school_admin', 'group_admin', 'group_
 
 // Roles that may be asked to approve a document version (documents.approval_step).
 const APPROVER_ROLES = new Set(['principal', 'school_admin', 'group_admin', 'group_ceo']);
+
+// Group roles that hold enrolment.read everywhere; a hint for links only.
+const GROUP_ENROLMENT_ROLES = new Set([
+  'group_ceo',
+  'group_admin',
+  'group_finance',
+  'school_life_coordinator',
+]);
 
 // Roles that hold admissions.manage; a hint for links only.
 const ADMISSIONS_ROLES = new Set(['principal', 'school_admin', 'group_admin']);
@@ -113,6 +127,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
       uniformsHref: `/schools/${role.school!.id}/uniforms`,
       staffHref: STAFF_ROLES.has(role.code) ? `/schools/${role.school!.id}/staff` : null,
       documentsHref: `/schools/${role.school!.id}/documents`,
+      consentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/consents` : null,
     }));
 
   return {
@@ -132,6 +147,10 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     staffSchools: me.roles.some((role) => role.scope === 'group' && STAFF_ROLES.has(role.code))
       ? schools.map((school) => ({ id: school.id, name: school.name }))
       : [],
+    consentSchools: me.roles.some((role) => role.scope === 'group' && GROUP_ENROLMENT_ROLES.has(role.code))
+      ? schools.map((school) => ({ id: school.id, name: school.name }))
+      : [],
+    showsConsentWording: me.roles.some((role) => role.code === 'privacy_officer'),
     showsMyEmployment: me.roles.length > 0,
     showsApprovals: me.roles.some((role) => APPROVER_ROLES.has(role.code)),
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),

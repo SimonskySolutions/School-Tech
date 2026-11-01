@@ -46,6 +46,12 @@ DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
 DELETE FROM documents.download_link;
 DELETE FROM documents.version;
 DELETE FROM documents.document;
+-- Consents and wording the tests gave or published (seeded ones: e2000000-);
+-- Anna's seeded consent for Mila given again.
+DELETE FROM privacy.consent_record WHERE id::text NOT LIKE 'e2000000-%';
+DELETE FROM privacy.consent_wording WHERE id::text NOT LIKE 'e2000000-%';
+UPDATE privacy.consent_record SET status = 'given', withdrawn_at = NULL, withdrawn_by_person_id = NULL
+ WHERE id = 'e2000000-0000-7000-8000-000000000201';
 -- Training the tests recorded; the seeded planned conference planned again.
 DELETE FROM staff.training WHERE id::text NOT LIKE 'df000000-%';
 UPDATE staff.training SET status = 'planned' WHERE id = 'df000000-0000-7000-8000-000000000102';

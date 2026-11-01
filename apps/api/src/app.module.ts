@@ -5,6 +5,11 @@ import { AuthModule } from './auth/auth.module';
 import { SchoolStaffController, StaffController } from './staff/staff.controller';
 import { DocumentsController, SchoolDocumentsController } from './documents/documents.controller';
 import { OBJECT_STORE, S3ObjectStore } from './documents/object-store';
+import {
+  ConsentPurposesController,
+  SchoolConsentsController,
+  StudentConsentsController,
+} from './privacy/consents.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
@@ -52,6 +57,9 @@ import { type Env } from './config/env';
     StaffController,
     SchoolDocumentsController,
     DocumentsController,
+    StudentConsentsController,
+    SchoolConsentsController,
+    ConsentPurposesController,
     CatalogController,
     DietaryController,
     DietaryReviewController,
