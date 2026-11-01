@@ -122,7 +122,15 @@ describe('worker', () => {
       'domain-verification': '* * * * *',
       'offer-expiry': '* * * * *',
       'admissions-retention': '0 4 * * *',
+      'notification-purge': '15 4 * * *',
     });
+  });
+
+  it('may purge old message parameters, as its job does', async () => {
+    const { rows } = await worker.query<{ purged: number }>(
+      `SELECT notify.purge_params(interval '90 days') AS purged`,
+    );
+    expect(rows[0]!.purged).toBeGreaterThanOrEqual(0);
   });
 
   it('may apply admissions retention, as its job does', async () => {

@@ -112,6 +112,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Qualifications and record checks (M6.2) are on the same page. "Needs attention" lists everyone employed now without a valid criminal record check, teachers without a valid teaching licence, and qualifications or checks that have expired or end within 60 days. For a criminal record certificate, note only the day you saw it and the day it is valid until: never scan, copy or type what it says. A qualification entered by mistake is marked "recorded in error" and no longer counts. Nobody is reminded automatically yet (M7): look at the page.
 - Professional development (M6.3) is on the same page: each person's hours for the school year (September to August), attended and planned, and the school's total; "Year before" and "Year after" show other years. Staff add their own training on "My employment"; the principal can add it for them. Mark planned training attended once it has taken place, or cancelled; cancelled training is not counted. Training recorded wrongly cannot be edited: cancel it if it was planned and record it again.
 
+### Messages by e-mail (M7.1)
+
+- In development every message goes to the development mailbox: open `http://127.0.0.1:58025` to read what the platform sent. Nothing leaves the machine. Restarting `mailpit` empties it.
+- The worker sends what is queued every 5 seconds. A message that cannot be sent is retried after 1, 5 and 30 minutes, then 2 and 6 hours, and is then marked failed. Look for failures: `SELECT created_at, kind_code, person_id, attempts, last_error FROM notify.message WHERE status = 'failed' ORDER BY created_at DESC` (as the superuser, or as the worker). To send one again after fixing the cause, queue it anew under a new key; failed messages are never resent silently.
+- Payment confirmations are always sent; kinds that are not essential can be turned off by each person (M7.2 adds the page).
+- **Production:** set `SMTP_HOST`, `SMTP_PORT`, `SMTP_REQUIRE_TLS=true` (port 587) or `SMTP_SECURE=true` (port 465), `SMTP_USER`, `SMTP_PASSWORD_FILE`, `MAIL_FROM` with the group's own domain and `PORTAL_URL` with https on the worker; it refuses to start otherwise. Before the first message, publish SPF, DKIM and DMARC records for the sender domain as the provider describes, and send a test to a mailbox you control. Keycloak's own messages (setting a password) need the same SMTP settings in the realm's e-mail tab.
+
 ### Tasks and projects (M6.7)
 
 - "Tasks" on the home page lists each person's own tasks (overdue ones marked), those they set for others and, for principals, school administrators, the group administrator and the CEO, the overdue tasks of others at their schools. Anyone who works in the group adds tasks for themselves; leaders give tasks to anyone who works at their school now (with a role or a current employment there).
@@ -379,6 +386,7 @@ bash scripts/db-restore-check.sh
 | Secrets | Files in `secrets/` | Host secret store or the platform's secret manager; never in images or the repository |
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |
+| E-mail | Mailpit, keeps everything locally | An SMTP service with TLS and the group's domain (SPF, DKIM, DMARC); the worker refuses Mailpit, plain connections and development addresses |
 | Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | Three Garage nodes with `replication_factor = 3`, or one node with frequent off-site copies; secrets mounted `0400` with `allow_world_readable_secrets` off; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
 
 ## Availability limits of the initial topology

@@ -8,6 +8,9 @@ import { EventDispatcher } from './event-dispatcher';
 import { MAINTENANCE_SCHEDULES, runMaintenance } from './maintenance';
 import { type OutboxJobData, OutboxRelay } from './outbox-relay';
 import { PaymentEventProcessor } from './payment-confirmation';
+import { smtpTransport } from './mail-transport';
+import { NotificationSender } from './notification-sender';
+import { orderPaidNotice } from './order-paid-notice';
 import { loadWorkerEnv } from './worker-env';
 
 // Background worker (ADR 0002, 0004). Same package and image as the API, its
@@ -75,10 +78,9 @@ async function main(): Promise<void> {
   const { affected } = await runMaintenance(database, 'audit.ensure-partitions');
   logger.log(`audit partitions checked (${affected} created)`);
 
-  const dispatcher = new EventDispatcher().on(
-    'commerce.order_line.cancelled',
-    cancellationCreditHandler(database),
-  );
+  const dispatcher = new EventDispatcher()
+    .on('commerce.order_line.cancelled', cancellationCreditHandler(database))
+    .on('commerce.order.paid', orderPaidNotice(database));
   const eventWorker = new Worker<OutboxJobData>('events', (job) => dispatcher.dispatch(job.data), {
     connection: connect(),
     prefix,
@@ -107,6 +109,24 @@ async function main(): Promise<void> {
   const payments = new PaymentEventProcessor(database, logger);
   payments.start();
 
+  // Messages wait in PostgreSQL and are sent from there (ADR 0031).
+  const mail = smtpTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    requireTls: env.SMTP_REQUIRE_TLS,
+    user: env.SMTP_USER,
+    password: env.SMTP_PASSWORD,
+  });
+  const notifications = new NotificationSender(database, mail, logger, {
+    intervalMs: env.NOTIFY_INTERVAL_MS,
+    batchSize: 20,
+    from: env.MAIL_FROM,
+    portalUrl: env.PORTAL_URL,
+    messageIdDomain: new URL(env.PORTAL_URL).hostname,
+  });
+  notifications.start();
+
   // Liveness for Docker: a file touched while the event loop is healthy.
   const beat = () => writeFileSync(env.HEARTBEAT_FILE, new Date().toISOString());
   beat();
@@ -120,7 +140,8 @@ async function main(): Promise<void> {
     stopping = true;
     logger.log(`${signal} received, finishing current jobs`);
     clearInterval(heartbeat);
-    await Promise.all([relay.stop(), payments.stop()]);
+    await Promise.all([relay.stop(), payments.stop(), notifications.stop()]);
+    mail.close();
     await Promise.all([eventWorker.close(), maintenanceWorker.close()]);
     await Promise.all([events.close(), maintenance.close()]);
     await Promise.all(connections.map((client) => client.quit().catch(() => client.disconnect())));

@@ -43,6 +43,12 @@ export const MAINTENANCE_SCHEDULES = [
     jobName: 'admissions.apply-retention',
     pattern: '0 4 * * *',
   },
+  {
+    // Message parameters go after 90 days; who, what kind and when remain (ADR 0031).
+    id: 'notification-purge',
+    jobName: 'notify.purge-params',
+    pattern: '15 4 * * *',
+  },
 ] as const;
 
 export type MaintenanceJob = (typeof MAINTENANCE_SCHEDULES)[number]['jobName'];
@@ -80,6 +86,12 @@ export async function runMaintenance(database: SystemDatabase, job: string): Pro
         tx.query<{ erased: number }>('SELECT admissions.apply_retention() AS erased'),
       );
       return { affected: row?.erased ?? 0 };
+    }
+    case 'notify.purge-params': {
+      const [row] = await database.withSystem('worker:notification-purge', (tx) =>
+        tx.query<{ purged: number }>(`SELECT notify.purge_params(interval '90 days') AS purged`),
+      );
+      return { affected: row?.purged ?? 0 };
     }
     default:
       throw new Error(`unknown maintenance job: ${job}`);

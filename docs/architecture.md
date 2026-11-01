@@ -18,6 +18,7 @@ One modular monolith, organised by business capability, deployed as a small set 
 | redis | BullMQ queues only | **Built** |
 | object storage | Garage v2.4.1, S3-compatible, private: Compose network only, one key held by the API (ADR 0029) | **Built**: documents (M6.4) |
 | migrate | One-off migration job (dbmate) | **Built** |
+| mailpit | Development mailbox (ADR 0031): receives every message the worker sends, delivers none; production uses an SMTP service | **Built** (development only) |
 
 ## Data layer (built)
 

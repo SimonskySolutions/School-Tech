@@ -34,3 +34,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0028](0028-staff-records.md) | Staff records separate from access | Accepted |
 | [0029](0029-private-document-store.md) | Private document store: Garage, links for one person | Accepted |
 | [0030](0030-consent-from-families.md) | Consent from families: wording versions, asking again | Accepted |
+| [0031](0031-notifications-by-email.md) | Notifications by e-mail over SMTP, queued in the database | Accepted |

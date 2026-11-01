@@ -3,6 +3,8 @@ import { z } from 'zod';
 // Worker configuration. Development defaults match compose.yaml; production
 // must set hosts and secrets explicitly.
 
+const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
+
 const schema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -23,12 +25,55 @@ const schema = z
     OUTBOX_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
     EVENT_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
     HEARTBEAT_FILE: z.string().min(1).default('/tmp/worker-heartbeat'),
+
+    // Messages by e-mail (ADR 0031): any SMTP service; Mailpit in development.
+    SMTP_HOST: z.string().min(1).default('mailpit'),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(1025),
+    SMTP_SECURE: flag.default(false),
+    SMTP_REQUIRE_TLS: flag.default(false),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: z.string().min(1).optional(),
+    MAIL_FROM: z
+      .string()
+      .regex(
+        /^[^<>@]*<[^<>@\s]+@([a-z0-9-]+\.)+[a-z]{2,}>$|^[^<>@\s]+@([a-z0-9-]+\.)+[a-z]{2,}$/i,
+        'an address, or "Name <address>"',
+      )
+      .default('Pythagoras <no-reply@pythagoras.localhost>'),
+    // Where links in messages lead.
+    PORTAL_URL: z.url().default('http://portal.pythagoras.localhost:53000'),
+    NOTIFY_INTERVAL_MS: z.coerce.number().int().min(500).max(300_000).default(5000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
       for (const key of ['DB_HOST', 'DB_PASSWORD', 'REDIS_HOST', 'REDIS_PASSWORD'] as const) {
         if (env[key] === undefined)
           ctx.addIssue({ code: 'custom', path: [key], message: 'required in production' });
+      }
+      // Never the development mailbox, never without TLS, never from a development domain.
+      if (env.SMTP_HOST === 'mailpit') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SMTP_HOST'],
+          message: 'the development mailbox cannot be used in production',
+        });
+      }
+      if (!env.SMTP_SECURE && !env.SMTP_REQUIRE_TLS) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['SMTP_REQUIRE_TLS'],
+          message: 'mail must be sent over TLS in production',
+        });
+      }
+      if (/\.(localhost|test)>?$/i.test(env.MAIL_FROM)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['MAIL_FROM'],
+          message: 'a development address cannot send in production',
+        });
+      }
+      if (!env.PORTAL_URL.startsWith('https://')) {
+        ctx.addIssue({ code: 'custom', path: ['PORTAL_URL'], message: 'must use https in production' });
       }
     }
   })
@@ -40,7 +85,7 @@ const schema = z
 
 export type WorkerEnv = z.infer<typeof schema>;
 
-const FILE_BACKED = ['DB_PASSWORD', 'REDIS_PASSWORD'] as const;
+const FILE_BACKED = ['DB_PASSWORD', 'REDIS_PASSWORD', 'SMTP_PASSWORD'] as const;
 
 export function loadWorkerEnv(
   env: Readonly<Record<string, string | undefined>>,

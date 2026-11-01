@@ -17,6 +17,14 @@ function fakeDatabase(result: Record<string, number>) {
 }
 
 describe('maintenance jobs', () => {
+  it('purges message parameters after 90 days, once a day', async () => {
+    const { database, calls } = fakeDatabase({ purged: 4 });
+    expect(await runMaintenance(database, 'notify.purge-params')).toEqual({ affected: 4 });
+    expect(calls).toEqual([
+      { actor: 'worker:notification-purge', sql: "SELECT notify.purge_params(interval '90 days') AS purged" },
+    ]);
+  });
+
   it('applies admissions retention once a day', async () => {
     const { database, calls } = fakeDatabase({ erased: 3 });
     expect(await runMaintenance(database, 'admissions.apply-retention')).toEqual({ affected: 3 });
@@ -68,6 +76,7 @@ describe('maintenance jobs', () => {
     // Retention deletions wait for policies approved by the data protection officer (ADR 0006).
     // Offer expiry only applies the deadline staff set on each offer (M5.3). Admissions
     // retention erases only under a policy the DPO approved; the database checks it (M5.6).
+    // Message parameters go after the 90 days ADR 0031 sets; the record of what was sent stays.
     expect(MAINTENANCE_SCHEDULES.map((schedule) => schedule.id)).toEqual([
       'audit-partitions',
       'inbound-payload-purge',
@@ -75,6 +84,7 @@ describe('maintenance jobs', () => {
       'domain-verification',
       'offer-expiry',
       'admissions-retention',
+      'notification-purge',
     ]);
   });
 });

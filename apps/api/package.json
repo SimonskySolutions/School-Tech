@@ -27,6 +27,7 @@
     "bullmq": "6.5.1",
     "ioredis": "6.0.0",
     "jose": "6.2.14",
+    "nodemailer": "10.1.7",
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",

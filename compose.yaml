@@ -151,6 +151,25 @@ services:
       - ./infra/garage/init.mjs:/opt/pythagoras/storage-init.mjs:ro
     command: ["node", "/opt/pythagoras/storage-init.mjs"]
 
+  # Development mailbox (ADR 0031): receives every message the worker sends and
+  # delivers nothing. Its inbox is on 127.0.0.1:${MAIL_HOST_PORT:-58025}; SMTP
+  # stays on the Compose network. Production uses a real SMTP service instead.
+  mailpit:
+    <<: *hardening
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    environment:
+      MP_MAX_MESSAGES: "2000"
+      MP_SMTP_DISABLE_RDNS: "true"
+      MP_DISABLE_VERSION_CHECK: "true"
+    ports:
+      - "127.0.0.1:${MAIL_HOST_PORT:-58025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   # Identity provider (ADR 0009). Development mode imports the development realm
   # with synthetic users on first start; production uses `start --optimized`
   # behind the gateway with a user-free realm (see docs/operations.md).
@@ -300,11 +319,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
     environment:
       <<: *workspace-env
       NODE_ENV: development
       DB_PASSWORD_FILE: /run/secrets/pg_worker_password
       REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
+      # Messages (ADR 0031): to the development mailbox, linking to the portal.
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: Pythagoras <no-reply@pythagoras.localhost>
+      PORTAL_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
     secrets:
       - pg_worker_password
       - redis_queue_password

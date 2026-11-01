@@ -46,6 +46,10 @@ DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
 DELETE FROM documents.download_link;
 DELETE FROM documents.version;
 DELETE FROM documents.document;
+-- Messages the tests caused and preferences they set (none are seeded); the
+-- development mailbox keeps its copies until Mailpit is restarted.
+DELETE FROM notify.message;
+DELETE FROM notify.preference;
 -- Tasks and projects the tests added (seeded ones: e3000000-), the seeded ones as seeded.
 DELETE FROM work.task WHERE id::text NOT LIKE 'e3000000-%';
 DELETE FROM work.project WHERE id::text NOT LIKE 'e3000000-%';

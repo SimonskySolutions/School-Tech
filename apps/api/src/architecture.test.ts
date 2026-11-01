@@ -30,6 +30,13 @@ describe('architecture', () => {
     expect(importers).toEqual(['documents/object-store.ts']);
   });
 
+  it('only the mail transport talks to the mail service (ADR 0031)', () => {
+    const importers = files
+      .filter((file) => /from ['"]nodemailer['"]/.test(file.text))
+      .map((file) => file.path);
+    expect(importers).toEqual(['worker/mail-transport.ts']);
+  });
+
   it('only the worker uses system database access', () => {
     const importers = files
       .filter((file) => file.text.includes('system-database') && !file.path.startsWith('database/'))
