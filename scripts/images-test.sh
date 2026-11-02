@@ -4,7 +4,8 @@
 # - the application images run as an unprivileged user;
 # - no image contains a file named like one of the platform's secrets;
 # - the migration job carries exactly the repository's migrations;
-# - Keycloak is built for production with the Pythagoras theme.
+# - Keycloak is built for production with the Pythagoras theme;
+# - the PostgreSQL image carries the pinned pgBackRest and rclone (M8.5).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -22,6 +23,7 @@ done
 # The names come from the scripts that create them, so a new secret is covered too.
 mapfile -t secret_names < <(
   sed -n '/^names=(/,/^)/p' scripts/dev-secrets.sh | grep -oE '[a-z][a-z0-9_]+' | grep -v '^names$'
+  sed -n '/^generated=(/,/^)/p' scripts/prod-secrets.sh | grep -oE '[a-z][a-z0-9_]+' | grep -v '^generated$'
   sed -n '/^declare -A issued=(/,/^)/p' scripts/prod-secrets.sh | grep -oE '\[[a-z0-9_]+\]' | tr -d '[]'
 )
 pattern="(^|/)($(IFS='|'; echo "${secret_names[*]}"))\$"
@@ -47,6 +49,13 @@ if grep -qE 'kc\.db += +postgres \(Persisted\)' <<<"$built"; then
   ok "keycloak is built for PostgreSQL (start --optimized)"
 else
   fail "keycloak was not built for PostgreSQL"
+fi
+
+tools=$(docker run --rm --entrypoint sh "pythagoras-postgres:$tag" -c 'pgbackrest version; rclone version | head -1' | tr -d '\r' | tr '\n' ' ')
+if [[ "$tools" == "pgBackRest 2.60.0 rclone v1.75.2 " ]]; then
+  ok "postgres carries pgBackRest 2.60.0 and rclone v1.75.2"
+else
+  fail "postgres carries '$tools'"
 fi
 
 if [[ $failed -ne 0 ]]; then echo "images: FAILED"; exit 1; fi

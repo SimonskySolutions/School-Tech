@@ -1,0 +1,82 @@
+# A stand-in for the off-site backup storage (M8.5, ADR 0035), until the real
+# one is chosen: a Garage node of its own behind TLS on the "offsite" network,
+# reachable as https://offsite. Used by scripts/prod-stack-test.sh, on top of
+# the production stack:
+#
+#   docker compose -f compose.production.yaml -f infra/backup-standin/compose.yaml ...
+#
+# with BACKUP_S3_ENDPOINT=offsite, BACKUP_S3_REGION=garage,
+# BACKUP_S3_CA_FILE=/run/secrets/tls_ca_crt, and TLS_EXTRA_SERVICES=offsite for
+# scripts/prod-secrets.sh so that it gets a certificate. Nothing here belongs
+# in production: the stand-in lives on the same host as what it backs up.
+
+services:
+  offsite-store:
+    image: ${IMAGE_REGISTRY:-}pythagoras-garage:${IMAGE_TAG}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    networks: [offsite]
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # The node's role, the backup's key and the bucket, as for the documents.
+  offsite-init:
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      offsite-store:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_URL: http://offsite-store:3903
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      STORAGE_ACCESS_KEY_ID: ${BACKUP_S3_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/backup_s3_secret_key
+      STORAGE_BUCKET: ${BACKUP_S3_BUCKET}
+      STORAGE_CAPACITY_GB: 1
+      STORAGE_NODE_TAG: offsite-standin
+    secrets:
+      - garage_admin_token
+      - backup_s3_secret_key
+    networks: [offsite]
+    command: ["node", "ops/storage-init.mjs"]
+
+  # TLS in front of the stand-in, with a certificate from the platform's authority.
+  offsite:
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      offsite-init:
+        condition: service_completed_successfully
+    secrets:
+      - tls_offsite_crt
+      - tls_offsite_key
+    networks: [offsite]
+    volumes:
+      # Relative to the project directory, the first file's (the repository root).
+      - ./infra/backup-standin/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "443"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backup:
+    depends_on:
+      offsite:
+        condition: service_healthy
+
+secrets:
+  tls_offsite_crt: { file: "${SECRETS_DIR}/tls_offsite_crt" }
+  tls_offsite_key: { file: "${SECRETS_DIR}/tls_offsite_key" }

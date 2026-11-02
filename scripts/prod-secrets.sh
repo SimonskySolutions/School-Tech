@@ -6,16 +6,22 @@
 #
 # Secrets the platform makes are random. Secrets a provider issues are taken
 # from the environment when set (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-# SMTP_PASSWORD); otherwise a placeholder is written and listed at the end, to
+# SMTP_PASSWORD, BACKUP_S3_SECRET_KEY); otherwise a placeholder is written and listed at the end, to
 # be replaced before the service it belongs to is used. The files are readable
 # by every user because the containers run as unprivileged users; the
 # directory is what keeps them private.
 #
 # It also makes the private certificate authority for the connections inside
-# the host (M8.4): PostgreSQL, PgBouncer and Redis each get a certificate for
-# their service name. The authority's key (tls_ca_key) stays here and is never
-# mounted into a container. To renew a certificate, delete its two files and
-# run the script again; delete tls_ca_* too to replace the authority.
+# the host (M8.4): PostgreSQL, PgBouncer, Redis and the backup service each get
+# a certificate for their service name (TLS_EXTRA_SERVICES adds more, for the
+# local stand-in of the off-site storage). The authority's key (tls_ca_key)
+# stays here and is never mounted into a container. To renew a certificate,
+# delete its two files and run the script again; delete tls_ca_* too to
+# replace the authority.
+#
+# The backup passphrases (backup_cipher_pass, backup_documents_pass,
+# backup_documents_salt) must also be kept somewhere other than this host:
+# without them the off-site backups cannot be read (docs/operations.md).
 set -euo pipefail
 # Git Bash on Windows would rewrite the certificate subjects as paths, but
 # must still translate file paths for openssl.
@@ -37,11 +43,14 @@ generated=(
   keycloak_provisioning_client_secret keycloak_cms_client_secret
   web_session_secret cms_payload_secret cms_platform_api_key
   garage_rpc_secret garage_admin_token storage_secret_access_key
+  storage_backup_secret_access_key
+  backup_cipher_pass backup_documents_pass backup_documents_salt
 )
 declare -A issued=(
   [stripe_secret_key]=STRIPE_SECRET_KEY
   [stripe_webhook_secret]=STRIPE_WEBHOOK_SECRET
   [smtp_password]=SMTP_PASSWORD
+  [backup_s3_secret_key]=BACKUP_S3_SECRET_KEY
 )
 
 write() {
@@ -101,17 +110,21 @@ CONF
 else
   echo "kept      tls_ca"
 fi
-for service in postgres pgbouncer redis; do
+# shellcheck disable=SC2086 # a list of names
+for service in postgres pgbouncer redis backup ${TLS_EXTRA_SERVICES:-}; do
   if [[ -s "$dir/tls_${service}_crt" && -s "$dir/tls_${service}_key" ]]; then
     echo "kept      tls_$service"
     continue
   fi
   openssl ecparam -name prime256v1 -genkey -noout -out "$dir/tls_${service}_key" 2>/dev/null
   openssl req -new -key "$dir/tls_${service}_key" -subj "/CN=$service" -out "$dir/$service.csr"
+  # The database also presents its certificate to the backup service (M8.5).
+  usage=serverAuth
+  if [[ $service == postgres ]]; then usage="serverAuth, clientAuth"; fi
   cat >"$dir/$service.ext" <<CONF
 basicConstraints = critical, CA:FALSE
 keyUsage = critical, digitalSignature
-extendedKeyUsage = serverAuth
+extendedKeyUsage = $usage
 subjectAltName = DNS:$service, DNS:localhost, IP:127.0.0.1
 CONF
   openssl x509 -req -in "$dir/$service.csr" -CA "$dir/tls_ca_crt" -CAkey "$dir/tls_ca_key" -CAcreateserial \
@@ -122,5 +135,6 @@ CONF
 done
 
 echo
-echo "A new key id for the object store, if .env has none yet:"
+echo "New key ids for the object store, if .env has none yet:"
 echo "  STORAGE_ACCESS_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+echo "  BACKUP_STORAGE_ACCESS_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"

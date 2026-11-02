@@ -13,6 +13,9 @@
 # - the production realm: no users or development client, the step-up
 #   sign-in, e-mail, events kept 30 days; a parent signs in with a password,
 #   staff only after setting up and then entering a one-time code;
+# - continuous backups to a stand-in off-site storage: the log archived within
+#   a minute, full and differential backups of every database, the documents
+#   copied, all encrypted, and the repository verified;
 # - every migration applied, and a failing one stops a release without
 #   touching the database or the running version;
 # - application containers read-only, without capabilities, unprivileged.
@@ -47,13 +50,23 @@ SMTP_USER=no-reply@example.bg
 MAIL_FROM=Pythagoras <no-reply@example.bg>
 STORAGE_ACCESS_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
 STORAGE_CAPACITY_GB=1
+BACKUP_STORAGE_ACCESS_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+BACKUP_S3_ENDPOINT=offsite
+BACKUP_S3_REGION=garage
+BACKUP_S3_BUCKET=pythagoras-backups
+BACKUP_S3_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+BACKUP_S3_CA_FILE=/run/secrets/tls_ca_crt
 EOF
-bash scripts/prod-secrets.sh "$work/secrets" >/dev/null
+BACKUP_S3_SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') TLS_EXTRA_SERVICES=offsite \
+  bash scripts/prod-secrets.sh "$work/secrets" >/dev/null
 
-compose() { docker compose -p "$project" -f compose.production.yaml --env-file "$(host_path "$work/env")" "$@"; }
+compose() {
+  docker compose -p "$project" -f compose.production.yaml -f infra/backup-standin/compose.yaml \
+    --env-file "$(host_path "$work/env")" "$@"
+}
 cleanup() {
   if [[ "${KEEP:-}" == 1 ]]; then
-    echo "kept running: docker compose -p $project -f compose.production.yaml --env-file $(host_path "$work/env") ..."
+    echo "kept running: docker compose -p $project -f compose.production.yaml -f infra/backup-standin/compose.yaml --env-file $(host_path "$work/env") ..."
   else
     compose down -v --remove-orphans >/dev/null 2>&1 || true
     rm -rf "$work"
@@ -71,7 +84,7 @@ else
   exit 1
 fi
 
-for job in migrate storage-init; do
+for job in migrate storage-init offsite-init; do
   state=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$(compose ps -a -q "$job")")
   if [[ "$state" == "exited 0" ]]; then ok "$job finished"; else fail "$job is '$state'"; fi
 done
@@ -90,6 +103,11 @@ networks() { docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}
 for service in postgres pgbouncer redis garage; do
   if [[ "$(networks "$service")" == "data " ]]; then ok "$service is on the data network only"; else fail "$service is on $(networks "$service")"; fi
 done
+if [[ "$(networks backup)" == "data offsite " ]]; then
+  ok "only the backup service reaches the off-site storage"
+else
+  fail "the backup service is on $(networks backup)"
+fi
 if compose exec -T gateway wget -q -T 3 -O /dev/null http://postgres:5432 2>/dev/null; then
   fail "the gateway reaches PostgreSQL"
 else
@@ -223,6 +241,69 @@ read -r total encrypted pooled pooled_count <<<"$connections"
 if [[ "$total" -gt 0 && "$encrypted" == true ]]; then ok "all $total network connections to PostgreSQL use TLS 1.3"; else fail "unencrypted connections: $connections"; fi
 if [[ "$pooled_count" -gt 0 && "$pooled" == true ]]; then ok "the API and the worker reach PostgreSQL only through PgBouncer"; else fail "API or worker connections bypass PgBouncer: $connections"; fi
 
+# Continuous backups (M8.5), against the stand-in off-site storage.
+backup() { compose exec -T backup pythagoras-backup "$@" | tr -d '\r'; }
+info() { backup pgbackrest --stanza=pythagoras --output=json info "$@"; }
+backups=$(info)
+same "the repository is encrypted with AES-256 and in order" "('aes-256-cbc', 0)" \
+  "$(field "(d[0]['cipher'], d[0]['status']['code'])" <<<"$backups")"
+same "a full backup was taken on the first start" full "$(field "d[0]['backup'][0]['type']" <<<"$backups")"
+same "the write-ahead log is switched at least every minute" 1min "$(sql "SHOW archive_timeout")"
+# A change, then the time until its segment is in the off-site storage.
+segment=$(sql "SELECT pg_walfile_name(pg_logical_emit_message(false, 'backup-check', 'x'))")
+for ((waited = 0; waited < 120; waited += 5)); do
+  archived=$(sql "SELECT coalesce(last_archived_wal, '') FROM pg_stat_archiver")
+  [[ "$archived" > "$segment" || "$archived" == "$segment" ]] && break
+  sleep 5
+done
+if [[ "$archived" > "$segment" || "$archived" == "$segment" ]]; then
+  ok "a change reaches the off-site storage within ${waited}s (target: 5 minutes)"
+else
+  fail "segment $segment was not archived within 2 minutes (last: $archived)"
+fi
+if backup pgbackrest --stanza=pythagoras check >/dev/null; then ok "the archive is checked end to end"; else fail "pgbackrest check failed"; fi
+
+# A document version, copied encrypted and then, once deleted, moved aside.
+document="v1/$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')/version"
+api_key=(-e RCLONE_CONFIG_API_TYPE=s3 -e RCLONE_CONFIG_API_PROVIDER=Other -e RCLONE_CONFIG_API_ENDPOINT=http://garage:3900
+  -e RCLONE_CONFIG_API_REGION=garage -e RCLONE_CONFIG_API_FORCE_PATH_STYLE=true -e "RCLONE_CONFIG_API_ACCESS_KEY_ID=$(grep ^STORAGE_ACCESS_KEY_ID "$work/env" | cut -d= -f2)"
+  -e "RCLONE_CONFIG_API_SECRET_ACCESS_KEY=$(cat "$work/secrets/storage_secret_access_key")")
+echo "A school policy for the backup check" | compose exec -T "${api_key[@]}" backup pythagoras-backup rclone rcat "api:pythagoras-documents/$document"
+backup documents >/dev/null
+same "documents are copied off the host" "A school policy for the backup check" "$(backup rclone cat "sealed:current/$document")"
+raw=$(backup rclone lsf -R --files-only offsite:pythagoras-backups/documents)
+if [[ -n "$raw" && "$raw" != *v1* && "$(backup rclone cat offsite:pythagoras-backups/documents/"$(head -1 <<<"$raw")" | head -c 6)" == RCLONE ]]; then
+  ok "their names and contents are encrypted there"
+else
+  fail "documents off the host are readable: $raw"
+fi
+if backup rclone lsf documents:pythagoras-documents >/dev/null && ! backup rclone touch "documents:pythagoras-documents/backup-write-check" 2>/dev/null; then
+  ok "the backup may read the documents but not change them"
+else
+  fail "the backup's key to the documents can write"
+fi
+compose exec -T "${api_key[@]}" backup pythagoras-backup rclone deletefile "api:pythagoras-documents/$document"
+backup documents >/dev/null
+if [[ -z "$(backup rclone lsf "sealed:current/$document" 2>/dev/null)" && -n "$(backup rclone lsf -R sealed:removed | grep -F "$document")" ]]; then
+  ok "a deleted document is moved aside, not lost"
+else
+  fail "the deleted document is not kept aside"
+fi
+
+# A differential on top of the full one, holding every database of the cluster.
+backup diff >/dev/null
+backups=$(info)
+same "a differential backup follows the full one" "('full', 'diff')" "$(field "(d[0]['backup'][0]['type'], d[0]['backup'][-1]['type'])" <<<"$backups")"
+label=$(field "d[0]['backup'][-1]['label']" <<<"$backups")
+same "the backups hold the platform's, Keycloak's and the CMS's databases" "['keycloak', 'pythagoras', 'pythagoras_cms']" \
+  "$(info --set="$label" | field "sorted(x['name'] for x in d[0]['backup'][0]['database-ref'] if x['name'] != 'postgres')")"
+if [[ "$(backup rclone cat offsite:pythagoras-backups/pgbackrest/backup/pythagoras/backup.info | head -c 8)" == Salted__ ]]; then
+  ok "nothing in the repository is readable without the passphrase"
+else
+  fail "the repository's files are not encrypted"
+fi
+if backup pgbackrest --stanza=pythagoras verify >/dev/null; then ok "every file in the repository matches its checksum"; else fail "pgbackrest verify failed"; fi
+
 # A release runs the migration job before replacing anything (docs/operations.md).
 cat >"$work/failing.sql" <<'EOF'
 -- migrate:up
@@ -247,7 +328,7 @@ else
 fi
 expect "the running version keeps serving" 200 api.pythagoras.test /health/ready
 
-for service in api worker web cms gateway pgbouncer storage-init migrate; do
+for service in api worker web cms gateway pgbouncer backup storage-init migrate; do
   id=$(compose ps -a -q "$service")
   settings=$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.Privileged}} {{.Config.User}}' "$id")
   read -r readonly capdrop privileged user <<<"$settings"

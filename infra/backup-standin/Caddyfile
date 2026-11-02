@@ -1,0 +1,11 @@
+# TLS in front of the stand-in off-site storage (infra/backup-standin/compose.yaml).
+{
+	admin off
+	auto_https disable_redirects
+	default_sni offsite
+}
+
+https://offsite {
+	tls /run/secrets/tls_offsite_crt /run/secrets/tls_offsite_key
+	reverse_proxy offsite-store:3900
+}

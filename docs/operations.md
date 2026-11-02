@@ -342,20 +342,21 @@ The worker checks pending domains every minute (each at most every five minutes)
 **First installation**
 
 1. Install Docker Engine with the Compose plugin; open the firewall for 80 and 443 only.
-2. Copy `.env.production.example` to `/etc/pythagoras/.env` (mode `0600`, owned by root) and fill it in: `IMAGE_TAG`, the host names, `ACME_EMAIL`, the SMTP service and `STORAGE_ACCESS_KEY_ID`.
-3. Create the secrets: `sudo bash scripts/prod-secrets.sh /etc/pythagoras/secrets`. The directory is `0700` and root's; the files are `0444` because the containers read them as unprivileged users. Secrets a provider issues come from the environment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_PASSWORD`); without them the script writes placeholders and lists them. Payments and e-mail fail until the placeholders are replaced; nothing else does. The script also prints a new key id for `STORAGE_ACCESS_KEY_ID`.
+2. Copy `.env.production.example` to `/etc/pythagoras/.env` (mode `0600`, owned by root) and fill it in: `IMAGE_TAG`, the host names, `ACME_EMAIL`, the SMTP service, `STORAGE_ACCESS_KEY_ID`, `BACKUP_STORAGE_ACCESS_KEY_ID` and the off-site backup storage (`BACKUP_S3_*`, below).
+3. Create the secrets: `sudo bash scripts/prod-secrets.sh /etc/pythagoras/secrets`. The directory is `0700` and root's; the files are `0444` because the containers read them as unprivileged users. Secrets a provider issues come from the environment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_PASSWORD`, `BACKUP_S3_SECRET_KEY`); without them the script writes placeholders and lists them. Payments, e-mail and backups fail until the placeholders are replaced; nothing else does. The script also prints new key ids for `STORAGE_ACCESS_KEY_ID` and `BACKUP_STORAGE_ACCESS_KEY_ID`. **Copy `backup_cipher_pass`, `backup_documents_pass` and `backup_documents_salt` to a safe place off the host** (the group's password manager): without them no backup can be read after losing the server.
 4. Put the images on the host: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env pull` from the registry in `IMAGE_REGISTRY`, or `docker load` of the images CI built for that commit.
 5. Start: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait`.
 
-**What starts, in order.** PostgreSQL, Redis and Garage first; then `migrate` (the platform's migrations) and `storage-init` (the object store's layout, key and bucket), which run once and exit; then Keycloak, the API, the worker, the CMS (which applies its own migrations), the web server and finally the gateway. Each waits for the health check or the successful exit of what it depends on, so a failing migration leaves the applications unstarted.
+**What starts, in order.** PostgreSQL, Redis and Garage first; then `migrate` (the platform's migrations) and `storage-init` (the object store's layout, key and bucket), which run once and exit; then Keycloak, the API, the worker, the CMS (which applies its own migrations), the web server and finally the gateway. The backup service starts once PostgreSQL is healthy and the object store is set up; it is healthy once the write-ahead log reaches the off-site storage and a backup exists, so on a new installation `up --wait` also waits for the first full backup. Each waits for the health check or the successful exit of what it depends on, so a failing migration leaves the applications unstarted.
 
 | Network | Members | Reach |
 | --- | --- | --- |
 | `edge` | gateway, web, API, CMS, Keycloak | The gateway routes to the applications; outbound for Stripe and Keycloak's e-mail |
-| `data` (internal) | PostgreSQL, PgBouncer, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init` | No way out; the gateway and the web server are not on it |
+| `data` (internal) | PostgreSQL, PgBouncer, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init`, `backup` | No way out; the gateway and the web server are not on it |
 | `egress` | worker | Outbound for SMTP and the DNS checks of school domains |
+| `offsite` | `backup` | Outbound to the off-site backup storage only (M8.5) |
 
-Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data` and `gateway_data` (certificates and the ACME account).
+Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data` and `gateway_data` (certificates and the ACME account); `pg_socket` only shares PostgreSQL's local socket with the backup service.
 
 **A release**
 
@@ -373,7 +374,7 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d 
 
 Set the new `IMAGE_TAG` first. The migration job runs while the previous version is still serving; if a migration fails its transaction rolls back, the command exits non-zero and nothing is replaced. Fix it with a new migration and release again (migrations are expand, then contract, so the previous version works with the new schema). Rolling back the applications is setting the previous `IMAGE_TAG` and running the last command.
 
-**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). It also checks the connections inside the host: PostgreSQL and PgBouncer refuse anything without TLS, a certificate is refused for a name it does not carry, Redis answers only over TLS, every network connection PostgreSQL holds is TLS 1.3, and the API and the worker reach it only through PgBouncer. CI runs it on every push.
+**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). It also checks the connections inside the host: PostgreSQL and PgBouncer refuse anything without TLS, a certificate is refused for a name it does not carry, Redis answers only over TLS, every network connection PostgreSQL holds is TLS 1.3, and the API and the worker reach it only through PgBouncer. And it checks the backups against a stand-in for the off-site storage (`infra/backup-standin/compose.yaml`): an encrypted repository with a full backup from the first start, a change archived within the minute, `pgbackrest check`, a document copied with its name and contents encrypted and moved aside once deleted, the backup's key unable to change the documents, a differential backup holding the platform's, Keycloak's and the CMS's databases, and `pgbackrest verify`. CI runs it on every push.
 
 ### Encrypted connections inside the host (M8.4)
 
@@ -393,6 +394,33 @@ The API and the worker refuse to start in production without the authority's cer
 
 **Renewing the certificates.** They are valid for 825 days, the authority for ten years. Delete the service's two files (`tls_<service>_crt`, `tls_<service>_key`), run `scripts/prod-secrets.sh` again and restart that service: `docker compose … up -d --force-recreate <service>`. To replace the authority, delete `tls_ca_*` and every `tls_*` file, run the script, and recreate every service.
 
+### Continuous backups (M8.5, ADR 0035)
+
+pgBackRest 2.60.0 and rclone v1.75.2, both in the PostgreSQL image. PostgreSQL archives every write-ahead log segment (`archive_mode = on`, `archive_timeout = 60`) to the `backup` service over pgBackRest's TLS protocol with its certificate; the backup service writes it, encrypted, to the off-site storage. It is the only service that holds the storage's key and the passphrases, and the only one on the `offsite` network.
+
+| What | When (UTC) | Kept |
+| --- | --- | --- |
+| Write-ahead log | Continuously, at least every minute | As long as the backups it belongs to |
+| Full backup | Sundays at 01:00 (`BACKUP_FULL_DAY`, `BACKUP_HOUR`), when the newest full is a week old, and on the first start | The newest 4 |
+| Differential backup | The other days at 01:00 | With its full backup |
+| Documents (rclone, `sealed:current`) | Every 5 minutes and before each database backup | Deleted objects under `sealed:removed/<time>` for 35 days |
+
+Everything is encrypted before it leaves the host: the repository with AES-256 (`backup_cipher_pass`), the documents' names and contents with rclone's `crypt` (`backup_documents_pass`, `backup_documents_salt`). The backup service reads the documents with a key of its own that may only read the bucket (`BACKUP_STORAGE_ACCESS_KEY_ID`, made by `storage-init`).
+
+**The off-site storage.** Any S3-compatible service in the EU, in an account separate from the server's. Create one bucket (for example `pythagoras-backups`) and a key that may only list, read, write and delete in it; set `BACKUP_S3_ENDPOINT`, `BACKUP_S3_PORT`, `BACKUP_S3_REGION`, `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID` and `BACKUP_S3_URI_STYLE` (`path` or `host`, whichever the provider documents) in `.env`, and the key's secret as `backup_s3_secret_key` (`BACKUP_S3_SECRET_KEY=… scripts/prod-secrets.sh …`, or write the file). pgBackRest keeps its files under `pgbackrest/`, rclone under `documents/`. Do not enable the provider's own lifecycle rules on the bucket: pgBackRest expires its backups itself. Until a provider is chosen, the stand-in (`infra/backup-standin/compose.yaml`, a Garage node behind TLS) shows the whole cycle locally.
+
+**Looking at the backups**, through the backup service, which sets up the repository's settings:
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec backup pythagoras-backup pgbackrest --stanza=pythagoras info
+```
+
+`pythagoras-backup full`, `diff` and `documents` take one now; `pythagoras-backup pgbackrest --stanza=pythagoras check` proves the archive end to end, `… verify` checks every file in the repository against its checksum. `pythagoras-backup rclone lsf -R sealed:current` lists the documents as they are off the host, decrypted.
+
+**What to expect.** On a new installation PostgreSQL logs a few failed `archive-push` attempts in the seconds before the backup service is up; they stop by themselves and nothing is lost (the log waits in `pg_wal`). If the off-site storage is unreachable later, the same happens until it returns, and `pg_wal` grows meanwhile: monitoring (M8.6) alerts on failed archiving and on the age of the newest backup. A failed scheduled backup is retried after 30 minutes.
+
+**Restoring** is the M8.7 drill and runbook: documents first (`sealed:current` plus what was moved aside up to the chosen moment), then the database with `pythagoras-backup pgbackrest --stanza=pythagoras restore` onto an empty data directory, to the latest moment or a point in time (`--type=time --target=…`). Erasures completed after the chosen moment are applied again from `privacy.data_subject_request`.
+
 ## Identity provider in production (M8.3, ADR 0034)
 
 - Keycloak runs `start --optimized --import-realm` from the platform's image, behind the gateway on `AUTH_HOST`, with TLS ending at the gateway (`KC_PROXY_HEADERS=xforwarded`).
@@ -407,7 +435,7 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec k
 ```
 
   then `kcadm.sh <command> --config /tmp/kcadm.config` in the same container, reached over SSH to the host. The web console is not set up for production use.
-- Back up the `keycloak` database together with `pythagoras` (same cluster, same backup job, M8.5).
+- The `keycloak` database is in every backup, with `pythagoras` and `pythagoras_cms` (one cluster, ADR 0035).
 
 Passwords are in `secrets/` (git-ignored), one file per role. For an administrative session as the superuser (local socket only):
 
@@ -448,13 +476,12 @@ bash scripts/db-restore-check.sh
 5. `docker compose exec -u postgres postgres psql -d pythagoras -v dbname=pythagoras -f /opt/pythagoras/db/bootstrap/database.sql`
 6. `bash scripts/db-migrate.sh status` must show no pending migrations, or apply them.
 
-### Production (required before go-live, not yet built)
+### Production
 
-- **Continuous archiving with point-in-time recovery**: pgBackRest (or WAL-G) with `archive_mode = on`, a full backup weekly, differential daily, WAL archived continuously to encrypted, off-site object storage in the EU, in a separate account from the database host.
-- **Retention**: at least 30 days of point-in-time recovery; monthly logical dumps kept per the DPO-approved retention policy.
-- **Restore drills**: monthly automated restore to a scratch host with the row-count check; quarterly full disaster-recovery rehearsal with timings recorded.
-- **Targets to agree with the business**: recovery point objective (data that may be lost) and recovery time objective (time to restore service). With WAL archiving, the RPO is typically under 5 minutes.
-- **Documents**: the bytes live in the object store, not the database. Copy the bucket off-site (for example `rclone sync` to an encrypted bucket in the EU with object versioning) **before** each database backup, so every version the database knows has its object; restore the objects first, then the database. Garage also snapshots its metadata every 6 hours (`metadata_auto_snapshot_interval`).
+- **Continuous backups** (M8.5, ADR 0035): pgBackRest with the write-ahead log archived at least every minute, a full backup weekly and a differential daily, encrypted, to off-site S3-compatible storage in the EU; the documents copied every 5 minutes and before each backup. See "Continuous backups" under the production stack. Targets (ADR 0033): at most 5 minutes of data lost, 4 hours to restore service.
+- **Retention**: four weekly full backups, so any moment of the last four to five weeks can be restored; longer-term copies only per the DPO-approved retention policy.
+- **Restore drills** (M8.7): an automated restore to a scratch host with the row-count check, its time measured against the 4-hour target; a full disaster-recovery rehearsal with timings recorded.
+- **Documents**: the bytes live in the object store, not the database; they are copied off-site before each database backup, so every version the database knows has its object. Restore the objects first, then the database. Garage also snapshots its metadata every 6 hours (`metadata_auto_snapshot_interval`).
 - **Redis**: no backup is needed for correctness. PostgreSQL's outbox is the source of truth; after losing Redis, the worker re-enqueues unpublished outbox events and expiry jobs from PostgreSQL. RDB snapshots and the AOF on the volume cover ordinary restarts.
 
 ## Upgrades
@@ -463,6 +490,7 @@ bash scripts/db-restore-check.sh
 - **PostgreSQL major release** (19 is due late 2026): wait for 19.1 or 19.2; test with `pg_upgrade --link` on a restored copy (the volume is mounted at `/var/lib/postgresql` for this), run the full test suite, then upgrade with a backup taken immediately before.
 - **Redis**: change the tag and digest, restart; run `scripts/redis-test.sh`.
 - **Garage**: v2.4.1 now; v2.5.0 (2026-10-24) rewrites the resync manager, so wait for a patch release, read its notes, then change the tag and digest, restart, and run the documents integration test. A major release needs its migration notes followed on a copy first.
+- **pgBackRest and rclone**: pinned in `infra/images/postgres.Dockerfile` (the package version, and rclone's release with its checksums). PostgreSQL and the backup service always run the same image, so they upgrade together. Read the release notes for repository format changes; run `pythagoras-backup pgbackrest --stanza=pythagoras check` and take a full backup after the release.
 - **Rotating a password**: write the new value to the secret file, re-run `db/bootstrap/cluster.sql` as the superuser (it applies `ALTER ROLE … PASSWORD` from the secrets), restart the services that use that role. For Redis, restart the container: the ACL file is regenerated from the secrets on start.
 
 ## Production configuration differences
@@ -477,6 +505,7 @@ bash scripts/db-restore-check.sh
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |
 | E-mail | Mailpit, keeps everything locally | An SMTP service with TLS and the group's domain (SPF, DKIM, DMARC); the worker refuses Mailpit, plain connections and development addresses |
+| Backups | Logical dumps to a local volume (`scripts/db-backup.sh`) | pgBackRest to encrypted off-site storage, the write-ahead log at least every minute, documents copied every 5 minutes (M8.5, ADR 0035) |
 | Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | One unprivileged Garage node with frequent off-site copies (M8.5), its secret files `0444` inside the root-only secrets directory; three nodes with `replication_factor = 3` as the platform grows; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
 
 ## Availability limits of the initial topology

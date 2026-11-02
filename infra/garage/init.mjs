@@ -1,7 +1,8 @@
 // Prepares the object store (ADR 0029; in production from the API image, ADR 0033) through Garage's admin API:
 // gives the single node its role, imports the API's key and creates the
-// documents bucket the key may read and write. Safe to run again: each step is
-// skipped when already done.
+// documents bucket the key may read and write; in production also the backup
+// service's key, which may only read it (M8.5). Safe to run again: each step
+// is skipped when already done.
 import { readFileSync } from 'node:fs';
 
 const ADMIN = process.env.GARAGE_ADMIN_URL ?? 'http://garage:3903';
@@ -57,5 +58,31 @@ if (!granted?.permissions?.read || !granted?.permissions?.write) {
     permissions: { read: true, write: true, owner: false },
   });
   console.log('storage: API key may read and write the bucket');
+}
+
+// The backup service copies the documents off the host with a key of its own.
+const readerId = process.env.BACKUP_STORAGE_ACCESS_KEY_ID;
+if (readerId) {
+  const readerSecret = readFileSync(process.env.BACKUP_STORAGE_SECRET_ACCESS_KEY_FILE, 'utf8').trim();
+  if (!(await call('GET', `/v2/GetKeyInfo?id=${encodeURIComponent(readerId)}`)).ok) {
+    await must('POST', '/v2/ImportKey', { accessKeyId: readerId, secretAccessKey: readerSecret, name: 'pythagoras-backup' });
+    console.log('storage: backup key imported');
+  }
+  const reader = info.value.keys.find((k) => k.accessKeyId === readerId);
+  if (!reader?.permissions?.read || reader.permissions.write || reader.permissions.owner) {
+    if (reader?.permissions?.write || reader?.permissions?.owner) {
+      await must('POST', '/v2/DenyBucketKey', {
+        bucketId: info.value.id,
+        accessKeyId: readerId,
+        permissions: { read: false, write: true, owner: true },
+      });
+    }
+    await must('POST', '/v2/AllowBucketKey', {
+      bucketId: info.value.id,
+      accessKeyId: readerId,
+      permissions: { read: true, write: false, owner: false },
+    });
+    console.log('storage: backup key may only read the bucket');
+  }
 }
 console.log('storage: ready');

@@ -24,6 +24,7 @@ tests
 !infra/postgres/pg_hba.production.conf
 !infra/postgres/production-entrypoint.sh
 !infra/pgbouncer
+!infra/pgbackrest
 !infra/postgres/initdb
 !infra/redis
 !infra/gateway/Caddyfile.production

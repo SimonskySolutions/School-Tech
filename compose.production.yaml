@@ -6,7 +6,9 @@
 #
 # Start-up order is enforced by health checks: the data services, then the
 # migration job (a failed migration stops everything after it), then the
-# applications, then the gateway. docs/operations.md has the full procedure.
+# applications, then the gateway. The backup service is healthy once the
+# write-ahead log reaches the off-site storage and a backup exists (M8.5).
+# docs/operations.md has the full procedure.
 
 name: ${STACK_NAME:-pythagoras}
 
@@ -64,9 +66,12 @@ services:
       - pg_cms_password
       - tls_postgres_crt
       - tls_postgres_key
+      - tls_ca_crt
     networks: [data]
     volumes:
       - pg_data:/var/lib/postgresql
+      # The local socket, shared with the backup service (M8.5).
+      - pg_socket:/var/run/postgresql
     shm_size: 512mb
     stop_grace_period: 120s
     deploy:
@@ -108,6 +113,64 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+  # Continuous backups (M8.5, ADR 0035): pgBackRest's repository host. It
+  # receives the write-ahead log from PostgreSQL over TLS, takes the scheduled
+  # backups from the data directory (read-only) and copies the documents, all
+  # encrypted, to the off-site storage. The only service that can reach it.
+  backup:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup"]
+    command: ["run"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?set the off-site backup storage (docs/operations.md)}
+      BACKUP_S3_PORT: ${BACKUP_S3_PORT:-443}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:?}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?}
+      BACKUP_S3_KEY_ID: ${BACKUP_S3_KEY_ID:?}
+      BACKUP_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+      BACKUP_S3_CA_FILE: ${BACKUP_S3_CA_FILE:-}
+      BACKUP_HOUR: ${BACKUP_HOUR:-1}
+      BACKUP_FULL_DAY: ${BACKUP_FULL_DAY:-7}
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${BACKUP_STORAGE_ACCESS_KEY_ID:?}
+      STORAGE_ENDPOINT: http://garage:3900
+      TZ: UTC
+    secrets:
+      - tls_ca_crt
+      - tls_backup_crt
+      - tls_backup_key
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+      - storage_backup_secret_access_key
+    # The data network for the database and the documents; offsite for the storage.
+    networks: [data, offsite]
+    volumes:
+      - pg_data:/var/lib/postgresql:ro
+      - pg_socket:/var/run/postgresql
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    # Healthy once the log is archived and a backup exists.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/pythagoras-backup", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
 
   redis:
     <<: *hardening
@@ -178,9 +241,12 @@ services:
       STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
       STORAGE_CAPACITY_GB: ${STORAGE_CAPACITY_GB:-100}
       STORAGE_NODE_TAG: production
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${BACKUP_STORAGE_ACCESS_KEY_ID:?}
+      BACKUP_STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_backup_secret_access_key
     secrets:
       - garage_admin_token
       - storage_secret_access_key
+      - storage_backup_secret_access_key
     networks: [data]
     command: ["node", "ops/storage-init.mjs"]
 
@@ -460,9 +526,12 @@ networks:
     internal: true
   # Outbound only, for the worker's mail and DNS checks.
   egress: {}
+  # Outbound only, for the backup service and the off-site storage (M8.5).
+  offsite: {}
 
 volumes:
   pg_data:
+  pg_socket:
   redis_data:
   garage_meta:
   garage_data:
@@ -502,3 +571,12 @@ secrets:
   tls_pgbouncer_key: { file: "${SECRETS_DIR}/tls_pgbouncer_key" }
   tls_redis_crt: { file: "${SECRETS_DIR}/tls_redis_crt" }
   tls_redis_key: { file: "${SECRETS_DIR}/tls_redis_key" }
+  tls_backup_crt: { file: "${SECRETS_DIR}/tls_backup_crt" }
+  tls_backup_key: { file: "${SECRETS_DIR}/tls_backup_key" }
+  # Backups (M8.5): the off-site storage's key, the encryption passphrases and
+  # the backup's read-only key to the documents.
+  backup_s3_secret_key: { file: "${SECRETS_DIR}/backup_s3_secret_key" }
+  backup_cipher_pass: { file: "${SECRETS_DIR}/backup_cipher_pass" }
+  backup_documents_pass: { file: "${SECRETS_DIR}/backup_documents_pass" }
+  backup_documents_salt: { file: "${SECRETS_DIR}/backup_documents_salt" }
+  storage_backup_secret_access_key: { file: "${SECRETS_DIR}/storage_backup_secret_access_key" }
