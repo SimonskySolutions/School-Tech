@@ -13,10 +13,12 @@ import { smtpTransport } from './mail-transport';
 import { NotificationSender } from './notification-sender';
 import { orderPaidNotice } from './order-paid-notice';
 import { MESSAGE_EVENTS, messageEventHandler } from './message-events';
+import { serveMetrics, WorkerMetrics } from './metrics';
 import { loadWorkerEnv } from './worker-env';
 
 // Background worker (ADR 0002, 0004). Same package and image as the API, its
-// own database role (pyth_worker) and Redis user (pyth_queue). No HTTP server.
+// own database role (pyth_worker) and Redis user (pyth_queue). Its only HTTP
+// endpoint is /metrics for Prometheus, on the data network (M8.6).
 
 const logger = new Logger('Worker');
 
@@ -134,6 +136,11 @@ async function main(): Promise<void> {
   notifications.start();
 
   // Liveness for Docker: a file touched while the event loop is healthy.
+  const metricsServer =
+    env.METRICS_PORT > 0
+      ? serveMetrics(new WorkerMetrics(database, [events, maintenance]), env.METRICS_PORT, logger)
+      : undefined;
+
   const beat = () => writeFileSync(env.HEARTBEAT_FILE, new Date().toISOString());
   beat();
   const heartbeat = setInterval(beat, 10_000);
@@ -146,6 +153,7 @@ async function main(): Promise<void> {
     stopping = true;
     logger.log(`${signal} received, finishing current jobs`);
     clearInterval(heartbeat);
+    metricsServer?.close();
     await Promise.all([relay.stop(), payments.stop(), notifications.stop()]);
     mail.close();
     await Promise.all([eventWorker.close(), maintenanceWorker.close()]);

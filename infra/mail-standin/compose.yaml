@@ -1,0 +1,48 @@
+# A stand-in for the mail service that receives the alerts (M8.6, ADR 0036):
+# a mailbox on the "egress" network that accepts any sign-in over STARTTLS,
+# with a certificate from the platform's authority, and delivers nothing. Used
+# by scripts/prod-stack-test.sh, on top of the production stack:
+#
+#   docker compose -f compose.production.yaml -f infra/mail-standin/compose.yaml ...
+#
+# with TLS_EXTRA_SERVICES=mailbox for scripts/prod-secrets.sh so that it gets a
+# certificate. Only Alertmanager is pointed at it, so that the check reads the
+# alert e-mails as they arrive. Nothing here belongs in production.
+
+services:
+  mailbox:
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_DISABLE_RDNS: "true"
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_SMTP_TLS_CERT: /run/secrets/tls_mailbox_crt
+      MP_SMTP_TLS_KEY: /run/secrets/tls_mailbox_key
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+    secrets:
+      - tls_mailbox_crt
+      - tls_mailbox_key
+    networks: [egress]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  alertmanager:
+    depends_on:
+      mailbox:
+        condition: service_healthy
+    environment:
+      SMTP_HOST: mailbox
+      SMTP_PORT: "1025"
+      ALERT_SMTP_CA_FILE: /run/secrets/tls_ca_crt
+
+secrets:
+  tls_mailbox_crt: { file: "${SECRETS_DIR}/tls_mailbox_crt" }
+  tls_mailbox_key: { file: "${SECRETS_DIR}/tls_mailbox_key" }

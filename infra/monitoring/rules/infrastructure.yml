@@ -1,0 +1,147 @@
+# Alerts on the host and the services (M8.6, ADR 0036). Every rule has a unit
+# test in ../tests that makes it fire (run.sh test). Critical: someone should
+# act now. Warning: act within the working day.
+groups:
+  - name: services
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} cannot be scraped"
+          description: "Prometheus has not reached {{ $labels.instance }} for 2 minutes: the service or its exporter is down."
+      - alert: ServiceUnhealthy
+        expr: probe_success{job="health"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.target }} fails its health check"
+          description: "The health check has failed for 2 minutes."
+      - alert: CertificateInvalid
+        expr: probe_success{job="certificate"} == 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "The gateway's certificate cannot be verified"
+          description: "A TLS connection to the gateway with the portal's name has failed for 10 minutes: browsers will refuse the platform."
+      - alert: CertificateExpiresSoon
+        expr: probe_ssl_earliest_cert_expiry{job="certificate"} - time() < 14 * 86400
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "The gateway's certificate expires in {{ $value | humanizeDuration }}"
+          description: "Caddy renews certificates 30 days ahead; renewal is failing (see the gateway's log)."
+
+  - name: host
+    rules:
+      - alert: HostDiskFilling
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"} / node_filesystem_size_bytes < 0.15
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free"
+          description: "Less than 15 % of the disk is free."
+      - alert: HostDiskFull
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|nsfs"} / node_filesystem_size_bytes < 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.mountpoint }} has {{ $value | humanizePercentage }} free"
+          description: "Less than 5 % of the disk is free: PostgreSQL stops when it cannot write its log."
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the memory is available"
+          description: "Less than 10 % of the memory has been available for 10 minutes."
+      - alert: HostCpuBusy
+        expr: 1 - avg without (cpu, mode) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "The processors are {{ $value | humanizePercentage }} busy"
+          description: "More than 90 % for 15 minutes."
+
+  - name: postgres
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "PostgreSQL is not answering"
+          description: "The exporter has not reached PostgreSQL for a minute."
+      - alert: PostgresConnectionsHigh
+        expr: sum without (datname, state, usename, application_name, backend_type) (pg_stat_activity_count) / on (instance) group_left max by (instance) (pg_settings_max_connections) > 0.80
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "PostgreSQL uses {{ $value | humanizePercentage }} of its connections"
+          description: "More than 80 % of max_connections for 5 minutes."
+      - alert: PostgresArchiveFailing
+        expr: pg_stat_archiver_last_archive_age > 300 and increase(pg_stat_archiver_failed_count[10m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "The write-ahead log is not reaching the backups"
+          description: "Archiving has failed and nothing was archived for {{ $value | humanizeDuration }}: data written since is not backed up, and pg_wal grows. Check the backup service and the off-site storage."
+      - alert: PostgresLongTransaction
+        expr: max without (datname, state, usename, application_name) (pg_stat_activity_max_tx_duration) > 600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "A transaction has been open for {{ $value | humanizeDuration }}"
+          description: "Long transactions hold back vacuum and locks."
+
+  - name: pgbouncer
+    rules:
+      - alert: PgBouncerDown
+        expr: pgbouncer_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "PgBouncer is not answering"
+          description: "The API and the worker reach PostgreSQL only through PgBouncer."
+      - alert: PgBouncerClientsWaiting
+        expr: max without (database, user) (pgbouncer_pools_client_waiting_connections) > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Clients are waiting for a database connection"
+          description: "Every pooled connection has been busy for 2 minutes."
+
+  - name: redis
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Redis is not answering"
+          description: "The queues stop; events wait in PostgreSQL's outbox and are relayed when Redis returns."
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.90 and redis_memory_max_bytes > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Redis uses {{ $value | humanizePercentage }} of its memory"
+          description: "More than 90 % of maxmemory for 10 minutes."
+
+  - name: monitoring
+    rules:
+      - alert: AlertDeliveryFailing
+        expr: increase(alertmanager_notifications_failed_total[10m]) > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Alert e-mails are not being sent"
+          description: "Alertmanager cannot deliver to {{ $labels.integration }}: check the SMTP service and the smtp_password secret."
+      - alert: RuleEvaluationFailing
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Alert rules fail to evaluate"
+          description: "Rule group {{ $labels.rule_group }} has failed for 10 minutes."

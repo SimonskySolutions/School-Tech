@@ -25,6 +25,7 @@ tests
 !infra/postgres/production-entrypoint.sh
 !infra/pgbouncer
 !infra/pgbackrest
+!infra/monitoring
 !infra/postgres/initdb
 !infra/redis
 !infra/gateway/Caddyfile.production

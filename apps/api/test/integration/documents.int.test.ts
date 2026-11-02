@@ -176,9 +176,11 @@ describe('private documents', () => {
       ).status,
     ).toBe(404);
 
+    // Other files may also file documents for this person (the approvals test does).
     const mine = (await get<MyStaffRecords>('/staff/me', tokens['kitchen.a']!)).body.documents;
-    expect(mine.map((document) => document.title)).toEqual(['Contract (integration test)']);
-    const own = await link('kitchen.a', mine[0]!.versions[0]!.id);
+    const contractOfMine = mine.find((document) => document.title === 'Contract (integration test)');
+    expect(contractOfMine).toBeDefined();
+    const own = await link('kitchen.a', contractOfMine!.versions[0]!.id);
     expect((await download('kitchen.a', own.body.token)).status).toBe(200);
 
     const principal = (await documentsAtA('principal.a')).body;

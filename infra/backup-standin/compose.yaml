@@ -19,6 +19,7 @@ services:
     secrets:
       - garage_rpc_secret
       - garage_admin_token
+      - garage_metrics_token
     networks: [offsite]
     healthcheck:
       test: ["CMD", "/garage", "status"]

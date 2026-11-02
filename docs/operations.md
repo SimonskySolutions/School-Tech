@@ -342,7 +342,7 @@ The worker checks pending domains every minute (each at most every five minutes)
 **First installation**
 
 1. Install Docker Engine with the Compose plugin; open the firewall for 80 and 443 only.
-2. Copy `.env.production.example` to `/etc/pythagoras/.env` (mode `0600`, owned by root) and fill it in: `IMAGE_TAG`, the host names, `ACME_EMAIL`, the SMTP service, `STORAGE_ACCESS_KEY_ID`, `BACKUP_STORAGE_ACCESS_KEY_ID` and the off-site backup storage (`BACKUP_S3_*`, below).
+2. Copy `.env.production.example` to `/etc/pythagoras/.env` (mode `0600`, owned by root) and fill it in: `IMAGE_TAG`, the host names, `ACME_EMAIL`, the SMTP service, `ALERT_EMAIL_TO` (who receives the alerts), `STORAGE_ACCESS_KEY_ID`, `BACKUP_STORAGE_ACCESS_KEY_ID` and the off-site backup storage (`BACKUP_S3_*`, below).
 3. Create the secrets: `sudo bash scripts/prod-secrets.sh /etc/pythagoras/secrets`. The directory is `0700` and root's; the files are `0444` because the containers read them as unprivileged users. Secrets a provider issues come from the environment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_PASSWORD`, `BACKUP_S3_SECRET_KEY`); without them the script writes placeholders and lists them. Payments, e-mail and backups fail until the placeholders are replaced; nothing else does. The script also prints new key ids for `STORAGE_ACCESS_KEY_ID` and `BACKUP_STORAGE_ACCESS_KEY_ID`. **Copy `backup_cipher_pass`, `backup_documents_pass` and `backup_documents_salt` to a safe place off the host** (the group's password manager): without them no backup can be read after losing the server.
 4. Put the images on the host: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env pull` from the registry in `IMAGE_REGISTRY`, or `docker load` of the images CI built for that commit.
 5. Start: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait`.
@@ -353,10 +353,11 @@ The worker checks pending domains every minute (each at most every five minutes)
 | --- | --- | --- |
 | `edge` | gateway, web, API, CMS, Keycloak | The gateway routes to the applications; outbound for Stripe and Keycloak's e-mail |
 | `data` (internal) | PostgreSQL, PgBouncer, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init`, `backup` | No way out; the gateway and the web server are not on it |
-| `egress` | worker | Outbound for SMTP and the DNS checks of school domains |
+| `egress` | worker, Alertmanager | Outbound for SMTP and the DNS checks of school domains |
 | `offsite` | `backup` | Outbound to the off-site backup storage only (M8.5) |
+| `monitoring` (internal) | Prometheus, Alertmanager, node_exporter, blackbox_exporter | No way out; Alertmanager also on `egress` for its e-mails, Prometheus on `data` for the exporters (M8.6) |
 
-Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data` and `gateway_data` (certificates and the ACME account); `pg_socket` only shares PostgreSQL's local socket with the backup service.
+Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data`, `gateway_data` (certificates and the ACME account), `backup_state` (the backup service's state and measures), `prometheus_data` and `alertmanager_data` (silences); `pg_socket` only shares PostgreSQL's local socket with the backup service.
 
 **A release**
 
@@ -420,6 +421,61 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec b
 **What to expect.** On a new installation PostgreSQL logs a few failed `archive-push` attempts in the seconds before the backup service is up; they stop by themselves and nothing is lost (the log waits in `pg_wal`). If the off-site storage is unreachable later, the same happens until it returns, and `pg_wal` grows meanwhile: monitoring (M8.6) alerts on failed archiving and on the age of the newest backup. A failed scheduled backup is retried after 30 minutes.
 
 **Restoring** is the M8.7 drill and runbook: documents first (`sealed:current` plus what was moved aside up to the chosen moment), then the database with `pythagoras-backup pgbackrest --stanza=pythagoras restore` onto an empty data directory, to the latest moment or a point in time (`--type=time --target=…`). Erasures completed after the chosen moment are applied again from `privacy.data_subject_request`.
+
+### Monitoring and alerts (M8.6, ADR 0036)
+
+Prometheus, Alertmanager and the exporters run from the `pythagoras-monitoring` image as seven services. They are unprivileged, read-only and published nowhere. Prometheus collects measures every 15 seconds and keeps them 30 days (`MONITOR_RETENTION`). The 36 alert rules are e-mailed to `ALERT_EMAIL_TO` through the SMTP service above, STARTTLS required. Set `ALERT_SMTP_CA_FILE` only for a mail service with a private certificate.
+
+| Service | Measures | Network |
+| --- | --- | --- |
+| `prometheus` | Collects everything and evaluates the rules | `monitoring`, `data` |
+| `alertmanager` | Groups the alerts and sends the e-mails | `monitoring`, `egress` |
+| `node-exporter` | The host's disks, memory and processors; the backup service's measures (from `backup_state`) | `monitoring` |
+| `blackbox` | The applications' health checks; the gateway's certificate | `monitoring`, `edge` |
+| `postgres-exporter`, `pgbouncer-exporter`, `redis-exporter` | PostgreSQL, PgBouncer and Redis, as `pyth_monitor` over verified TLS | `data` |
+
+The worker also serves the platform's own measures on port 9464, reachable on the data network only. These are counts, never personal data, and cover:
+- the outbox and the queues;
+- webhooks and e-mails;
+- data subject requests due and overdue;
+- audit partitions.
+
+Keycloak and Garage report their own measures.
+
+**Looking at it.** Prometheus' and Alertmanager's own pages are not published. Ask them from inside their containers:
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec prometheus wget -q -O - 'http://127.0.0.1:9090/api/v1/alerts'
+```
+
+`…/api/v1/targets` shows what is collected and whether it answers. `…/api/v1/query?query=<PromQL>` asks anything. For the web interface, forward the port over SSH to a container address (`docker inspect` gives it): `ssh -L 9090:<prometheus address>:9090 <host>`. To silence an alert during planned work, use `exec alertmanager amtool --alertmanager.url=http://127.0.0.1:9093 silence add alertname=<name> --duration=2h --comment=<why>`.
+
+**The alerts**, in `infra/monitoring/rules/`. Each e-mail says what is wrong and what to do.
+
+| Area | Critical | Warning |
+| --- | --- | --- |
+| Services | A target not collected (`TargetDown`), a health check failing (`ServiceUnhealthy`), the gateway's certificate invalid | The certificate expires within 14 days |
+| Host | A disk 95 % full | A disk 85 % full, memory low, processors busy |
+| PostgreSQL, PgBouncer, Redis | Down; the write-ahead log not archived | Connections high, a long transaction, clients waiting for a connection, Redis memory high |
+| Platform | Outbox events waiting, webhooks not applied, a data subject request overdue, next month's audit partition missing | Outbox retrying, queues backing up or failing, e-mails overdue or given up, a data subject request due within 7 days, audit rows in the default partition |
+| Backups | Newest backup older than 26 hours, newest full older than 8 days, documents not copied for 30 minutes, the backup service reporting nothing | The last backup failed, no restore drill for 35 days (M8.7) |
+| Monitoring | Alert e-mails failing | Rules failing to evaluate |
+
+Critical alerts repeat every 4 hours while they last, warnings daily. Each sends one more e-mail when it resolves. While PostgreSQL or Redis is down, the alerts that only follow from that stay quiet. Every rule has a `promtool` test in `infra/monitoring/tests/`, run by `docker run --rm pythagoras-monitoring:<tag> test`. A new rule needs one, or the test fails.
+
+**Watch the host from outside, too.** Monitoring on the host cannot report the host's own loss. Set up an external uptime check of `https://<PORTAL_HOST>/` and `https://<API_HOST>/health/ready`, alerting the same people. Use the hosting provider's own check or an independent service. Choose it with the hosting.
+
+**Upgrading an installation from before M8.6.**
+
+1. Run `scripts/prod-secrets.sh` again to add `pg_monitor_password`, `redis_monitor_password` and `garage_metrics_token`. Existing files are kept.
+2. Run `up -d --wait` with the new images. PostgreSQL, PgBouncer, Redis and Garage are recreated with the new secrets.
+3. Create the monitoring role. The bootstrap is idempotent:
+
+   ```bash
+   docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec postgres gosu postgres bash /opt/pythagoras/db/bootstrap/apply.sh
+   ```
+
+Until step 3, `TargetDown` may fire for the PostgreSQL and PgBouncer exporters.
 
 ## Identity provider in production (M8.3, ADR 0034)
 
@@ -505,6 +561,7 @@ bash scripts/db-restore-check.sh
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |
 | E-mail | Mailpit, keeps everything locally | An SMTP service with TLS and the group's domain (SPF, DKIM, DMARC); the worker refuses Mailpit, plain connections and development addresses |
+| Monitoring | None; the suites check the applications | Prometheus, Alertmanager and exporters, 36 alerts by e-mail (M8.6, ADR 0036), and an external uptime check |
 | Backups | Logical dumps to a local volume (`scripts/db-backup.sh`) | pgBackRest to encrypted off-site storage, the write-ahead log at least every minute, documents copied every 5 minutes (M8.5, ADR 0035) |
 | Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | One unprivileged Garage node with frequent off-site copies (M8.5), its secret files `0444` inside the root-only secrets directory; three nodes with `replication_factor = 3` as the platform grows; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
 
@@ -517,9 +574,6 @@ One PostgreSQL and one Redis instance on one host is a single point of failure: 
 3. Application instances (API, worker) scale horizontally behind the gateway; they keep no local state.
 4. Reporting moves to a read replica once report queries affect daily work.
 
-## Monitoring checklist (to implement with the application)
+## Monitoring
 
-- PostgreSQL: connections per role, replication lag, longest transaction, lock waits (logged), `pg_stat_statements` top queries, autovacuum, disk usage, backup age, last successful restore check.
-- Redis: memory against `maxmemory` (with `noeviction`, a full Redis rejects writes), AOF rewrite status, connected clients, queue depths and failed jobs.
-- Audit log partitions: `audit.ensure_partitions()` must run monthly (worker job); alert if fewer than two future partitions exist.
-- Data subject requests approaching `due_at`.
+Production's monitoring and alerts are described under "Monitoring and alerts" in the production stack (M8.6, ADR 0036). It covers the host, PostgreSQL, PgBouncer, Redis, the outbox and queues, e-mails and webhooks, data subject requests, audit partitions, backup age and the restore drill. Not yet measured: per-query statistics (`pg_stat_statements`), and replication lag, which matters once a replica exists.

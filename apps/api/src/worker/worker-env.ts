@@ -29,6 +29,8 @@ const schema = z
     OUTBOX_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
     EVENT_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
     HEARTBEAT_FILE: z.string().min(1).default('/tmp/worker-heartbeat'),
+    // The platform's measures for Prometheus (M8.6); 0 turns the endpoint off.
+    METRICS_PORT: z.coerce.number().int().min(0).max(65535).default(9464),
 
     // Messages by e-mail (ADR 0031): any SMTP service; Mailpit in development.
     SMTP_HOST: z.string().min(1).default('mailpit'),

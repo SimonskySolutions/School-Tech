@@ -37,6 +37,9 @@ COPY infra/postgres/production-entrypoint.sh /usr/local/bin/pythagoras-entrypoin
 COPY infra/pgbackrest/database.conf /etc/pgbackrest/pgbackrest.conf
 COPY infra/pgbackrest/repository.conf /etc/pgbackrest/repository.conf
 COPY --chmod=755 infra/pgbackrest/backup.sh /usr/local/bin/pythagoras-backup
+# The backup service's lasting state and its measures for monitoring (M8.6);
+# a new volume takes this owner, and the host's exporter may read the measures.
+RUN install -d -o postgres -g postgres -m 755 /var/lib/pythagoras-backup /var/lib/pythagoras-backup/metrics
 # Starts as root only to place the certificate and fix ownership of the data
 # directory; the server runs as the "postgres" user.
 ENTRYPOINT ["/bin/bash", "/usr/local/bin/pythagoras-entrypoint.sh"]

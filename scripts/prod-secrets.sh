@@ -37,12 +37,12 @@ chmod 700 "$dir"
 # are not made: production refuses the features that use them.
 generated=(
   pg_superuser_password pg_migrator_password pg_api_password pg_worker_password
-  pg_reporting_password pg_backup_password pg_cms_password pg_keycloak_password
-  redis_queue_password redis_health_password redis_admin_password
+  pg_reporting_password pg_backup_password pg_cms_password pg_keycloak_password pg_monitor_password
+  redis_queue_password redis_health_password redis_admin_password redis_monitor_password
   keycloak_admin_password keycloak_web_client_secret
   keycloak_provisioning_client_secret keycloak_cms_client_secret
   web_session_secret cms_payload_secret cms_platform_api_key
-  garage_rpc_secret garage_admin_token storage_secret_access_key
+  garage_rpc_secret garage_admin_token garage_metrics_token storage_secret_access_key
   storage_backup_secret_access_key
   backup_cipher_pass backup_documents_pass backup_documents_salt
 )

@@ -1,0 +1,127 @@
+# Alerts on the platform's own measures (M8.6, ADR 0036): the worker's
+# /metrics (monitoring.platform_metrics() and the queues) and the backup
+# service's textfile. Every rule has a unit test in ../tests that makes it fire.
+groups:
+  - name: platform
+    rules:
+      - alert: OutboxBacklog
+        expr: pythagoras_outbox_oldest_pending_seconds > 900
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Events have waited {{ $value | humanizeDuration }} to reach the queue"
+          description: "The worker's outbox relay is not publishing: payments, credits and messages wait."
+      - alert: OutboxRetrying
+        expr: pythagoras_outbox_retrying_events > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Events keep failing to be published ({{ $value }})"
+          description: "Outbox events have failed at least three times (integration.outbox_event.last_error)."
+      - alert: QueueBacklog
+        expr: pythagoras_queue_jobs{state="waiting"} > 100
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Jobs waiting in the {{ $labels.queue }} queue: {{ $value }}"
+          description: "The worker is not keeping up."
+      - alert: QueueJobsFailing
+        expr: delta(pythagoras_queue_jobs{state="failed"}[1h]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Jobs failed in the {{ $labels.queue }} queue"
+          description: "Jobs failed for good in the last hour; the worker's log names them."
+      - alert: WebhooksWaiting
+        expr: pythagoras_inbound_events_waiting > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Provider webhooks are not being applied ({{ $value }} waiting)"
+          description: "Verified webhooks (payments) have waited more than 25 minutes: families' payments are not being confirmed."
+      - alert: WebhooksFailed
+        expr: pythagoras_inbound_events_failed > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Provider webhooks could not be applied ({{ $value }})"
+          description: "See integration.inbound_event.last_error."
+      - alert: MessagesOverdue
+        expr: pythagoras_messages_overdue > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "E-mails are overdue ({{ $value }})"
+          description: "Messages have waited more than 30 minutes: check the SMTP service."
+      - alert: MessagesFailed
+        expr: pythagoras_messages_failed_last_day > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "E-mails were given up on in the last day ({{ $value }})"
+          description: "See notify.message.last_error."
+
+  - name: privacy
+    rules:
+      - alert: DataSubjectRequestDueSoon
+        expr: pythagoras_data_subject_requests_due_within_7_days > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Data subject requests due within 7 days: {{ $value }}"
+          description: "GDPR Art. 12(3): answer within one month of receipt, or record an extension."
+      - alert: DataSubjectRequestOverdue
+        expr: pythagoras_data_subject_requests_overdue > 0
+        labels: { severity: critical }
+        annotations:
+          summary: "Data subject requests overdue: {{ $value }}"
+          description: "The legal deadline has passed; tell the data protection officer."
+      - alert: AuditPartitionMissing
+        expr: pythagoras_audit_partitions_ahead < 1
+        for: 1h
+        labels: { severity: critical }
+        annotations:
+          summary: "Next month has no audit log partition"
+          description: "The worker's daily audit.ensure-partitions job is not running; changes would land in the default partition."
+      - alert: AuditDefaultPartitionUsed
+        expr: pythagoras_audit_default_partition_rows > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Audit log rows in the default partition: {{ $value }}"
+          description: "Their month had no partition; move them into one once it exists (docs/operations.md)."
+
+  - name: backups
+    rules:
+      - alert: BackupMetricsMissing
+        expr: absent(pythagoras_backup_last_success_timestamp_seconds)
+        for: 30m
+        labels: { severity: critical }
+        annotations:
+          summary: "The backup service reports nothing"
+          description: "No backup measures for 30 minutes: the backup service is stopped or cannot reach its repository."
+      - alert: BackupTooOld
+        expr: time() - max without (type) (pythagoras_backup_last_success_timestamp_seconds) > 26 * 3600
+        labels: { severity: critical }
+        annotations:
+          summary: "The newest database backup is {{ $value | humanizeDuration }} old"
+          description: "A differential or full backup runs every night; the last one did not."
+      - alert: FullBackupTooOld
+        expr: time() - pythagoras_backup_last_success_timestamp_seconds{type="full"} > 8 * 86400
+        labels: { severity: critical }
+        annotations:
+          summary: "The newest full backup is {{ $value | humanizeDuration }} old"
+          description: "A full backup runs every week."
+      - alert: BackupFailed
+        expr: pythagoras_backup_last_run_failed == 1
+        labels: { severity: warning }
+        annotations:
+          summary: "The last database backup failed"
+          description: "It is retried after 30 minutes; the backup service's log has the reason."
+      - alert: DocumentsCopyStale
+        expr: time() - pythagoras_documents_copy_last_success_timestamp_seconds > 1800
+        labels: { severity: critical }
+        annotations:
+          summary: "The documents were last copied off the host {{ $value | humanizeDuration }} ago"
+          description: "They are copied every 5 minutes; check the backup service and the off-site storage."
+      - alert: RestoreCheckOverdue
+        expr: time() - pythagoras_restore_check_last_success_timestamp_seconds > 35 * 86400
+        labels: { severity: warning }
+        annotations:
+          summary: "No restore drill has succeeded for 35 days"
+          description: "A backup is only proven by restoring it: run the restore drill (docs/operations.md, M8.7)."

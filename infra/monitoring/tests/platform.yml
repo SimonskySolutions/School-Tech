@@ -1,0 +1,242 @@
+# Unit tests for ../rules/platform.yml (M8.6): each alert fires on the
+# condition it describes, and not before its time. Run by
+# infra/monitoring/run.sh test, in CI through scripts/images-test.sh.
+rule_files: [../rules/platform.yml]
+evaluation_interval: 1m
+tests:
+  # OutboxBacklog
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_outbox_oldest_pending_seconds{instance="worker:9464", job="worker"}'
+        values: '1000x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OutboxBacklog
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: OutboxBacklog
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "critical"}
+            exp_annotations: {"description": "The worker's outbox relay is not publishing: payments, credits and messages wait.", "summary": "Events have waited 16m 40s to reach the queue"}
+  # OutboxRetrying
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_outbox_retrying_events{instance="worker:9464", job="worker"}'
+        values: '2x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: OutboxRetrying
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: OutboxRetrying
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "Outbox events have failed at least three times (integration.outbox_event.last_error).", "summary": "Events keep failing to be published (2)"}
+  # QueueBacklog
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_queue_jobs{instance="worker:9464", job="worker", queue="events", state="waiting"}'
+        values: '150x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: QueueBacklog
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: QueueBacklog
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "queue": "events", "state": "waiting", "severity": "warning"}
+            exp_annotations: {"description": "The worker is not keeping up.", "summary": "Jobs waiting in the events queue: 150"}
+  # QueueJobsFailing
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_queue_jobs{instance="worker:9464", job="worker", queue="events", state="failed"}'
+        values: '0x30 1x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: QueueJobsFailing
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: QueueJobsFailing
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "queue": "events", "state": "failed", "severity": "warning"}
+            exp_annotations: {"description": "Jobs failed for good in the last hour; the worker's log names them.", "summary": "Jobs failed in the events queue"}
+  # WebhooksWaiting
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_inbound_events_waiting{instance="worker:9464", job="worker"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: WebhooksWaiting
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: WebhooksWaiting
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "critical"}
+            exp_annotations: {"description": "Verified webhooks (payments) have waited more than 25 minutes: families' payments are not being confirmed.", "summary": "Provider webhooks are not being applied (1 waiting)"}
+  # WebhooksFailed
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_inbound_events_failed{instance="worker:9464", job="worker"}'
+        values: '1'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: WebhooksFailed
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "See integration.inbound_event.last_error.", "summary": "Provider webhooks could not be applied (1)"}
+  # MessagesOverdue
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_messages_overdue{instance="worker:9464", job="worker"}'
+        values: '2x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MessagesOverdue
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: MessagesOverdue
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "Messages have waited more than 30 minutes: check the SMTP service.", "summary": "E-mails are overdue (2)"}
+  # MessagesFailed
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_messages_failed_last_day{instance="worker:9464", job="worker"}'
+        values: '1'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: MessagesFailed
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "See notify.message.last_error.", "summary": "E-mails were given up on in the last day (1)"}
+  # DataSubjectRequestDueSoon
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_data_subject_requests_due_within_7_days{instance="worker:9464", job="worker"}'
+        values: '1'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: DataSubjectRequestDueSoon
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "GDPR Art. 12(3): answer within one month of receipt, or record an extension.", "summary": "Data subject requests due within 7 days: 1"}
+  # DataSubjectRequestOverdue
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_data_subject_requests_overdue{instance="worker:9464", job="worker"}'
+        values: '1'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: DataSubjectRequestOverdue
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "critical"}
+            exp_annotations: {"description": "The legal deadline has passed; tell the data protection officer.", "summary": "Data subject requests overdue: 1"}
+  # AuditPartitionMissing
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_audit_partitions_ahead{instance="worker:9464", job="worker"}'
+        values: '0x70'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AuditPartitionMissing
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: AuditPartitionMissing
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "critical"}
+            exp_annotations: {"description": "The worker's daily audit.ensure-partitions job is not running; changes would land in the default partition.", "summary": "Next month has no audit log partition"}
+  # AuditDefaultPartitionUsed
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_audit_default_partition_rows{instance="worker:9464", job="worker"}'
+        values: '5'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: AuditDefaultPartitionUsed
+        exp_alerts:
+          - exp_labels: {"instance": "worker:9464", "job": "worker", "severity": "warning"}
+            exp_annotations: {"description": "Their month had no partition; move them into one once it exists (docs/operations.md).", "summary": "Audit log rows in the default partition: 5"}
+  # BackupMetricsMissing
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="node-exporter:9100", job="node"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: BackupMetricsMissing
+        exp_alerts: []
+      - eval_time: 31m
+        alertname: BackupMetricsMissing
+        exp_alerts:
+          - exp_labels: {"severity": "critical"}
+            exp_annotations: {"description": "No backup measures for 30 minutes: the backup service is stopped or cannot reach its repository.", "summary": "The backup service reports nothing"}
+  # BackupTooOld
+  - interval: 1h
+    input_series:
+      - series: 'pythagoras_backup_last_success_timestamp_seconds{instance="node-exporter:9100", job="node", type="diff"}'
+        values: '0x30'
+      - series: 'pythagoras_backup_last_success_timestamp_seconds{instance="node-exporter:9100", job="node", type="full"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: BackupTooOld
+        exp_alerts: []
+      - eval_time: 27h
+        alertname: BackupTooOld
+        exp_alerts:
+          - exp_labels: {"instance": "node-exporter:9100", "job": "node", "severity": "critical"}
+            exp_annotations: {"description": "A differential or full backup runs every night; the last one did not.", "summary": "The newest database backup is 1d 3h 0m 0s old"}
+  # FullBackupTooOld
+  - interval: 1d
+    input_series:
+      - series: 'pythagoras_backup_last_success_timestamp_seconds{instance="node-exporter:9100", job="node", type="full"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: FullBackupTooOld
+        exp_alerts: []
+      - eval_time: 9d
+        alertname: FullBackupTooOld
+        exp_alerts:
+          - exp_labels: {"instance": "node-exporter:9100", "job": "node", "type": "full", "severity": "critical"}
+            exp_annotations: {"description": "A full backup runs every week.", "summary": "The newest full backup is 9d 0h 0m 0s old"}
+  # BackupFailed
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_backup_last_run_failed{instance="node-exporter:9100", job="node"}'
+        values: '1'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: BackupFailed
+        exp_alerts:
+          - exp_labels: {"instance": "node-exporter:9100", "job": "node", "severity": "warning"}
+            exp_annotations: {"description": "It is retried after 30 minutes; the backup service's log has the reason.", "summary": "The last database backup failed"}
+  # DocumentsCopyStale
+  - interval: 1m
+    input_series:
+      - series: 'pythagoras_documents_copy_last_success_timestamp_seconds{instance="node-exporter:9100", job="node"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 29m
+        alertname: DocumentsCopyStale
+        exp_alerts: []
+      - eval_time: 31m
+        alertname: DocumentsCopyStale
+        exp_alerts:
+          - exp_labels: {"instance": "node-exporter:9100", "job": "node", "severity": "critical"}
+            exp_annotations: {"description": "They are copied every 5 minutes; check the backup service and the off-site storage.", "summary": "The documents were last copied off the host 31m 0s ago"}
+  # RestoreCheckOverdue
+  - interval: 1d
+    input_series:
+      - series: 'pythagoras_restore_check_last_success_timestamp_seconds{instance="node-exporter:9100", job="node"}'
+        values: '0x40'
+    alert_rule_test:
+      - eval_time: 34d
+        alertname: RestoreCheckOverdue
+        exp_alerts: []
+      - eval_time: 36d
+        alertname: RestoreCheckOverdue
+        exp_alerts:
+          - exp_labels: {"instance": "node-exporter:9100", "job": "node", "severity": "warning"}
+            exp_annotations: {"description": "A backup is only proven by restoring it: run the restore drill (docs/operations.md, M8.7).", "summary": "No restore drill has succeeded for 35 days"}

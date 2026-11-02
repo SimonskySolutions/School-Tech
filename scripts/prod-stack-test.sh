@@ -16,6 +16,9 @@
 # - continuous backups to a stand-in off-site storage: the log archived within
 #   a minute, full and differential backups of every database, the documents
 #   copied, all encrypted, and the repository verified;
+# - monitoring: every target scraped, the platform's, the backup's and the
+#   exporters' measures present, no alert on a healthy stack but the missing
+#   restore drill, and an alert e-mailed when Redis stops (to a stand-in mailbox);
 # - every migration applied, and a failing one stops a release without
 #   touching the database or the running version;
 # - application containers read-only, without capabilities, unprivileged.
@@ -56,17 +59,19 @@ BACKUP_S3_REGION=garage
 BACKUP_S3_BUCKET=pythagoras-backups
 BACKUP_S3_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
 BACKUP_S3_CA_FILE=/run/secrets/tls_ca_crt
+ALERT_EMAIL_TO=platform@example.bg
 EOF
-BACKUP_S3_SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') TLS_EXTRA_SERVICES=offsite \
+BACKUP_S3_SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') TLS_EXTRA_SERVICES="offsite mailbox" \
   bash scripts/prod-secrets.sh "$work/secrets" >/dev/null
 
+overlays="-f infra/backup-standin/compose.yaml -f infra/mail-standin/compose.yaml"
 compose() {
-  docker compose -p "$project" -f compose.production.yaml -f infra/backup-standin/compose.yaml \
-    --env-file "$(host_path "$work/env")" "$@"
+  # shellcheck disable=SC2086 # the overlays' options
+  docker compose -p "$project" -f compose.production.yaml $overlays --env-file "$(host_path "$work/env")" "$@"
 }
 cleanup() {
   if [[ "${KEEP:-}" == 1 ]]; then
-    echo "kept running: docker compose -p $project -f compose.production.yaml -f infra/backup-standin/compose.yaml --env-file $(host_path "$work/env") ..."
+    echo "kept running: docker compose -p $project -f compose.production.yaml $overlays --env-file $(host_path "$work/env") ..."
   else
     compose down -v --remove-orphans >/dev/null 2>&1 || true
     rm -rf "$work"
@@ -94,11 +99,13 @@ if [[ -z "$unhealthy" ]]; then ok "every service is healthy"; else fail "not hea
 published=$(compose ps --format '{{.Service}} {{.Ports}}' | grep -- '->' | cut -d' ' -f1 | sort -u | tr '\n' ' ')
 if [[ "$published" == "gateway " ]]; then ok "only the gateway is published"; else fail "published: $published"; fi
 
-if [[ "$(docker network inspect -f '{{.Internal}}' "${project}_data")" == true ]]; then
-  ok "the data network has no way out"
-else
-  fail "the data network is not internal"
-fi
+for network in data monitoring; do
+  if [[ "$(docker network inspect -f '{{.Internal}}' "${project}_$network")" == true ]]; then
+    ok "the $network network has no way out"
+  else
+    fail "the $network network is not internal"
+  fi
+done
 networks() { docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(compose ps -q "$1")" | sed "s/${project}_//g"; }
 for service in postgres pgbouncer redis garage; do
   if [[ "$(networks "$service")" == "data " ]]; then ok "$service is on the data network only"; else fail "$service is on $(networks "$service")"; fi
@@ -108,6 +115,11 @@ if [[ "$(networks backup)" == "data offsite " ]]; then
 else
   fail "the backup service is on $(networks backup)"
 fi
+for placed in "prometheus data monitoring " "alertmanager egress monitoring " "node-exporter monitoring " \
+  "blackbox edge monitoring " "postgres-exporter data " "pgbouncer-exporter data " "redis-exporter data "; do
+  service=${placed%% *}
+  if [[ "$(networks "$service")" == "${placed#* }" ]]; then ok "$service is on ${placed#* }"; else fail "$service is on $(networks "$service")"; fi
+done
 if compose exec -T gateway wget -q -T 3 -O /dev/null http://postgres:5432 2>/dev/null; then
   fail "the gateway reaches PostgreSQL"
 else
@@ -328,7 +340,60 @@ else
 fi
 expect "the running version keeps serving" 200 api.pythagoras.test /health/ready
 
-for service in api worker web cms gateway pgbouncer backup storage-init migrate; do
+# Monitoring (M8.6), read through Prometheus' own API inside its container.
+prom() { compose exec -T prometheus wget -q -O - "http://127.0.0.1:9090/api/v1/$1" | tr -d '\r'; }
+value() { # PromQL: prints the first result's value, or "none"
+  prom "query?query=$("$PY" -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1")" |
+    field "d['data']['result'][0]['value'][1] if d['data']['result'] else 'none'"
+}
+for ((waited = 0; waited < 180; waited += 5)); do
+  targets=$(prom targets)
+  down=$(field "sorted(t['labels']['job'] + ' ' + t['labels'].get('target', t['labels']['instance']) for t in d['data']['activeTargets'] if t['health'] != 'up')" <<<"$targets")
+  [[ "$down" == "[]" ]] && break
+  sleep 5
+done
+same "Prometheus reaches all $(field "len(d['data']['activeTargets'])" <<<"$targets") targets" "[]" "$down"
+same "every application answers its health probe" 1 "$(value 'min(probe_success{job="health"})')"
+same "the gateway's certificate is valid and checked" "1 1" "$(value 'probe_success{job="certificate"}') $(value 'count(probe_ssl_earliest_cert_expiry > time())')"
+same "the exporters reach PostgreSQL, PgBouncer and Redis" "1 1 1" "$(value pg_up) $(value pgbouncer_up) $(value redis_up)"
+same "the archiver's progress is measured" 1 "$(value 'count(pg_stat_archiver_archived_count > 0)')"
+same "the host's disks are measured" 1 "$(value 'count(node_filesystem_avail_bytes) > bool 0')"
+same "the platform's measures are scraped from the worker" "12 8" \
+  "$(value 'count({job="worker", __name__=~"pythagoras_(outbox|inbound|messages|data_subject|audit)_.+"})') $(value 'count(pythagoras_queue_jobs)')"
+same "the backups' measures are read from the backup service" "5 1" \
+  "$(value 'count({__name__=~"pythagoras_(backup|documents_copy|restore_check)_.+"})') $(value 'count(time() - pythagoras_backup_last_success_timestamp_seconds{type="diff"} < 3600)')"
+rules=$(prom rules)
+same "every alert rule is loaded and evaluates" "$(grep -ho 'alert: [A-Za-z]*' infra/monitoring/rules/*.yml | wc -l | tr -d ' ') ['ok']" \
+  "$(field "str(sum(len(g['rules']) for g in d['data']['groups'])) + ' ' + str(sorted({r['health'] for g in d['data']['groups'] for r in g['rules']}))" <<<"$rules")"
+# The host's own alerts depend on the machine the check runs on.
+same "nothing fires on a healthy stack but the restore drill not yet run (M8.7)" "['RestoreCheckOverdue']" \
+  "$(field "sorted({a['labels']['alertname'] for g in d['data']['groups'] for r in g['rules'] for a in r.get('alerts', []) if a['state'] == 'firing' and not a['labels']['alertname'].startswith('Host')})" <<<"$rules")"
+
+# The alerts reach the mailbox: the one already firing, then Redis stopped.
+mail() { # alert name: waits up to 5 minutes for its e-mail, prints its recipients
+  local found
+  for ((waited = 0; waited < 300; waited += 10)); do
+    found=$(compose exec -T mailbox wget -q -O - "http://127.0.0.1:8025/api/v1/messages?limit=100" | tr -d '\r' |
+      field "' '.join(sorted({t['Address'] for m in d['messages'] if m['Subject'].startswith('[FIRING') and ' $1 ' in m['Subject'] + ' ' for t in m['To']}))")
+    [[ -n "$found" ]] && break
+    sleep 10
+  done
+  echo "$found"
+}
+same "an alert is e-mailed to whoever receives them, over TLS" platform@example.bg "$(mail RestoreCheckOverdue)"
+compose stop redis >/dev/null 2>&1
+same "stopping Redis is e-mailed as an alert" platform@example.bg "$(mail RedisDown)"
+compose start redis >/dev/null 2>&1
+for ((waited = 0; waited < 180; waited += 5)); do
+  unhealthy=$(compose ps --format '{{.Service}} {{.Health}}' | grep -v ' healthy$' || true)
+  [[ -z "$unhealthy" ]] && break
+  sleep 5
+done
+if [[ -z "$unhealthy" ]]; then ok "the stack recovers once Redis is back (${waited}s)"; else fail "not healthy after Redis returned: $unhealthy"; fi
+expect "the API is ready again" 200 api.pythagoras.test /health/ready
+
+for service in api worker web cms gateway pgbouncer backup storage-init migrate \
+  prometheus alertmanager node-exporter blackbox postgres-exporter pgbouncer-exporter redis-exporter; do
   id=$(compose ps -a -q "$service")
   settings=$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.Privileged}} {{.Config.User}}' "$id")
   read -r readonly capdrop privileged user <<<"$settings"

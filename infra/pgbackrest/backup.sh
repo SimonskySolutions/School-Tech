@@ -10,6 +10,10 @@
 #                                   "offsite" (raw) and "sealed" (decrypting)
 #   pythagoras-backup health        the container's health check
 #
+# Its measures for monitoring (M8.6) go to $kept/metrics/backup.prom, which the
+# host's exporter reads: the newest backup of each type, the last copy of the
+# documents, whether the last backup failed and the last restore check.
+#
 # Schedule (UTC): a full backup on BACKUP_FULL_DAY (ISO weekday, 7 = Sunday)
 # or when the newest full is a week old, a differential every other day, both
 # at BACKUP_HOUR; the documents every DOCUMENTS_COPY_INTERVAL seconds and
@@ -18,6 +22,8 @@ set -euo pipefail
 
 stanza=pythagoras
 state=/tmp/pythagoras-backup
+# Kept across restarts (the backup_state volume).
+kept=/var/lib/pythagoras-backup
 hour=${BACKUP_HOUR:-1}
 full_day=${BACKUP_FULL_DAY:-7}
 documents_every=${DOCUMENTS_COPY_INTERVAL:-300}
@@ -89,20 +95,55 @@ documents() {
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   cutoff=$(date -u -d "-$keep_days days" +%Y%m%dT%H%M%SZ)
   rclone sync "documents:$documents_bucket" sealed:current --backup-dir "sealed:removed/$stamp" \
-    --stats 0 --log-level NOTICE
+    --stats 0 --log-level NOTICE || return 1
   rclone lsf --dirs-only sealed:removed 2>/dev/null | tr -d / | while read -r old; do
     if [[ "$old" < "$cutoff" ]]; then
       rclone purge "sealed:removed/$old" && log "documents removed before $cutoff purged ($old)"
     fi
   done
-  date -u +%s >"$state/documents.last"
+  date -u +%s >"$kept/documents.last"
 }
 
+# Functions below are also called in "||" lists, where bash does not stop at a
+# failing command, so each step's result is checked.
 backup() { # full|diff
-  documents
-  pgbackrest --stanza="$stanza" --type="$1" backup
-  date -u +%s >"$state/backup.last"
-  log "$1 backup done"
+  documents || return 1
+  if pgbackrest --stanza="$stanza" --type="$1" backup; then
+    echo 0 >"$kept/backup.failed"
+    log "$1 backup done"
+    write_metrics
+  else
+    echo 1 >"$kept/backup.failed"
+    write_metrics
+    return 1
+  fi
+}
+
+# The measures in Prometheus' text format, from the repository itself, so they
+# stay true across restarts. Left as they were when the repository cannot be
+# read: the alerts then see the backups age.
+write_metrics() {
+  local info full diff out=$kept/metrics/backup.prom
+  info=$(pgbackrest --stanza="$stanza" --output=json info 2>/dev/null) || return 0
+  full=$(jq '[.[0].backup[] | select(.type == "full") | .timestamp.stop] | max // 0' <<<"$info")
+  diff=$(jq '[.[0].backup[] | select(.type != "full") | .timestamp.stop] | max // 0' <<<"$info")
+  {
+    echo '# HELP pythagoras_backup_last_success_timestamp_seconds When the newest database backup of each type finished.'
+    echo '# TYPE pythagoras_backup_last_success_timestamp_seconds gauge'
+    echo "pythagoras_backup_last_success_timestamp_seconds{type=\"full\"} $full"
+    echo "pythagoras_backup_last_success_timestamp_seconds{type=\"diff\"} $diff"
+    echo '# HELP pythagoras_backup_last_run_failed Whether the last database backup failed.'
+    echo '# TYPE pythagoras_backup_last_run_failed gauge'
+    echo "pythagoras_backup_last_run_failed $(cat "$kept/backup.failed" 2>/dev/null || echo 0)"
+    echo '# HELP pythagoras_documents_copy_last_success_timestamp_seconds When the documents were last copied off the host.'
+    echo '# TYPE pythagoras_documents_copy_last_success_timestamp_seconds gauge'
+    echo "pythagoras_documents_copy_last_success_timestamp_seconds $(cat "$kept/documents.last" 2>/dev/null || echo 0)"
+    echo '# HELP pythagoras_restore_check_last_success_timestamp_seconds When a restore drill last succeeded (M8.7).'
+    echo '# TYPE pythagoras_restore_check_last_success_timestamp_seconds gauge'
+    echo "pythagoras_restore_check_last_success_timestamp_seconds $(cat "$kept/restore-check.last" 2>/dev/null || echo 0)"
+  } >"$out.tmp"
+  chmod 644 "$out.tmp"
+  mv "$out.tmp" "$out"
 }
 
 # The type of database backup due now, or nothing.
@@ -135,11 +176,13 @@ run() {
     until backup full; do sleep 60 & wait $!; done
   fi
   touch "$state/ready"
+  write_metrics
   log "ready: the log is archived, and backups run at $hour:00 UTC"
 
   while kill -0 "$server" 2>/dev/null; do
     if (( $(date +%s) >= next_documents )); then
       documents || log "copying the documents failed"
+      write_metrics
       next_documents=$(( $(date +%s) + documents_every ))
     fi
     if (( $(date +%s) - failed_at >= retry_after )); then
@@ -156,7 +199,7 @@ run() {
 case ${1:-run} in
   run) run ;;
   full | diff) prepare; backup "$1" ;;
-  documents) prepare; documents; log "documents copied" ;;
+  documents) prepare; documents; write_metrics; log "documents copied" ;;
   pgbackrest | rclone) prepare; exec "$@" ;;
   health) [[ -f "$state/ready" ]] && PGBACKREST_CONFIG=/etc/pgbackrest/repository.conf pgbackrest server-ping localhost >/dev/null ;;
   *) echo "usage: pythagoras-backup [run|full|diff|documents|pgbackrest …|rclone …|health]" >&2; exit 2 ;;

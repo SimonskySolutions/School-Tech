@@ -64,6 +64,7 @@ services:
       - pg_backup_password
       - pg_keycloak_password
       - pg_cms_password
+      - pg_monitor_password
     volumes:
       - pg_data:/var/lib/postgresql
       - pg_backups:/backups:ro
@@ -480,6 +481,8 @@ secrets:
     file: ./secrets/pg_keycloak_password
   pg_cms_password:
     file: ./secrets/pg_cms_password
+  pg_monitor_password:
+    file: ./secrets/pg_monitor_password
   cms_payload_secret:
     file: ./secrets/cms_payload_secret
   cms_platform_api_key:

@@ -5,7 +5,9 @@
 # - no image contains a file named like one of the platform's secrets;
 # - the migration job carries exactly the repository's migrations;
 # - Keycloak is built for production with the Pythagoras theme;
-# - the PostgreSQL image carries the pinned pgBackRest and rclone (M8.5).
+# - the PostgreSQL image carries the pinned pgBackRest and rclone (M8.5);
+# - the monitoring image's configuration is valid and every alert fires in
+#   its unit test (M8.6).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -14,8 +16,8 @@ failed=0
 ok() { echo "ok - $1"; }
 fail() { echo "not ok - $1"; failed=1; }
 
-declare -A expected_user=([api]=node [web]=node [cms]=node [keycloak]=1000 [migrate]=65534:65534 [garage]=1000:1000 [pgbouncer]=postgres)
-for image in api web cms keycloak migrate garage pgbouncer; do
+declare -A expected_user=([api]=node [web]=node [cms]=node [keycloak]=1000 [migrate]=65534:65534 [garage]=1000:1000 [pgbouncer]=postgres [monitoring]=nobody)
+for image in api web cms keycloak migrate garage pgbouncer monitoring; do
   user=$(docker image inspect -f '{{.Config.User}}' "pythagoras-$image:$tag")
   if [[ "$user" == "${expected_user[$image]}" ]]; then ok "$image runs as $user"; else fail "$image runs as '$user'"; fi
 done
@@ -27,7 +29,7 @@ mapfile -t secret_names < <(
   sed -n '/^declare -A issued=(/,/^)/p' scripts/prod-secrets.sh | grep -oE '\[[a-z0-9_]+\]' | tr -d '[]'
 )
 pattern="(^|/)($(IFS='|'; echo "${secret_names[*]}"))\$"
-for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer; do
+for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
   container=$(docker create "pythagoras-$image:$tag")
   found=$(docker export "$container" | tar -t | grep -E "$pattern" || true)
   docker rm "$container" >/dev/null
@@ -56,6 +58,13 @@ if [[ "$tools" == "pgBackRest 2.60.0 rclone v1.75.2 " ]]; then
   ok "postgres carries pgBackRest 2.60.0 and rclone v1.75.2"
 else
   fail "postgres carries '$tools'"
+fi
+
+if docker run --rm "pythagoras-monitoring:$tag" test >"${TMPDIR:-/tmp}/monitoring-test.log" 2>&1; then
+  ok "monitoring's configuration is valid and every alert fires in its test"
+else
+  fail "monitoring's configuration or alert tests failed"
+  cat "${TMPDIR:-/tmp}/monitoring-test.log"
 fi
 
 if [[ $failed -ne 0 ]]; then echo "images: FAILED"; exit 1; fi

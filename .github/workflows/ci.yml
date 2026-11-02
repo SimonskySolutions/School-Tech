@@ -44,10 +44,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build every production image (ADR 0033)
         run: |
-          for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer; do
+          for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
             docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:${{ github.sha }} .
           done
-      - name: Unprivileged users, no secret files, migrations and Keycloak build
+      - name: Unprivileged users, no secret files, migrations, Keycloak build, alert tests
         run: bash scripts/images-test.sh ${{ github.sha }}
       - name: Start the production stack from the images and check it (M8.2)
         run: bash scripts/prod-stack-test.sh ${{ github.sha }}

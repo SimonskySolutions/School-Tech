@@ -21,6 +21,7 @@ describe('worker configuration', () => {
       REDIS_USERNAME: 'pyth_queue',
       REDIS_PASSWORD: 'redis-pass',
       QUEUE_PREFIX: 'pyth',
+      METRICS_PORT: 9464,
     });
   });
 
