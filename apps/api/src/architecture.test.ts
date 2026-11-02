@@ -37,6 +37,49 @@ describe('architecture', () => {
     expect(importers).toEqual(['worker/mail-transport.ts']);
   });
 
+  it('names no integration that waits for its contract (ADR 0032)', () => {
+    // Application code, pages, the CMS, shared types and seeds: never docs or
+    // migrations, which describe the boundary.
+    const ROOT = join(__dirname, '..', '..', '..');
+    const SKIP = new Set(['node_modules', '.next', 'dist', '.turbo']);
+    const scan = (dir: string): string[] =>
+      readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) return SKIP.has(entry.name) ? [] : scan(path);
+        return /\.(ts|tsx|sql)$/.test(entry.name) && !entry.name.endsWith('.test.ts') ? [path] : [];
+      });
+    const sources = [
+      'apps/api/src',
+      'apps/web/app',
+      'apps/web/lib',
+      'apps/cms',
+      'packages/shared/src',
+      'db/seeds',
+    ].flatMap(scan);
+    const WAITING =
+      /shkolo|evrotrust|b-trust|borica|infonotary|stampit|neispuo|(?<!\p{L})(НЕИСПУО|НАП|НОИ)(?!\p{L})/iu;
+    const naming = sources.filter((path) => WAITING.test(readFileSync(join(ROOT, path), 'utf8')));
+    expect(sources.length).toBeGreaterThan(100);
+    expect(naming).toEqual([]);
+  });
+
+  it('records each waiting integration as not built, with no adapter (ADR 0032)', () => {
+    const register = readFileSync(
+      join(__dirname, '..', '..', '..', 'docs', 'integration-register.md'),
+      'utf8',
+    );
+    for (const system of [
+      '| Shkolo |',
+      '| Qualified e-signature |',
+      '| Statutory payroll and official reporting',
+    ]) {
+      const row = register.split('\n').find((line) => line.startsWith(system));
+      expect(row, system).toBeDefined();
+      expect(row).toContain('**Not built');
+      expect(row).toContain('Development adapter: none');
+    }
+  });
+
   it('only the worker uses system database access', () => {
     const importers = files
       .filter((file) => file.text.includes('system-database') && !file.path.startsWith('database/'))
