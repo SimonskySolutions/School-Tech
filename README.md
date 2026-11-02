@@ -64,6 +64,7 @@ bash scripts/gateway-test.sh
 - [Data model](docs/data-model.md)
 - [Decisions](docs/decisions/README.md)
 - [Operations](docs/operations.md): backups, restore, upgrades, production differences
+- [Handoff](docs/handoff.md): what exists, what is still to decide, the first week on a real server
 - [Integration register](docs/integration-register.md)
 
 All data in development and tests is synthetic. Payment processing stays in test mode during development.

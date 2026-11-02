@@ -66,6 +66,31 @@ describe('Stripe checkout', () => {
     expect(Number(form.get('expires_at'))).toBeGreaterThanOrEqual(Math.floor(Date.now() / 1000) + 1799);
   });
 
+  it('can talk to a stand-in that speaks Stripe’s API', async () => {
+    const urls: string[] = [];
+    const provider = new StripePaymentProvider({
+      secretKey: 'sk_test_abc',
+      webhookSecret: WEBHOOK_SECRET,
+      apiUrl: 'https://stripe/v1',
+      fetch: (url) => {
+        urls.push(url instanceof Request ? url.url : url.toString());
+        return Promise.resolve(Response.json({ id: 'cs_test_1', url: 'https://stripe/pay/cs_test_1' }));
+      },
+    });
+    await provider.createCheckout({
+      paymentId: 'p',
+      orderId: 'o',
+      groupId: 'g',
+      amountMinor: 100,
+      currency: 'EUR',
+      description: 'd',
+      successUrl: 'https://portal.example/s',
+      cancelUrl: 'https://portal.example/c',
+      expiresAt: new Date(),
+    });
+    expect(urls).toEqual(['https://stripe/v1/checkout/sessions']);
+  });
+
   it('reports a refused session as an error', async () => {
     const provider = new StripePaymentProvider({
       secretKey: 'sk_test_abc',

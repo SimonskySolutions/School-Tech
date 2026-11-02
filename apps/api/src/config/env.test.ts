@@ -42,6 +42,29 @@ describe('API configuration', () => {
     ).toThrow(/live Stripe key/);
   });
 
+  it("talks to Stripe's own API unless told otherwise, and only over https", () => {
+    const stripe = {
+      PAYMENT_PROVIDER: 'stripe',
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_WEBHOOK_SECRET: 'whsec_x',
+    };
+    expect(load(stripe).STRIPE_API_URL).toBe('https://api.stripe.com/v1');
+    expect(load({ ...stripe, STRIPE_API_URL: 'https://stripe/v1' }).STRIPE_API_URL).toBe('https://stripe/v1');
+    expect(() => load({ ...stripe, STRIPE_API_URL: 'http://stripe/v1' })).toThrow(/https/);
+  });
+
+  it('sends a live Stripe key to Stripe only', () => {
+    expect(() =>
+      load({
+        NODE_ENV: 'production',
+        PAYMENT_PROVIDER: 'stripe',
+        STRIPE_SECRET_KEY: 'sk_live_x',
+        STRIPE_WEBHOOK_SECRET: 'whsec_x',
+        STRIPE_API_URL: 'https://stripe/v1',
+      }),
+    ).toThrow(/only sent to Stripe itself/);
+  });
+
   it('refuses the development payment provider in production', () => {
     expect(() => load({ NODE_ENV: 'production' })).toThrow(/development payment provider/);
   });

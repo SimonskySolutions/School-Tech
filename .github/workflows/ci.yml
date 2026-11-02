@@ -39,9 +39,11 @@ jobs:
   images:
     name: Production images and stack
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the previous commit stands for the previous release (M8.8)
       - name: Build every production image (ADR 0033)
         run: |
           for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
@@ -49,7 +51,17 @@ jobs:
           done
       - name: Unprivileged users, no secret files, migrations, Keycloak build, alert tests
         run: bash scripts/images-test.sh ${{ github.sha }}
-      - name: Start the production stack from the images and check it (M8.2)
+      - name: Build the previous commit's images and keep its compose file, to roll back to
+        run: |
+          git worktree add "$RUNNER_TEMP/previous" HEAD^
+          cp "$RUNNER_TEMP/previous/compose.production.yaml" "$RUNNER_TEMP/compose.previous.yaml"
+          for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
+            docker build -f "$RUNNER_TEMP/previous/infra/images/$image.Dockerfile" -t pythagoras-$image:previous "$RUNNER_TEMP/previous"
+          done
+      - name: Start the production stack from the images and check it, then roll back and release again (M8.2, M8.8)
+        env:
+          PREVIOUS_TAG: previous
+          PREVIOUS_COMPOSE: ${{ runner.temp }}/compose.previous.yaml
         run: bash scripts/prod-stack-test.sh ${{ github.sha }}
 
   stack:

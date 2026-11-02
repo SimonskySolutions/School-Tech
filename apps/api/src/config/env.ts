@@ -59,6 +59,12 @@ const schema = z
     PAYMENT_PROVIDER: z.enum(['development', 'stripe']).default('development'),
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // Stripe's API. Another address only for a stand-in that speaks Stripe's
+    // API, with test keys (the production stack's check, M8.8).
+    STRIPE_API_URL: z
+      .url()
+      .refine((url) => url.startsWith('https://'), 'must use https')
+      .default('https://api.stripe.com/v1'),
     // Development provider only: signs checkout tokens and webhooks. A random
     // one is generated per process when unset.
     DEV_PAYMENTS_SECRET: z.string().min(32).optional(),
@@ -146,6 +152,16 @@ const schema = z
           code: 'custom',
           path: ['STRIPE_SECRET_KEY'],
           message: 'a live Stripe key is only allowed in production',
+        });
+      }
+      if (
+        env.STRIPE_SECRET_KEY?.startsWith('sk_live_') &&
+        env.STRIPE_API_URL !== 'https://api.stripe.com/v1'
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['STRIPE_API_URL'],
+          message: 'a live Stripe key is only sent to Stripe itself',
         });
       }
     }

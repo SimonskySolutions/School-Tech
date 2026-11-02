@@ -291,6 +291,12 @@ Useful checks, as the superuser (`docker compose exec -u postgres postgres psql 
 3. Locally, forward events with the Stripe CLI (`stripe listen --forward-to localhost:53001/webhooks/stripe`) and use its signing secret.
 4. Run one payment with a Stripe test card, then resend the same event from the dashboard: the second delivery must be stored as a duplicate and change nothing. Only then mark Stripe "validated" in the integration register.
 
+**The Stripe stand-in** (M8.8, ADR 0038). Until the account exists, the production stack's check runs the Stripe adapter against Stripe's official `stripe-mock` (`infra/stripe-standin/compose.yaml`):
+- `stripe-mock` sits behind TLS at `https://stripe`;
+- the API points to it with `STRIPE_API_URL=https://stripe/v1`. The setting defaults to Stripe's own API, must be https, and is refused with a live key.
+
+`stripe-mock` checks each request against Stripe's API and answers with Stripe's example objects, but sends no webhooks: `scripts/prod-purchase-check.py` signs and sends `checkout.session.completed` itself. **Production never sets `STRIPE_API_URL`.**
+
 ## Production images and CI
 
 Every service runs from an image (ADR 0033). Build them all from the repository root:
@@ -359,23 +365,58 @@ The worker checks pending domains every minute (each at most every five minutes)
 
 Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data`, `gateway_data` (certificates and the ACME account), `backup_state` (the backup service's state and measures), `prometheus_data` and `alertmanager_data` (silences); `pg_socket` only shares PostgreSQL's local socket with the backup service.
 
+### Releases, rollbacks and upgrades (M8.8, ADR 0038)
+
+A release is a commit's images (`IMAGE_TAG`, the commit's tag in CI) together with that commit's `compose.production.yaml`. CI has proven both, including a rollback from them to the commit before, before they can be released.
+
 **A release**
+
+1. Keep what is running, to roll back to: `sudo cp /etc/pythagoras/compose.production.yaml /etc/pythagoras/releases/<running tag>.yaml`, and note the running `IMAGE_TAG`.
+2. Put the new release's `compose.production.yaml` in `/etc/pythagoras/`, set the new `IMAGE_TAG` in `/etc/pythagoras/.env`, and fetch the images:
 
 ```bash
 docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env pull
 ```
 
+3. Run the migrations while the running release still serves:
+
 ```bash
 docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm migrate
 ```
+
+4. Replace what changed:
 
 ```bash
 docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait
 ```
 
-Set the new `IMAGE_TAG` first. The migration job runs while the previous version is still serving; if a migration fails its transaction rolls back, the command exits non-zero and nothing is replaced. Fix it with a new migration and release again (migrations are expand, then contract, so the previous version works with the new schema). Rolling back the applications is setting the previous `IMAGE_TAG` and running the last command.
+5. Check: every service healthy (`ps`), the portal and a school website answer, and no alert has fired.
 
-**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). It also checks the connections inside the host: PostgreSQL and PgBouncer refuse anything without TLS, a certificate is refused for a name it does not carry, Redis answers only over TLS, every network connection PostgreSQL holds is TLS 1.3, and the API and the worker reach it only through PgBouncer. And it checks the backups against a stand-in for the off-site storage (`infra/backup-standin/compose.yaml`): an encrypted repository with a full backup from the first start, a change archived within the minute, `pgbackrest check`, a document copied with its name and contents encrypted and moved aside once deleted, the backup's key unable to change the documents, a differential backup holding the platform's, Keycloak's and the CMS's databases, and `pgbackrest verify`. CI runs it on every push.
+If a migration fails, its transaction rolls back, the job exits non-zero and nothing is replaced. Fix it with a new migration and release again.
+
+**Rolling back.** Put the kept compose file back in `/etc/pythagoras/compose.production.yaml`, set the previous `IMAGE_TAG`, and run step 4. The schema stays as the new release left it:
+- migrations are expand, then contract (below), so the previous release works with it;
+- the previous release's migration job finds nothing to apply;
+- **never run a down migration against production.**
+
+Data written by the new release stays. If the new release must not run again, fix it in a further release.
+
+**Upgrading a component** (PostgreSQL's minor release, Keycloak, Caddy, Redis, Garage, PgBouncer, the exporters, pgBackRest, rclone) is a release:
+1. Change its tag and digest in its Dockerfile in `infra/images/`.
+2. Push. CI builds every image, proves the whole stack, and rolls back to the commit before and releases again.
+3. Release it as above.
+
+PostgreSQL's major release is different (`pg_upgrade`, see "Upgrades" below).
+
+**What CI proves.** The images job also builds the previous commit's images (tag `previous`) and keeps its compose file. `scripts/prod-stack-test.sh`, with `PREVIOUS_TAG=previous PREVIOUS_COMPOSE=<that file>`:
+1. rolls the running stack back to them;
+2. checks that the previous release's API, worker, web server and CMS run on the new schema, with every migration still applied;
+3. checks that the parent signs in and sees their paid order, and that the school's website answers;
+4. releases the current commit again by steps 3 and 4, and checks the same.
+
+Locally, build the previous commit's images from a worktree (`git worktree add <dir> Dev`) with the tag `previous` and pass the same variables. Without them, the check says it skipped the rollback.
+
+**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). It also checks the connections inside the host: PostgreSQL and PgBouncer refuse anything without TLS, a certificate is refused for a name it does not carry, Redis answers only over TLS, every network connection PostgreSQL holds is TLS 1.3, and the API and the worker reach it only through PgBouncer. And it checks the backups against a stand-in for the off-site storage (`infra/backup-standin/compose.yaml`): an encrypted repository with a full backup from the first start, a change archived within the minute, `pgbackrest check`, a document copied with its name and contents encrypted and moved aside once deleted, the backup's key unable to change the documents, a differential backup holding the platform's, Keycloak's and the CMS's databases, and `pgbackrest verify`. Since M8.8 it also runs a family's purchase through the portal against a Stripe stand-in, checks a school website on its own domain with a certificate issued on the first visit, and, with `PREVIOUS_TAG`, rolls back to the previous release and releases again (see "Releases, rollbacks and upgrades"). CI runs it on every push.
 
 ### Encrypted connections inside the host (M8.4)
 
@@ -619,7 +660,9 @@ bash scripts/db-restore-check.sh
 
 ## Upgrades
 
-- **PostgreSQL minor release** (quarterly): change the image tag and digest in `compose.yaml`, `docker compose up -d postgres`. No data change.
+In production every upgrade below goes out as a release (see "Releases, rollbacks and upgrades"): the pinned version changes in `infra/images/`, CI proves it, and the release procedure replaces it. The steps below are for development (`compose.yaml`) and for what each upgrade needs on top.
+
+- **PostgreSQL minor release** (quarterly): change the image tag and digest in `compose.yaml` and `infra/images/postgres.Dockerfile`, `docker compose up -d postgres`. No data change.
 - **PostgreSQL major release** (19 is due late 2026): wait for 19.1 or 19.2; test with `pg_upgrade --link` on a restored copy (the volume is mounted at `/var/lib/postgresql` for this), run the full test suite, then upgrade with a backup taken immediately before.
 - **Redis**: change the tag and digest, restart; run `scripts/redis-test.sh`.
 - **Garage**: v2.4.1 now; v2.5.0 (2026-10-24) rewrites the resync manager, so wait for a patch release, read its notes, then change the tag and digest, restart, and run the documents integration test. A major release needs its migration notes followed on a copy first.

@@ -12,6 +12,7 @@ export function createPaymentProvider(env: Env): PaymentProvider {
     return new StripePaymentProvider({
       secretKey: env.STRIPE_SECRET_KEY!,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET!,
+      apiUrl: env.STRIPE_API_URL,
     });
   }
   if (!env.DEV_PAYMENTS_SECRET) {

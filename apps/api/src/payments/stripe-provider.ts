@@ -42,6 +42,8 @@ const HANDLED = new Set([
 export interface StripeProviderOptions {
   secretKey: string;
   webhookSecret: string;
+  /** Stripe's API, or a stand-in that speaks it (STRIPE_API_URL). */
+  apiUrl?: string;
   fetch?: typeof fetch;
 }
 
@@ -72,7 +74,7 @@ export class StripePaymentProvider implements PaymentProvider {
         Math.max(Math.floor(request.expiresAt.getTime() / 1000), Math.floor(Date.now() / 1000) + 1800),
       ),
     });
-    const response = await this.fetch(`${STRIPE_API}/checkout/sessions`, {
+    const response = await this.fetch(`${this.options.apiUrl ?? STRIPE_API}/checkout/sessions`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${this.options.secretKey}`,

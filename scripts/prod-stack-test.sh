@@ -3,6 +3,8 @@
 # throwaway secrets, checks it as CI does after building the images, and
 # removes it again (ADR 0033):
 #   scripts/prod-stack-test.sh [tag]        (default tag: local; KEEP=1 keeps it running)
+#   PREVIOUS_TAG=<tag of the previous release's images> [PREVIOUS_COMPOSE=<its compose file>]
+#     also rolls back to the previous release and releases this one again.
 # - every service healthy, the migration job and storage set-up finished;
 # - only the gateway published; the data network internal and out of the
 #   gateway's and the web server's reach;
@@ -13,6 +15,11 @@
 # - the production realm: no users or development client, the step-up
 #   sign-in, e-mail, events kept 30 days; a parent signs in with a password,
 #   staff only after setting up and then entering a one-time code;
+# - a family's purchase (M8.8): the parent books an activity in the portal, the
+#   API creates the checkout at a Stripe stand-in, a signed webhook (sent once
+#   more as a duplicate) marks the order paid, and the order page says so;
+# - a school website on its own domain, with a certificate issued on the first
+#   visit, and none for a domain not yet verified;
 # - continuous backups to a stand-in off-site storage: the log archived within
 #   a minute, full and differential backups of every database, the documents
 #   copied, all encrypted, and the repository verified;
@@ -26,6 +33,9 @@
 #   runbook from the off-site storage, documents first, with nothing lost;
 # - every migration applied, and a failing one stops a release without
 #   touching the database or the running version;
+# - with PREVIOUS_TAG: rolled back, the previous release's images run on the
+#   new schema with the family's data; then this release goes out again by the
+#   release procedure;
 # - application containers read-only, without capabilities, unprivileged.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -66,17 +76,22 @@ BACKUP_S3_KEY_ID=GK$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
 BACKUP_S3_CA_FILE=/run/secrets/tls_ca_crt
 ALERT_EMAIL_TO=platform@example.bg
 EOF
-BACKUP_S3_SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') TLS_EXTRA_SERVICES="offsite mailbox" \
+# Stripe's test-mode key and webhook secret, as Stripe would issue them; the
+# stand-in accepts any test key.
+BACKUP_S3_SECRET_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n') TLS_EXTRA_SERVICES="offsite mailbox stripe" \
+  STRIPE_SECRET_KEY="sk_test_$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
+  STRIPE_WEBHOOK_SECRET="whsec_$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')" \
   bash scripts/prod-secrets.sh "$work/secrets" >/dev/null
 
-overlays="-f infra/backup-standin/compose.yaml -f infra/mail-standin/compose.yaml"
+overlays="-f infra/backup-standin/compose.yaml -f infra/mail-standin/compose.yaml -f infra/stripe-standin/compose.yaml"
+production=compose.production.yaml
 compose() {
   # shellcheck disable=SC2086 # the overlays' options
-  docker compose -p "$project" -f compose.production.yaml $overlays --env-file "$(host_path "$work/env")" "$@"
+  docker compose -p "$project" --project-directory . -f "$production" $overlays --env-file "$(host_path "$work/env")" "$@"
 }
 cleanup() {
   if [[ "${KEEP:-}" == 1 ]]; then
-    echo "kept running: docker compose -p $project -f compose.production.yaml $overlays --env-file $(host_path "$work/env") ..."
+    echo "kept running: docker compose -p $project --project-directory . -f $production $overlays --env-file $(host_path "$work/env") ..."
   else
     compose down -v --remove-orphans >/dev/null 2>&1 || true
     rm -rf "$work"
@@ -226,6 +241,34 @@ printf '{"parent": {"email": "parent@example.bg", "password": "%s", "name": "Rad
 PYTHONIOENCODING=utf-8 "$PY" scripts/prod-signin-check.py "$ca" "$https_port" portal.pythagoras.test "$(host_path "$work/users.json")" || failed=1
 logins=$(kc get events -r pythagoras -q type=LOGIN --fields type | field "len(d)")
 if [[ "$logins" -ge 3 ]]; then ok "the sign-ins are recorded as events ($logins)"; else fail "sign-ins are not recorded ($logins)"; fi
+
+# A family's purchase and a school website (M8.8), on synthetic data: School E,
+# billed by "Testing Company", with a chess club and a website on its own domain.
+if compose exec -T postgres gosu postgres psql -X -q -d pythagoras <scripts/prod-stack-fixture.sql >"$work/fixture.log" 2>&1; then
+  ok "the school, its website, the child and the chess club are set up"
+else
+  fail "the end-to-end data could not be loaded"
+  cat "$work/fixture.log"
+fi
+purchase() { # book | paid
+  # shellcheck disable=SC2086 # the overlays' options
+  PYTHONIOENCODING=utf-8 "$PY" scripts/prod-purchase-check.py "$1" "$ca" "$https_port" portal.pythagoras.test api.pythagoras.test \
+    "$(host_path "$work/users.json")" "$(host_path "$work/secrets/stripe_webhook_secret")" -- \
+    docker compose -p "$project" --project-directory . -f "$production" $overlays --env-file "$(host_path "$work/env")" \
+    exec -T postgres gosu postgres psql -XtAq -d pythagoras -c
+}
+purchase book || failed=1
+
+body() { # host path: prints the page
+  curl -s --max-time 30 --ssl-no-revoke --cacert "$ca" --resolve "$1:$https_port:127.0.0.1" "https://$1:$https_port$2" || true
+}
+if [[ "$(body www.school-e.test /)" == *"Welcome to School E."* ]]; then
+  ok "the school's website answers on its own domain, with a certificate issued on the first visit"
+else
+  fail "the school's website does not answer on www.school-e.test"
+fi
+expect "a domain not yet verified gets no certificate and no website" 000 pending.school-e.test /
+expect "nor does a domain the platform does not know" 000 www.not-a-school.test /
 
 # Encrypted connections inside the host (M8.4). The PgBouncer container has the
 # PostgreSQL client and the API role's password, so it tries each way in.
@@ -465,7 +508,7 @@ for ((waited = 0; waited < 120; waited += 2)); do
   sleep 2
 done
 lost=$SECONDS
-standins="offsite-store offsite-init offsite mailbox"
+standins="offsite-store offsite-init offsite mailbox stripe-mock stripe"
 mapfile -t platform < <(compose config --services | grep -vxF -f <(tr ' ' '\n' <<<"$standins restore restore-drill"))
 compose rm -s -f -v "${platform[@]}" >/dev/null 2>&1
 for volume in pg_data pg_socket redis_data garage_meta garage_data gateway_data backup_state drill_data prometheus_data alertmanager_data; do
@@ -496,6 +539,8 @@ else
   compose ps -a
 fi
 same "nothing written before the loss is lost" 1 "$(sql "SELECT count(*) FROM org.education_group WHERE code = 'before-loss'")"
+same "the family's order is still paid" "paid succeeded" \
+  "$(sql "SELECT o.status || ' ' || p.status FROM commerce.customer_order o JOIN commerce.payment p ON p.order_id = o.id")"
 same "every migration is still applied" "$here" "$(sql "SELECT count(*) FROM meta.schema_migrations")"
 same "the document is back with its contents" "$(printf '%s' "$contents" | sha256sum | cut -d' ' -f1)" \
   "$(compose exec -T "${api_key[@]}" backup pythagoras-backup rclone cat "api:pythagoras-documents/v1/$document/$version" | sha256sum | cut -d' ' -f1)"
@@ -506,6 +551,45 @@ expect "the API is ready again after the restore" 200 api.pythagoras.test /healt
 backups=$(info)
 same "a full backup of the restored database is taken at once" full "$(field "d[0]['backup'][-1]['type']" <<<"$backups")"
 if backup pgbackrest --stanza=pythagoras check >/dev/null; then ok "the restored database archives its log again"; else fail "archiving does not work after the restore"; fi
+
+# Rolling back and releasing again (docs/operations.md, "Releases, rollbacks
+# and upgrades"), with the previous release's images and its compose file: the
+# schema stays as this release left it, because migrations only expand.
+if [[ -n "${PREVIOUS_TAG:-}" ]]; then
+  release() { # tag compose-file: sets IMAGE_TAG, runs the migration job, replaces what changed
+    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$1/" "$work/env"
+    production=$2
+    compose run --rm --no-TTY migrate >"$work/release.log" 2>&1 && compose up -d --wait --wait-timeout 900 >>"$work/release.log" 2>&1
+  }
+  image() { docker inspect -f '{{.Config.Image}}' "$(compose ps -q "$1")"; }
+  current=$production
+  if release "$PREVIOUS_TAG" "${PREVIOUS_COMPOSE:-$current}"; then
+    ok "rolled back to the previous release ($PREVIOUS_TAG) on the new schema"
+  else
+    fail "the previous release did not start on the new schema"
+    tail -40 "$work/release.log"
+    compose ps -a
+  fi
+  same "the previous release's applications are running" \
+    "pythagoras-api:$PREVIOUS_TAG pythagoras-api:$PREVIOUS_TAG pythagoras-web:$PREVIOUS_TAG pythagoras-cms:$PREVIOUS_TAG" \
+    "$(image api) $(image worker) $(image web) $(image cms)"
+  same "the schema was left as it was" "$here" "$(sql "SELECT count(*) FROM meta.schema_migrations")"
+  expect "the previous API is ready" 200 api.pythagoras.test /health/ready
+  expect "the previous release serves the school's website" 200 www.school-e.test /
+  echo "# the previous release, with this release's data:"
+  purchase paid || failed=1
+
+  if release "$tag" "$current"; then ok "this release goes out again: migrations first, then the applications"; else
+    fail "releasing again failed"
+    tail -40 "$work/release.log"
+  fi
+  same "this release's applications are running" "pythagoras-api:$tag pythagoras-web:$tag" "$(image api) $(image web)"
+  unhealthy=$(compose ps --format '{{.Service}} {{.Health}}' | grep -v ' healthy$' || true)
+  if [[ -z "$unhealthy" ]]; then ok "every service is healthy after the release"; else fail "not healthy after the release: $unhealthy"; fi
+  purchase paid || failed=1
+else
+  echo "# skipped the rollback: PREVIOUS_TAG is not set (CI sets it to the previous commit's images)"
+fi
 
 for service in api worker web cms gateway pgbouncer backup storage-init migrate \
   prometheus alertmanager node-exporter blackbox postgres-exporter pgbouncer-exporter redis-exporter; do

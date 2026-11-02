@@ -1,0 +1,11 @@
+# TLS in front of the Stripe stand-in (infra/stripe-standin/compose.yaml).
+{
+	admin off
+	auto_https disable_redirects
+	default_sni stripe
+}
+
+https://stripe {
+	tls /run/secrets/tls_stripe_crt /run/secrets/tls_stripe_key
+	reverse_proxy stripe-mock:12111
+}
