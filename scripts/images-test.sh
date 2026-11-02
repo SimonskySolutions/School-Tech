@@ -13,16 +13,19 @@ failed=0
 ok() { echo "ok - $1"; }
 fail() { echo "not ok - $1"; failed=1; }
 
-declare -A expected_user=([api]=node [web]=node [cms]=node [keycloak]=1000 [migrate]=65534:65534)
-for image in api web cms keycloak migrate; do
+declare -A expected_user=([api]=node [web]=node [cms]=node [keycloak]=1000 [migrate]=65534:65534 [garage]=1000:1000)
+for image in api web cms keycloak migrate garage; do
   user=$(docker image inspect -f '{{.Config.User}}' "pythagoras-$image:$tag")
   if [[ "$user" == "${expected_user[$image]}" ]]; then ok "$image runs as $user"; else fail "$image runs as '$user'"; fi
 done
 
-# The names come from the script that creates them, so a new secret is covered too.
-mapfile -t secret_names < <(sed -n '/^names=(/,/^)/p' scripts/dev-secrets.sh | grep -oE '[a-z][a-z0-9_]+' | grep -v '^names$')
+# The names come from the scripts that create them, so a new secret is covered too.
+mapfile -t secret_names < <(
+  sed -n '/^names=(/,/^)/p' scripts/dev-secrets.sh | grep -oE '[a-z][a-z0-9_]+' | grep -v '^names$'
+  sed -n '/^declare -A issued=(/,/^)/p' scripts/prod-secrets.sh | grep -oE '\[[a-z0-9_]+\]' | tr -d '[]'
+)
 pattern="(^|/)($(IFS='|'; echo "${secret_names[*]}"))\$"
-for image in api web cms keycloak migrate postgres redis gateway; do
+for image in api web cms keycloak migrate postgres redis gateway garage; do
   container=$(docker create "pythagoras-$image:$tag")
   found=$(docker export "$container" | tar -t | grep -E "$pattern" || true)
   docker rm "$container" >/dev/null

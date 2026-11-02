@@ -1,4 +1,4 @@
-// Prepares the development object store (ADR 0029) through Garage's admin API:
+// Prepares the object store (ADR 0029; in production from the API image, ADR 0033) through Garage's admin API:
 // gives the single node its role, imports the API's key and creates the
 // documents bucket the key may read and write. Safe to run again: each step is
 // skipped when already done.
@@ -9,7 +9,8 @@ const token = readFileSync(process.env.GARAGE_ADMIN_TOKEN_FILE, 'utf8').trim();
 const accessKeyId = process.env.STORAGE_ACCESS_KEY_ID;
 const secretAccessKey = readFileSync(process.env.STORAGE_SECRET_ACCESS_KEY_FILE, 'utf8').trim();
 const bucket = process.env.STORAGE_BUCKET ?? 'pythagoras-documents';
-const capacity = 10 * 1024 ** 3;
+const capacity = Number(process.env.STORAGE_CAPACITY_GB ?? 10) * 1024 ** 3;
+const tag = process.env.STORAGE_NODE_TAG ?? 'dev';
 
 async function call(method, path, body) {
   const response = await fetch(`${ADMIN}${path}`, {
@@ -31,7 +32,7 @@ const status = await must('GET', '/v2/GetClusterStatus');
 const layout = await must('GET', '/v2/GetClusterLayout');
 if (layout.roles.length === 0) {
   const node = status.nodes[0].id;
-  await must('POST', '/v2/UpdateClusterLayout', { roles: [{ id: node, zone: 'dc1', capacity, tags: ['dev'] }] });
+  await must('POST', '/v2/UpdateClusterLayout', { roles: [{ id: node, zone: 'dc1', capacity, tags: [tag] }] });
   await must('POST', '/v2/ApplyClusterLayout', { version: layout.version + 1 });
   console.log(`storage: node ${node.slice(0, 16)} given its role`);
 }

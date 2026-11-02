@@ -296,7 +296,7 @@ Useful checks, as the superuser (`docker compose exec -u postgres postgres psql 
 Every service runs from an image (ADR 0033). Build them all from the repository root:
 
 ```bash
-for image in api web cms keycloak migrate postgres redis gateway; do docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:local .; done
+for image in api web cms keycloak migrate postgres redis gateway garage; do docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:local .; done
 ```
 
 ```bash
@@ -312,13 +312,14 @@ bash scripts/images-test.sh
 | `pythagoras-migrate` | The one-off migration job: dbmate with `db/migrations` inside. Reads `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_PASSWORD_FILE`, `DB_SSLMODE` (default `verify-full`) and `DB_SSLROOTCERT` | `65534` |
 | `pythagoras-postgres` | PostgreSQL with `infra/postgres` configuration and the first-start bootstrap | starts as root, runs as `postgres` |
 | `pythagoras-redis` | Redis with its configuration and the ACL built from secret files | starts as root, runs as `redis` |
-| `pythagoras-gateway` | Caddy with `Caddyfile.production` | root, with every capability dropped except binding ports 80 and 443 |
+| `pythagoras-gateway` | Caddy with `Caddyfile.production` | root, with every capability dropped except binding ports 80 and 443 (`no-new-privileges` blocks the file capability an unprivileged Caddy would need) |
+| `pythagoras-garage` | Garage with `infra/garage/garage.production.toml` and data directories it owns | `1000` |
 
 The build context (`.dockerignore`) admits only the files the images copy, named one by one; `secrets/` never enters it. `scripts/images-test.sh` checks that the application images run unprivileged, that no image holds a file named like one of the platform's secrets, that the migration job carries exactly the repository's migrations, and that Keycloak was built for PostgreSQL with the theme.
 
 **Changing a CMS collection.** Development creates the tables directly; production applies migrations. After changing a collection, generate one in the development CMS container and commit it: `docker compose exec cms sh -c "cd apps/cms && pnpm exec payload migrate:create <name>"`.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the code checks, builds both images, and runs every suite against the full stack on each push and on pull requests into `Dev` and `main` (ADR 0015).
+GitHub Actions (`.github/workflows/ci.yml`) runs the code checks, builds every production image, checks the images and starts the production stack from them (`scripts/prod-stack-test.sh`), and runs every suite against the development stack, on each push and on pull requests into `Dev` and `main` (ADR 0015).
 
 ### Real domains for school websites (ADR 0018)
 
@@ -332,6 +333,46 @@ The worker checks pending domains every minute (each at most every five minutes)
 ### Production gateway
 
 `infra/gateway/Caddyfile.production` serves HTTPS. It needs `ACME_EMAIL`, `PORTAL_HOST`, `AUTH_HOST`, `API_HOST` and `CMS_HOST`, and DNS records pointing the portal, identity, API, CMS and every school domain at the gateway host, with ports 80 and 443 open for certificate issuance. School domains get certificates only once the platform lists them as verified domains of a live website. `LOCAL_CERTS=local_certs` makes Caddy sign every certificate with its own authority instead; it is for the local and CI proof of the production stack only.
+
+## Production stack (M8.2)
+
+`compose.production.yaml` runs the platform on one Linux host from the images above (ADR 0033). Nothing from the repository is needed on the host except that file: settings come from an env file, secrets from a directory of files.
+
+**First installation**
+
+1. Install Docker Engine with the Compose plugin; open the firewall for 80 and 443 only.
+2. Copy `.env.production.example` to `/etc/pythagoras/.env` (mode `0600`, owned by root) and fill it in: `IMAGE_TAG`, the host names, `ACME_EMAIL`, the SMTP service and `STORAGE_ACCESS_KEY_ID`.
+3. Create the secrets: `sudo bash scripts/prod-secrets.sh /etc/pythagoras/secrets`. The directory is `0700` and root's; the files are `0444` because the containers read them as unprivileged users. Secrets a provider issues come from the environment (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SMTP_PASSWORD`); without them the script writes placeholders and lists them. Payments and e-mail fail until the placeholders are replaced; nothing else does. The script also prints a new key id for `STORAGE_ACCESS_KEY_ID`.
+4. Put the images on the host: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env pull` from the registry in `IMAGE_REGISTRY`, or `docker load` of the images CI built for that commit.
+5. Start: `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait`.
+
+**What starts, in order.** PostgreSQL, Redis and Garage first; then `migrate` (the platform's migrations) and `storage-init` (the object store's layout, key and bucket), which run once and exit; then Keycloak, the API, the worker, the CMS (which applies its own migrations), the web server and finally the gateway. Each waits for the health check or the successful exit of what it depends on, so a failing migration leaves the applications unstarted.
+
+| Network | Members | Reach |
+| --- | --- | --- |
+| `edge` | gateway, web, API, CMS, Keycloak | The gateway routes to the applications; outbound for Stripe and Keycloak's e-mail |
+| `data` (internal) | PostgreSQL, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init` | No way out; the gateway and the web server are not on it |
+| `egress` | worker | Outbound for SMTP and the DNS checks of school domains |
+
+Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data` and `gateway_data` (certificates and the ACME account).
+
+**A release**
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env pull
+```
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm migrate
+```
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait
+```
+
+Set the new `IMAGE_TAG` first. The migration job runs while the previous version is still serving; if a migration fails its transaction rolls back, the command exits non-zero and nothing is replaced. Fix it with a new migration and release again (migrations are expand, then contract, so the previous version works with the new schema). Rolling back the applications is setting the previous `IMAGE_TAG` and running the last command.
+
+**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). CI runs it on every push. Until M8.3 Keycloak starts without the platform's realm and until M8.4 connections inside the host are not encrypted.
 
 ## Identity provider in production (to do in M8)
 
@@ -410,7 +451,7 @@ bash scripts/db-restore-check.sh
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |
 | E-mail | Mailpit, keeps everything locally | An SMTP service with TLS and the group's domain (SPF, DKIM, DMARC); the worker refuses Mailpit, plain connections and development addresses |
-| Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | Three Garage nodes with `replication_factor = 3`, or one node with frequent off-site copies; secrets mounted `0400` with `allow_world_readable_secrets` off; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
+| Object store | One Garage node, `replication_factor = 1`, secret files readable (`allow_world_readable_secrets`) | One unprivileged Garage node with frequent off-site copies (M8.5), its secret files `0444` inside the root-only secrets directory; three nodes with `replication_factor = 3` as the platform grows; encrypted disks; or any S3-compatible service in the EU (`STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET`) |
 
 ## Availability limits of the initial topology
 

@@ -28,6 +28,8 @@ FROM node:24-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=root:root /out ./
+# The object store's one-off set-up (storage-init in compose.production.yaml).
+COPY --chown=root:root infra/garage/init.mjs ./ops/storage-init.mjs
 # Code is owned by root and read-only to the process; it runs as "node".
 USER node
 EXPOSE 3000

@@ -1,0 +1,430 @@
+# Production stack (ADR 0033). One Linux host with Docker; every service from
+# a pinned image built by CI; secrets as files in a directory only root may
+# enter. Settings come from an env file (see .env.production.example):
+#
+#   docker compose -f compose.production.yaml --env-file .env.production up -d --wait
+#
+# Start-up order is enforced by health checks: the data services, then the
+# migration job (a failed migration stops everything after it), then the
+# applications, then the gateway. docs/operations.md has the full procedure.
+
+name: ${STACK_NAME:-pythagoras}
+
+# Every container: restart on failure, no privilege escalation, bounded logs.
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: "10"
+
+# The application containers additionally drop every capability and cannot
+# write to their own filesystem; /tmp is memory only.
+x-application: &application
+  <<: *hardening
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+
+# Database connection settings shared by the services that use PostgreSQL.
+# TLS arrives in M8.4; until then the data network is internal to the host.
+x-database: &database
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: pythagoras
+
+services:
+  postgres:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG:?set IMAGE_TAG to the release being deployed}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --data-checksums --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --auth-local=peer --auth-host=scram-sha-256
+      TZ: UTC
+    secrets:
+      - pg_superuser_password
+      - pg_migrator_password
+      - pg_api_password
+      - pg_worker_password
+      - pg_reporting_password
+      - pg_backup_password
+      - pg_keycloak_password
+      - pg_cms_password
+    networks: [data]
+    volumes:
+      - pg_data:/var/lib/postgresql
+    shm_size: 512mb
+    stop_grace_period: 120s
+    deploy:
+      resources:
+        limits: { cpus: "4", memory: 4g }
+    healthcheck:
+      test: ["CMD-SHELL", "gosu postgres psql -XtAq -d pythagoras -c \"SELECT 1 WHERE current_setting('listen_addresses') <> ''\" | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  redis:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-redis:${IMAGE_TAG}
+    secrets:
+      - redis_queue_password
+      - redis_health_password
+      - redis_admin_password
+    networks: [data]
+    volumes:
+      - redis_data:/data
+    tmpfs:
+      - /run/redis-acl:size=1m
+      # Hide the bundled modules: the queue needs none of them.
+      - /usr/local/lib/redis/modules:size=1m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g }
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_health_password)\" redis-cli --no-auth-warning --user pyth_health ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  garage:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-garage:${IMAGE_TAG}
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    networks: [data]
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    read_only: true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g }
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Gives the node its role, imports the API's key and creates the bucket; once,
+  # and harmless again on every release.
+  storage-init:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    restart: "no"
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+      STORAGE_CAPACITY_GB: ${STORAGE_CAPACITY_GB:-100}
+      STORAGE_NODE_TAG: production
+    secrets:
+      - garage_admin_token
+      - storage_secret_access_key
+    networks: [data]
+    command: ["node", "ops/storage-init.mjs"]
+
+  # The one-off migration job. If a migration fails its transaction rolls back,
+  # the job exits non-zero and nothing that depends on it starts.
+  migrate:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-migrate:${IMAGE_TAG}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *database
+      DB_PASSWORD_FILE: /run/secrets/pg_migrator_password
+      DB_SSLMODE: disable
+    secrets:
+      - pg_migrator_password
+    networks: [data]
+
+  keycloak:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-keycloak:${IMAGE_TAG}
+    cap_drop: [ALL]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: pyth_keycloak
+      KC_HOSTNAME: https://${AUTH_HOST:?}${PUBLIC_PORT:-}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_CACHE: local
+      KC_LOG_LEVEL: info
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+    secrets:
+      - pg_keycloak_password
+      - keycloak_admin_password
+      - keycloak_web_client_secret
+      - keycloak_provisioning_client_secret
+      - keycloak_cms_client_secret
+    networks: [edge, data]
+    tmpfs:
+      - /tmp:size=64m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+
+  api:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    environment:
+      <<: *database
+      NODE_ENV: production
+      DB_PASSWORD_FILE: /run/secrets/pg_api_password
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_JWKS_URL: http://keycloak:8080/realms/pythagoras/protocol/openid-connect/certs
+      OIDC_ALLOWED_CLIENTS: pythagoras-web
+      PORTAL_URL: https://${PORTAL_HOST:?}${PUBLIC_PORT:-}
+      PAYMENT_PROVIDER: stripe
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook_secret
+      PROVISIONING_CLIENT_SECRET_FILE: /run/secrets/keycloak_provisioning_client_secret
+      ACCOUNT_SETUP: email
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      STORAGE_ENDPOINT: http://garage:3900
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+    secrets:
+      - pg_api_password
+      - stripe_secret_key
+      - stripe_webhook_secret
+      - keycloak_provisioning_client_secret
+      - cms_platform_api_key
+      - storage_secret_access_key
+    networks: [edge, data]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # The same image as the API, running the outbox relay, event handlers,
+  # scheduled maintenance and e-mail.
+  worker:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    command: ["node", "dist/worker/main.js"]
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *database
+      NODE_ENV: production
+      DB_PASSWORD_FILE: /run/secrets/pg_worker_password
+      REDIS_HOST: redis
+      REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
+      SMTP_HOST: ${SMTP_HOST:?}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:?}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      MAIL_FROM: ${MAIL_FROM:?}
+      PORTAL_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+    secrets:
+      - pg_worker_password
+      - redis_queue_password
+      - smtp_password
+    # The data network for its stores; egress for mail and DNS checks of school domains.
+    networks: [data, egress]
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s = require('fs').statSync('/tmp/worker-heartbeat'); process.exit(Date.now() - s.mtimeMs < 30000 ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  web:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-web:${IMAGE_TAG}
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_INTERNAL_URL: http://keycloak:8080/realms/pythagoras
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_web_client_secret
+      SESSION_SECRET_FILE: /run/secrets/web_session_secret
+    secrets:
+      - keycloak_web_client_secret
+      - web_session_secret
+    networks: [edge]
+    tmpfs:
+      - /tmp:size=64m
+      # Next.js caches rendered output here; nothing in it must survive a restart.
+      - /app/apps/web/.next/cache:size=128m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  # Applies its own migrations when it starts (apps/cms/migrations).
+  cms:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-cms:${IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      CMS_PUBLIC_URL: https://${CMS_HOST:?}${PUBLIC_PORT:-}
+      DB_HOST: postgres
+      DB_PASSWORD_FILE: /run/secrets/pg_cms_password
+      PAYLOAD_SECRET_FILE: /run/secrets/cms_payload_secret
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_INTERNAL_URL: http://keycloak:8080/realms/pythagoras
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_cms_client_secret
+    secrets:
+      - pg_cms_password
+      - cms_payload_secret
+      - cms_platform_api_key
+      - keycloak_cms_client_secret
+    networks: [edge, data]
+    tmpfs:
+      - /tmp:size=64m
+      - /app/apps/cms/.next/cache:size=128m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/websites?limit=1').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  # The only published service.
+  gateway:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-gateway:${IMAGE_TAG}
+    cap_add: [NET_BIND_SERVICE]
+    depends_on:
+      web:
+        condition: service_healthy
+      cms:
+        condition: service_healthy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?}
+      PORTAL_HOST: ${PORTAL_HOST}
+      AUTH_HOST: ${AUTH_HOST}
+      API_HOST: ${API_HOST:?}
+      CMS_HOST: ${CMS_HOST}
+      LOCAL_CERTS: ${LOCAL_CERTS:-}
+    networks: [edge]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      # Certificates and the ACME account: kept, or every restart asks Let's Encrypt again.
+      - gateway_data:/data
+    tmpfs:
+      - /tmp:size=16m
+      - /config:size=8m
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  # The gateway and the services it routes to.
+  edge: {}
+  # Databases and the object store, with their clients only; no way out.
+  data:
+    internal: true
+  # Outbound only, for the worker's mail and DNS checks.
+  egress: {}
+
+volumes:
+  pg_data:
+  redis_data:
+  garage_meta:
+  garage_data:
+  gateway_data:
+
+# One file per secret in SECRETS_DIR (scripts/prod-secrets.sh creates them).
+secrets:
+  pg_superuser_password: { file: "${SECRETS_DIR:?}/pg_superuser_password" }
+  pg_migrator_password: { file: "${SECRETS_DIR}/pg_migrator_password" }
+  pg_api_password: { file: "${SECRETS_DIR}/pg_api_password" }
+  pg_worker_password: { file: "${SECRETS_DIR}/pg_worker_password" }
+  pg_reporting_password: { file: "${SECRETS_DIR}/pg_reporting_password" }
+  pg_backup_password: { file: "${SECRETS_DIR}/pg_backup_password" }
+  pg_keycloak_password: { file: "${SECRETS_DIR}/pg_keycloak_password" }
+  pg_cms_password: { file: "${SECRETS_DIR}/pg_cms_password" }
+  redis_queue_password: { file: "${SECRETS_DIR}/redis_queue_password" }
+  redis_health_password: { file: "${SECRETS_DIR}/redis_health_password" }
+  redis_admin_password: { file: "${SECRETS_DIR}/redis_admin_password" }
+  keycloak_admin_password: { file: "${SECRETS_DIR}/keycloak_admin_password" }
+  keycloak_web_client_secret: { file: "${SECRETS_DIR}/keycloak_web_client_secret" }
+  keycloak_provisioning_client_secret: { file: "${SECRETS_DIR}/keycloak_provisioning_client_secret" }
+  keycloak_cms_client_secret: { file: "${SECRETS_DIR}/keycloak_cms_client_secret" }
+  web_session_secret: { file: "${SECRETS_DIR}/web_session_secret" }
+  cms_payload_secret: { file: "${SECRETS_DIR}/cms_payload_secret" }
+  cms_platform_api_key: { file: "${SECRETS_DIR}/cms_platform_api_key" }
+  garage_rpc_secret: { file: "${SECRETS_DIR}/garage_rpc_secret" }
+  garage_admin_token: { file: "${SECRETS_DIR}/garage_admin_token" }
+  storage_secret_access_key: { file: "${SECRETS_DIR}/storage_secret_access_key" }
+  stripe_secret_key: { file: "${SECRETS_DIR}/stripe_secret_key" }
+  stripe_webhook_secret: { file: "${SECRETS_DIR}/stripe_webhook_secret" }
+  smtp_password: { file: "${SECRETS_DIR}/smtp_password" }
