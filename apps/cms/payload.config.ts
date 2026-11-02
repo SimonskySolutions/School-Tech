@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { postgresAdapter } from '@payloadcms/db-postgres';
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant';
 import { lexicalEditor } from '@payloadcms/richtext-lexical';
@@ -7,6 +9,7 @@ import { isAdmin, isPlatform } from './collections/access';
 import { Pages } from './collections/pages';
 import { Users } from './collections/users';
 import { Websites } from './collections/websites';
+import { migrations } from './migrations';
 import { ensurePlatformAccount } from './platform';
 import { seedDevelopment } from './seed';
 
@@ -17,6 +20,8 @@ import { seedDevelopment } from './seed';
 // `next build` loads this file too; secrets are never baked into a build, so
 // during the build phase they are placeholders and the server reads the real
 // ones when it starts.
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const building = process.env.NEXT_PHASE === 'phase-production-build';
 
 function setting(name: string, fallback?: string): string {
@@ -51,9 +56,12 @@ export default buildConfig({
       password: setting('DB_PASSWORD'),
       max: 10,
     },
-    // Development creates tables from the collections; production applies
-    // generated migrations as a release step (M8).
+    // Development creates tables from the collections; production applies the
+    // generated migrations in ./migrations when it starts (ADR 0033). After
+    // changing a collection, generate one: `payload migrate:create <name>`.
     push: development,
+    migrationDir: path.resolve(dirname, 'migrations'),
+    prodMigrations: migrations,
   }),
   plugins: [
     multiTenantPlugin({

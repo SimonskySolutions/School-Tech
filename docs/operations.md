@@ -293,15 +293,30 @@ Useful checks, as the superuser (`docker compose exec -u postgres postgres psql 
 
 ## Production images and CI
 
+Every service runs from an image (ADR 0033). Build them all from the repository root:
+
 ```bash
-docker build -f infra/images/api.Dockerfile -t pythagoras-api .
+for image in api web cms keycloak migrate postgres redis gateway; do docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:local .; done
 ```
 
 ```bash
-docker build -f infra/images/web.Dockerfile -t pythagoras-web .
+bash scripts/images-test.sh
 ```
 
-The API image also runs the worker: `docker run pythagoras-api node dist/worker/main.js`. Both images run as the unprivileged `node` user and refuse unsafe production settings at start-up (for example, the web app requires HTTPS addresses when `NODE_ENV=production`).
+| Image | What it is | Runs as |
+| --- | --- | --- |
+| `pythagoras-api` | The API; also the worker with `node dist/worker/main.js` | `node` |
+| `pythagoras-web` | The portal and the school websites | `node` |
+| `pythagoras-cms` | The website editor; applies its own generated migrations (`apps/cms/migrations`) when it starts | `node` |
+| `pythagoras-keycloak` | Keycloak built for PostgreSQL with the Pythagoras theme, started with `start --optimized` | `1000` |
+| `pythagoras-migrate` | The one-off migration job: dbmate with `db/migrations` inside. Reads `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_PASSWORD_FILE`, `DB_SSLMODE` (default `verify-full`) and `DB_SSLROOTCERT` | `65534` |
+| `pythagoras-postgres` | PostgreSQL with `infra/postgres` configuration and the first-start bootstrap | starts as root, runs as `postgres` |
+| `pythagoras-redis` | Redis with its configuration and the ACL built from secret files | starts as root, runs as `redis` |
+| `pythagoras-gateway` | Caddy with `Caddyfile.production` | root, with every capability dropped except binding ports 80 and 443 |
+
+The build context (`.dockerignore`) admits only the files the images copy, named one by one; `secrets/` never enters it. `scripts/images-test.sh` checks that the application images run unprivileged, that no image holds a file named like one of the platform's secrets, that the migration job carries exactly the repository's migrations, and that Keycloak was built for PostgreSQL with the theme.
+
+**Changing a CMS collection.** Development creates the tables directly; production applies migrations. After changing a collection, generate one in the development CMS container and commit it: `docker compose exec cms sh -c "cd apps/cms && pnpm exec payload migrate:create <name>"`.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the code checks, builds both images, and runs every suite against the full stack on each push and on pull requests into `Dev` and `main` (ADR 0015).
 
@@ -316,7 +331,7 @@ The worker checks pending domains every minute (each at most every five minutes)
 
 ### Production gateway
 
-`infra/gateway/Caddyfile.production` serves HTTPS. It needs `ACME_EMAIL`, `AUTH_HOST` and `API_HOST`, and DNS records pointing the identity, API and every school domain at the gateway host, with ports 80 and 443 open for certificate issuance. School domains get certificates only once the platform lists them as verified domains of a live website.
+`infra/gateway/Caddyfile.production` serves HTTPS. It needs `ACME_EMAIL`, `PORTAL_HOST`, `AUTH_HOST`, `API_HOST` and `CMS_HOST`, and DNS records pointing the portal, identity, API, CMS and every school domain at the gateway host, with ports 80 and 443 open for certificate issuance. School domains get certificates only once the platform lists them as verified domains of a live website. `LOCAL_CERTS=local_certs` makes Caddy sign every certificate with its own authority instead; it is for the local and CI proof of the production stack only.
 
 ## Identity provider in production (to do in M8)
 

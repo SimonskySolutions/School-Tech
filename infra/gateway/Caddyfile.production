@@ -2,8 +2,13 @@
 #
 # Environment:
 #   ACME_EMAIL   contact address for the certificate authority
+#   PORTAL_HOST  family and staff portal, e.g. portal.example.bg
 #   AUTH_HOST    identity provider host name, e.g. auth.example.bg
 #   API_HOST     public API host name, e.g. api.example.bg (health and webhooks only)
+#   CMS_HOST     website editor, e.g. cms.example.bg
+#   LOCAL_CERTS  "local_certs" to sign every certificate with Caddy's own
+#                authority instead of Let's Encrypt (the local and CI proof of
+#                the production stack, ADR 0033); empty in production
 #
 # Every other host name gets a certificate on demand, but only after the API
 # confirms it is a verified domain of a live website. A new school website goes
@@ -11,6 +16,7 @@
 {
 	admin off
 	email {$ACME_EMAIL}
+	{$LOCAL_CERTS}
 	on_demand_tls {
 		ask http://api:3000/internal/tls/allowed
 	}
@@ -28,6 +34,18 @@
 	import no_banner
 	header Strict-Transport-Security "max-age=31536000"
 	request_header X-Request-Id {http.request.uuid}
+}
+
+{$PORTAL_HOST} {
+	import proxy_defaults
+	@internal path /internal /internal/*
+	respond @internal "Not found" 404
+	reverse_proxy web:3000
+}
+
+{$CMS_HOST} {
+	import proxy_defaults
+	reverse_proxy cms:3000
 }
 
 {$AUTH_HOST} {

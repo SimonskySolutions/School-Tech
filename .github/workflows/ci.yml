@@ -42,15 +42,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: docker build -f infra/images/api.Dockerfile -t pythagoras-api:${{ github.sha }} .
-      - run: docker build -f infra/images/web.Dockerfile -t pythagoras-web:${{ github.sha }} .
-      - name: Images run as an unprivileged user
+      - name: Build every production image (ADR 0033)
         run: |
-          for image in api web; do
-            user=$(docker run --rm --entrypoint id pythagoras-$image:${{ github.sha }} -un)
-            echo "$image runs as $user"
-            test "$user" = node
+          for image in api web cms keycloak migrate postgres redis gateway; do
+            docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:${{ github.sha }} .
           done
+      - name: Unprivileged users, no secret files, migrations and Keycloak build
+        run: bash scripts/images-test.sh ${{ github.sha }}
 
   stack:
     name: Database, identity, API, worker, gateway and sign-in suites

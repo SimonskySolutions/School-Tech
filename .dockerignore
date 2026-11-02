@@ -16,3 +16,14 @@ scripts
 tests
 **/test
 **/*.test.ts
+# Only what the production images copy, by name (ADR 0033); secrets/ stays out.
+!db/migrations
+!db/bootstrap
+!infra/images/migrate
+!infra/postgres/postgresql.conf
+!infra/postgres/pg_hba.conf
+!infra/postgres/initdb
+!infra/redis
+!infra/gateway/Caddyfile.production
+!infra/keycloak/entrypoint.sh
+!infra/keycloak/themes

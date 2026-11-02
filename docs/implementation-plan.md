@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-11-02. Current milestone: **M8 · Production deployment** (outlined below; to be planned when it starts). M7 is complete (all six steps, all seven acceptance criteria met; CI green on GitHub for every M7 commit, runs #96–#104 and the M7.6 run). M6 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M6 commit, runs #80–#92 and the M6.8 run). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M5 commit, runs #64–#78). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
+Last updated: 2026-11-02. Current milestone: **M8 · Production deployment** (planned 2026-11-02). M7 is complete (all six steps, all seven acceptance criteria met; CI green on GitHub for every M7 commit, runs #96–#104 and the M7.6 run). M6 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M6 commit, runs #80–#92 and the M6.8 run). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M5 commit, runs #64–#78). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. Each milestone is planned in detail when it starts; later milestones are outlined.
 
@@ -299,15 +299,37 @@ Tests added for M6.3: 19 database checks (the school year, one's own record and 
 6. Met: each is recorded as not built, with no development adapter and its next step (ADR 0032, the integration register); an architecture rule fails if code, pages, the CMS, shared types or seeds name them (M7.5).
 7. Met: the confirmation, the approval steps, a reminder and the export all work at School G, set up during the test, with no code change (M7.6).
 
+## M8 · Production deployment
+
+**Goal:** a documented production deployment that starts from nothing on a single Linux host, keeps every connection encrypted, backs up continuously and proves it can be restored, and says when something is wrong. Decided on 2026-11-02 (ADR 0033): the hosting provider, the group's domain and the off-site backup storage are to be decided later, so everything is provider-neutral and proven locally and in CI; the recovery targets are at most 5 minutes of data lost and 4 hours to restore service.
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M8.1 Production images | M1.6 | An image for every service of the brief: the CMS (with generated migrations instead of development's table push), Keycloak built for production with the Pythagoras theme, the migration job with the migrations inside, the gateway with its production configuration (portal, sign-in, API, CMS and school domains); all built in CI, unprivileged users, no secrets inside | **Done** (2026-11-02), ADR 0033: eight images in `infra/images`, all built by CI: `api` (also the worker), `web`, `cms` (Payload's standalone server; the initial migration generated into `apps/cms/migrations` and applied on start in production through `prodMigrations`, while development keeps creating tables directly), `keycloak` (`kc.sh build` for PostgreSQL with health, metrics and the Pythagoras theme; `start --optimized`), `migrate` (dbmate 2.34.1 with `db/migrations` inside; the password from a secret file, TLS `verify-full` unless told otherwise), `postgres` and `redis` (official images with the platform's configuration, bootstrap and ACL entrypoint inside) and `gateway` (Caddy with `Caddyfile.production`, which now also routes the portal and CMS host names and can use its own certificate authority for the local proof). The build context admits only the files the images copy; `scripts/images-test.sh` checks in CI that the application images run unprivileged (`node`, Keycloak's `1000`, `65534` for the migration job), that no image holds a file named like a platform secret, that the migration job carries exactly the repository's migrations and that Keycloak was built for PostgreSQL |
+| M8.2 Production Compose | M8.1 | `compose.production.yaml`, `.env.production.example` and a script that creates the secret files: three networks, only the gateway published, health checks gating start-up, the migration job before the applications, restricted containers, resource limits, persistent volumes | Planned |
+| M8.3 Identity for production | M8.2 | A realm without development users or test clients, generated from the development realm and checked by a test; multi-factor sign-in required for staff; SMTP for password reset; sign-in events kept 30 days; the administration console only through an SSH tunnel | Planned |
+| M8.4 Encrypted connections and pooling | M8.2 | A private certificate authority on the host; TLS required by PostgreSQL and Redis; PgBouncer in transaction mode in front of PostgreSQL; the applications connect through it with verified certificates | Planned |
+| M8.5 Continuous backups | M8.4 | pgBackRest: write-ahead log archived continuously, full weekly and differential daily, encrypted, to S3-compatible storage (a local stand-in until chosen); documents copied before each backup; the Keycloak and CMS databases in the same backups | Planned |
+| M8.6 Monitoring and alerts | M8.2 | Prometheus, Alertmanager and exporters for the host, PostgreSQL, PgBouncer and Redis; the platform's own metrics (queues, outbox, failed messages, backup age, restore checks, audit partitions, data subject requests due); alerts by e-mail, each tested by firing it | Planned |
+| M8.7 Restore drills and disaster recovery | M8.5 | A drill that restores to a point in time on a scratch host, checks every table and measures the time against the 4-hour target; the runbook for a lost server, objects first and then the database | Planned |
+| M8.8 Production stack end to end | M8.1–M8.7 | CI starts the production stack from nothing with local certificates, runs a family's purchase, a school website on its domain and a restore drill against it; release, rollback and upgrade procedures exercised; the handoff documentation | Planned |
+
+**Acceptance criteria**
+1. Every service of the brief runs from a pinned image built in CI, as an unprivileged user where the software allows, with no secret in an image or the repository.
+2. A clean host starts with the documented commands; the migration job runs before the applications and a failing migration stops the release; CI proves this from nothing on every push.
+3. Only the gateway is reachable from outside; HTTPS with HSTS at the edge; TLS on every connection to PostgreSQL, PgBouncer and Redis.
+4. Production sign-in has no development users or clients, requires a second factor for staff, keeps sign-in events 30 days and does not expose the administration console.
+5. Write-ahead log is archived continuously to encrypted S3-compatible storage; a drill restores to a chosen moment within 5 minutes of data and in under 4 hours, with every table checked; documents are restored with the database.
+6. The metrics of the monitoring checklist are collected and each alert has been fired in a test and delivered by e-mail.
+7. Release, rollback and upgrade procedures are documented and exercised; the application image of the previous release runs against the new schema.
+
 ## Later milestones (outline)
 
-| Milestone | Depends on | Outcome |
-| --- | --- | --- |
-| M8 · Production deployment | M2 | Production Compose, TLS, PgBouncer, pgBackRest, monitoring, restore drills |
+None planned beyond M8. Open items below remain.
 
 ## Open items
 
-- Staff multi-factor sign-in: Keycloak authentication flow to be configured before production (ADR 0006, 0009).
+- Staff multi-factor sign-in: Keycloak authentication flow to be configured before production (ADR 0006, 0009); planned in M8.3.
 - Stripe test-mode account: when available, follow the switch-over steps in `docs/operations.md` (Payments). Not built yet in the Stripe adapter: fetching the authoritative payment state, refunds, and expiring the Stripe session when our reservation expires.
 - Signing out of the CMS does not end the Keycloak session (ADR 0019).
 - If the CMS could not be reached when a website was created, the set-up page does not say so yet; calling `POST /admin/schools/:id/website` again adds the missing CMS space.
