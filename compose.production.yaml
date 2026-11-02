@@ -177,6 +177,83 @@ services:
       retries: 60
       start_period: 300s
 
+  # Restores (M8.7, ADR 0037), never started by "up": run when needed.
+  # The restore drill, monthly (infra/systemd): restores the backups to a
+  # scratch volume, checks every table and document and measures the time.
+  #   docker compose -f compose.production.yaml --env-file … run --rm restore-drill
+  restore-drill:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    profiles: [recovery]
+    restart: "no"
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup", "drill"]
+    environment: &restore-environment
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?}
+      BACKUP_S3_PORT: ${BACKUP_S3_PORT:-443}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:?}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?}
+      BACKUP_S3_KEY_ID: ${BACKUP_S3_KEY_ID:?}
+      BACKUP_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+      BACKUP_S3_CA_FILE: ${BACKUP_S3_CA_FILE:-}
+      TZ: UTC
+    secrets: &restore-secrets
+      - tls_ca_crt
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+    # The off-site storage only; the live database through its local socket,
+    # to mark the moment the drill restores.
+    networks: [offsite]
+    volumes:
+      - drill_data:/var/lib/postgresql
+      - pg_socket:/var/run/postgresql
+      - backup_state:/var/lib/pythagoras-backup
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+
+  # A lost server's restore (docs/operations.md), into the stack's own volumes
+  # with every other service stopped: the documents first, then the database.
+  #   … run --rm restore documents [time]
+  #   … run --rm restore database [time]
+  restore:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    profiles: [recovery]
+    restart: "no"
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup", "restore"]
+    environment:
+      <<: *restore-environment
+      # The API's key: the only one that may write the documents back.
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+      DOCUMENTS_SECRET_FILE: /run/secrets/storage_secret_access_key
+      STORAGE_ENDPOINT: http://garage:3900
+    secrets:
+      - tls_ca_crt
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+      - storage_secret_access_key
+    networks: [data, offsite]
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - backup_state:/var/lib/pythagoras-backup
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+
   redis:
     <<: *hardening
     image: ${IMAGE_REGISTRY:-}pythagoras-redis:${IMAGE_TAG}
@@ -703,6 +780,8 @@ volumes:
   pg_data:
   pg_socket:
   backup_state:
+  # The restore drill's scratch copy of the database, emptied after each drill.
+  drill_data:
   prometheus_data:
   alertmanager_data:
   redis_data:

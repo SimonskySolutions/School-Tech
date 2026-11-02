@@ -420,7 +420,7 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec b
 
 **What to expect.** On a new installation PostgreSQL logs a few failed `archive-push` attempts in the seconds before the backup service is up; they stop by themselves and nothing is lost (the log waits in `pg_wal`). If the off-site storage is unreachable later, the same happens until it returns, and `pg_wal` grows meanwhile: monitoring (M8.6) alerts on failed archiving and on the age of the newest backup. A failed scheduled backup is retried after 30 minutes.
 
-**Restoring** is the M8.7 drill and runbook: documents first (`sealed:current` plus what was moved aside up to the chosen moment), then the database with `pythagoras-backup pgbackrest --stanza=pythagoras restore` onto an empty data directory, to the latest moment or a point in time (`--type=time --target=…`). Erasures completed after the chosen moment are applied again from `privacy.data_subject_request`.
+**Restoring**: see "Restore drills" and "Losing the server" below (M8.7). Documents come first: the current copy, plus whatever was moved aside after the chosen moment. Then the database goes into an empty data directory, to the latest moment or a point in time.
 
 ### Monitoring and alerts (M8.6, ADR 0036)
 
@@ -476,6 +476,83 @@ Critical alerts repeat every 4 hours while they last, warnings daily. Each sends
    ```
 
 Until step 3, `TargetDown` may fire for the PostgreSQL and PgBouncer exporters.
+
+### Restore drills (M8.7, ADR 0037)
+
+A backup is proven only by restoring it. The restore drill restores the off-site backups into a scratch volume (`drill_data`) on the same host, without touching the running platform, then checks what it restored:
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm restore-drill
+```
+
+1. It marks a moment in the live database: a named restore point, with every table of the platform's database counted in the same snapshot.
+2. It waits until that moment has reached the off-site storage. This is the data a lost server would cost, at most 5 minutes.
+3. It restores the cluster from the off-site storage into the scratch volume, to exactly that moment. The restored copy runs inside the drill's own container, with no network and with archiving off.
+4. It checks:
+   - `pg_amcheck` on all three databases;
+   - every table counted, and the same tables as live;
+   - every table of the platform's database holding exactly the rows of the marked moment;
+   - every document version the database refers to present in the off-site copy, with 20 of them (`DRILL_DOCUMENT_CHECKS`) read back against their checksums.
+5. It must finish in under 4 hours.
+
+On success it records its time and duration for monitoring, writes `/var/lib/pythagoras-backup/restore-check.report` (table names and row counts, no personal data), and empties the scratch volume. After a failure the scratch volume is left for inspection; the next drill replaces it. To read the last report:
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec backup cat /var/lib/pythagoras-backup/restore-check.report
+```
+
+`… run --rm restore-drill --time="2026-11-02 09:30:00+00"` restores to a chosen time instead, and `--name=<restore point>` to an earlier named point. Use either to look at the data as it was, before a real restore. The drill needs free disk space about the size of the database.
+
+**Monthly, by systemd.** `infra/systemd/pythagoras-restore-drill.{service,timer}` runs the drill on the first Sunday of each month at 03:00 UTC, after the weekly full backup. The units expect the Compose file at `/etc/pythagoras/compose.production.yaml` and the settings at `/etc/pythagoras/.env`; change the paths in the service if the host keeps them elsewhere. Install them:
+
+```bash
+sudo cp infra/systemd/pythagoras-restore-drill.service infra/systemd/pythagoras-restore-drill.timer /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now pythagoras-restore-drill.timer
+```
+
+`systemctl list-timers pythagoras-restore-drill` shows the next run, and `journalctl -u pythagoras-restore-drill` shows the last ones. `RestoreCheckOverdue` fires once 35 days pass without a successful drill. Keep each month's report with the group's records of processing (GDPR Art. 32(1)(d)).
+
+### Losing the server (M8.7, ADR 0037)
+
+What must survive off the host: the off-site backup storage, **an encrypted copy of `/etc/pythagoras/secrets` and `/etc/pythagoras/.env`** (the group's password manager), and the images (the registry, or CI's build for the release). The backup passphrases are in the secrets directory. Without them nothing can be read back.
+
+The target is under 4 hours from a new host to a working platform. CI rehearses every step on each push (`scripts/prod-stack-test.sh`): it deletes every container and volume of the stack and follows this list.
+
+1. **A new host.** Install Docker Engine with the Compose plugin. Open the firewall for 80 and 443 only. Put `compose.production.yaml`, `.env` and the secrets directory back in `/etc/pythagoras` (the directory `0700` and root's, the files `0444`). Put the images on the host as for a release.
+2. **The object store, empty, with its keys and bucket:**
+
+   ```bash
+   docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait garage
+   docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm storage-init
+   ```
+
+3. **The documents first.** This copies them back from the off-site copy with the API's key:
+
+   ```bash
+   docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm restore documents
+   ```
+
+4. **Then the database**, into its own empty volume. It replays the archived log to the latest moment, then archives the restored database's new timeline itself:
+
+   ```bash
+   docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env run --rm restore database
+   ```
+
+5. **Start everything:** `docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d --wait`. The backup service takes a full backup of the restored database before it reports healthy. The gateway obtains new certificates. Redis starts empty, and the worker relays what PostgreSQL's outbox still holds.
+6. **Point the DNS at the new host** if its address changed, check sign-in and a download, and run a restore drill once the stack is up.
+
+**To an earlier moment** (data destroyed by mistake, not a lost server), give the same time to both steps: `restore documents "2026-11-02 09:30:00+00"` and `restore database "2026-11-02 09:30:00+00"`. Try the moment with a drill first. Before stopping the old stack, note the erasures completed after that moment:
+
+```sql
+SELECT subject_person_id, completed_at FROM privacy.data_subject_request
+WHERE kind = 'erasure' AND status = 'completed' AND completed_at > '2026-11-02 09:30:00+00';
+```
+
+Stop every service except `garage`, remove the `pg_data` volume (or set `RESTORE_OVERWRITE=yes` for the database step), and restore. **Apply those erasures again before the platform is opened**: through the portal, or `privacy.pseudonymise_person(<id>)`. Use the data protection officer's record of requests when the old database is gone.
+
+**Without the original secrets** (only the backup passphrases and the storage key survived), create new ones with `scripts/prod-secrets.sh`, put the three backup passphrases and `backup_s3_secret_key` back in place, and restore as above. Then, before opening the platform:
+- set the database roles' passwords from the new files: `exec postgres gosu postgres bash /opt/pythagoras/db/bootstrap/apply.sh`;
+- set the new client secrets in Keycloak: `pythagoras-web`, `pythagoras-provisioning` and `pythagoras-cms`, under Clients → Credentials, through the administration tool in its container.
 
 ## Identity provider in production (M8.3, ADR 0034)
 
@@ -536,7 +613,7 @@ bash scripts/db-restore-check.sh
 
 - **Continuous backups** (M8.5, ADR 0035): pgBackRest with the write-ahead log archived at least every minute, a full backup weekly and a differential daily, encrypted, to off-site S3-compatible storage in the EU; the documents copied every 5 minutes and before each backup. See "Continuous backups" under the production stack. Targets (ADR 0033): at most 5 minutes of data lost, 4 hours to restore service.
 - **Retention**: four weekly full backups, so any moment of the last four to five weeks can be restored; longer-term copies only per the DPO-approved retention policy.
-- **Restore drills** (M8.7): an automated restore to a scratch host with the row-count check, its time measured against the 4-hour target; a full disaster-recovery rehearsal with timings recorded.
+- **Restore drills** (M8.7, ADR 0037): a monthly drill restores the off-site backups to a scratch volume. It checks every table against a moment it marks, and every document off the host. Its time is measured against the 4-hour target. CI rehearses losing the server on every push. See "Restore drills" and "Losing the server" under the production stack.
 - **Documents**: the bytes live in the object store, not the database; they are copied off-site before each database backup, so every version the database knows has its object. Restore the objects first, then the database. Garage also snapshots its metadata every 6 hours (`metadata_auto_snapshot_interval`).
 - **Redis**: no backup is needed for correctness. PostgreSQL's outbox is the source of truth; after losing Redis, the worker re-enqueues unpublished outbox events and expiry jobs from PostgreSQL. RDB snapshots and the AOF on the volume cover ordinary restarts.
 

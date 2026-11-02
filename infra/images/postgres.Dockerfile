@@ -5,7 +5,8 @@
 # Accepts only TLS from the network (M8.4): pg_hba.production.conf and the
 # certificate from the secrets. Archives its write-ahead log continuously with
 # pgBackRest (M8.5, ADR 0035); the same image runs the backup service, which
-# also copies the documents with rclone. Build from the repository root:
+# also copies the documents with rclone, and the restore drill and a lost
+# server's restore run from it too (M8.7). Build from the repository root:
 #   docker build -f infra/images/postgres.Dockerfile -t pythagoras-postgres .
 
 # rclone from the project's release, checked against its published checksums.
@@ -32,6 +33,8 @@ COPY infra/postgres/postgresql.conf /etc/postgresql/postgresql.conf
 COPY infra/postgres/pg_hba.production.conf /etc/postgresql/pg_hba.conf
 COPY infra/postgres/initdb/ /docker-entrypoint-initdb.d/
 COPY db/bootstrap/ /opt/pythagoras/db/bootstrap/
+# The restore drill counts every table with it (M8.7).
+COPY db/ops/row_counts.sql /opt/pythagoras/db/ops/row_counts.sql
 COPY infra/postgres/production-entrypoint.sh /usr/local/bin/pythagoras-entrypoint.sh
 # pgBackRest: the database's side by default, the repository's for the backup service.
 COPY infra/pgbackrest/database.conf /etc/pgbackrest/pgbackrest.conf

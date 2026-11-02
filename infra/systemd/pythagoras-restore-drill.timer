@@ -1,0 +1,13 @@
+# The restore drill on the first Sunday of every month at 03:00 UTC, after
+# the weekly full backup (01:00). A drill missed while the host was off runs
+# when it is back (Persistent). The alert fires after 35 days without a drill.
+[Unit]
+Description=Monthly Pythagoras restore drill
+
+[Timer]
+OnCalendar=Sun *-*-01..07 03:00:00 UTC
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

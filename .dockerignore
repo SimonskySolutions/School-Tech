@@ -19,6 +19,7 @@ tests
 # Only what the production images copy, by name (ADR 0033); secrets/ stays out.
 !db/migrations
 !db/bootstrap
+!db/ops/row_counts.sql
 !infra/images/migrate
 !infra/postgres/postgresql.conf
 !infra/postgres/pg_hba.production.conf

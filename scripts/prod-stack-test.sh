@@ -19,6 +19,11 @@
 # - monitoring: every target scraped, the platform's, the backup's and the
 #   exporters' measures present, no alert on a healthy stack but the missing
 #   restore drill, and an alert e-mailed when Redis stops (to a stand-in mailbox);
+# - restore drills on a scratch volume: to a moment the drill marks, every
+#   table as it was then, and to a chosen time; every document present off the
+#   host and read back against its checksum; under 4 hours, and measured;
+# - a lost server: every volume of the stack deleted, then restored by the
+#   runbook from the off-site storage, documents first, with nothing lost;
 # - every migration applied, and a failing one stops a release without
 #   touching the database or the running version;
 # - application containers read-only, without capabilities, unprivileged.
@@ -284,7 +289,8 @@ echo "A school policy for the backup check" | compose exec -T "${api_key[@]}" ba
 backup documents >/dev/null
 same "documents are copied off the host" "A school policy for the backup check" "$(backup rclone cat "sealed:current/$document")"
 raw=$(backup rclone lsf -R --files-only offsite:pythagoras-backups/documents)
-if [[ -n "$raw" && "$raw" != *v1* && "$(backup rclone cat offsite:pythagoras-backups/documents/"$(head -1 <<<"$raw")" | head -c 6)" == RCLONE ]]; then
+# No path component is a plain name ("current", "v1"); encrypted ones are long and random.
+if [[ -n "$raw" ]] && ! grep -Eq '(^|/)(current|removed|v1)(/|$)' <<<"$raw" && [[ "$(backup rclone cat offsite:pythagoras-backups/documents/"$(head -1 <<<"$raw")" | head -c 6)" == RCLONE ]]; then
   ok "their names and contents are encrypted there"
 else
   fail "documents off the host are readable: $raw"
@@ -360,7 +366,7 @@ same "the archiver's progress is measured" 1 "$(value 'count(pg_stat_archiver_ar
 same "the host's disks are measured" 1 "$(value 'count(node_filesystem_avail_bytes) > bool 0')"
 same "the platform's measures are scraped from the worker" "12 8" \
   "$(value 'count({job="worker", __name__=~"pythagoras_(outbox|inbound|messages|data_subject|audit)_.+"})') $(value 'count(pythagoras_queue_jobs)')"
-same "the backups' measures are read from the backup service" "5 1" \
+same "the backups' measures are read from the backup service" "6 1" \
   "$(value 'count({__name__=~"pythagoras_(backup|documents_copy|restore_check)_.+"})') $(value 'count(time() - pythagoras_backup_last_success_timestamp_seconds{type="diff"} < 3600)')"
 rules=$(prom rules)
 same "every alert rule is loaded and evaluates" "$(grep -ho 'alert: [A-Za-z]*' infra/monitoring/rules/*.yml | wc -l | tr -d ' ') ['ok']" \
@@ -391,6 +397,115 @@ for ((waited = 0; waited < 180; waited += 5)); do
 done
 if [[ -z "$unhealthy" ]]; then ok "the stack recovers once Redis is back (${waited}s)"; else fail "not healthy after Redis returned: $unhealthy"; fi
 expect "the API is ready again" 200 api.pythagoras.test /health/ready
+
+# Restore drills (M8.7) on a scratch volume, as the monthly timer runs them.
+# A document of a member of staff, so that the drill has one to find off the host.
+document=c8700000-0000-7000-8000-000000000001
+version=c8700000-0000-7000-8000-000000000002
+contents="A contract for the restore drill (synthetic)."
+compose exec -T postgres gosu postgres psql -X -q -v ON_ERROR_STOP=1 -d pythagoras <<SQL
+BEGIN;
+SET LOCAL app.actor = 'test:restore-drill';
+INSERT INTO documents.document (id, group_id, attached_to, person_id, title, category)
+VALUES ('$document', 'a8000000-0000-7000-8000-000000000001', 'staff', 'c8000000-0000-7000-8000-000000000002', 'Contract (restore drill)', 'contract');
+INSERT INTO documents.version (id, group_id, document_id, version_no, object_key, file_name, content_type, size_bytes, sha256, uploaded_by_person_id, uploaded_at)
+VALUES ('$version', 'a8000000-0000-7000-8000-000000000001', '$document', 1, 'v1/$document/$version', 'contract.txt', 'text/plain',
+        ${#contents}, decode('$(printf '%s' "$contents" | sha256sum | cut -d' ' -f1)', 'hex'), 'c8000000-0000-7000-8000-000000000002', now() - interval '10 minutes');
+COMMIT;
+SQL
+printf '%s' "$contents" | compose exec -T "${api_key[@]}" backup pythagoras-backup rclone rcat "api:pythagoras-documents/v1/$document/$version"
+backup documents >/dev/null
+drill() { compose run --rm --no-TTY restore-drill "$@" 2>&1 | tr -d '\r'; }
+report() { compose exec -T backup cat /var/lib/pythagoras-backup/restore-check.report | tr -d '\r'; }
+if out=$(drill); then ok "a drill restores the moment it marks and passes"; else fail "the drill failed"; echo "$out"; fi
+for line in "every table of the platform's database holds exactly what it held at the marked moment" \
+  "amcheck found nothing wrong" "documents: 1 present off the host, 1 read back against their checksums, 0 newer than the last copy, 0 missing"; do
+  if [[ "$out" == *"$line"* ]]; then ok "drill: $line"; else fail "the drill did not report: $line"; fi
+done
+took=$(grep -o 'drill passed in [0-9]*s' <<<"$out" | tr -dc 0-9)
+if [[ -n "$took" && "$took" -lt 14400 ]]; then ok "the drill took ${took}s (target: under 4 hours)"; else fail "the drill's time is '$took'"; fi
+if [[ "$(compose run --rm --no-TTY --entrypoint sh restore-drill -c 'ls -A /var/lib/postgresql/18/docker 2>/dev/null | wc -l')" == 0 ]]; then
+  ok "the scratch copy is emptied afterwards"
+else
+  fail "the drill left its scratch copy behind"
+fi
+
+# To a chosen time: a change before it is restored, one after it is not.
+group() { # id code
+  compose exec -T postgres gosu postgres psql -X -q -v ON_ERROR_STOP=1 -d pythagoras \
+    -c "BEGIN; SET LOCAL app.actor = 'test:restore-drill'; INSERT INTO org.education_group (id, code, name) VALUES ('$1', '$2', 'Restore drill'); COMMIT;"
+}
+group a8700000-0000-7000-8000-000000000001 drill-before
+before=$(sql "SELECT count(*) FROM org.education_group")
+sleep 2
+moment=$(sql "SELECT now()")
+sleep 2
+group a8700000-0000-7000-8000-000000000002 drill-after
+if out=$(drill --time="$moment"); then ok "a drill restores to a chosen time and passes"; else fail "the drill to $moment failed"; echo "$out"; fi
+same "the chosen time holds the change before it and not the one after" "pythagoras: org.education_group=$before" \
+  "$(report | grep '^pythagoras: org.education_group=')"
+
+# The drill's success reaches monitoring, and the alert for a missing drill resolves.
+for ((waited = 0; waited < 120; waited += 5)); do
+  [[ "$(value 'count(ALERTS{alertname="RestoreCheckOverdue", alertstate="firing"})')" == none ]] && break
+  sleep 5
+done
+same "monitoring sees the drill's success and its time" "1 1" \
+  "$(value 'count(time() - pythagoras_restore_check_last_success_timestamp_seconds < 3600)') $(value 'count(pythagoras_restore_check_duration_seconds > 0)')"
+same "the alert for a missing drill resolves" none "$(value 'count(ALERTS{alertname="RestoreCheckOverdue", alertstate="firing"})')"
+
+# A lost server (docs/operations.md, "Losing the server"): the stack's
+# containers and every one of its volumes gone; the off-site storage, the
+# secrets and the settings kept. Restored by the runbook: documents, database, start.
+group a8700000-0000-7000-8000-000000000003 before-loss
+compose exec -T postgres gosu postgres psql -X -q -At -d postgres -c "SELECT pg_switch_wal()" >/dev/null
+segment=$(sql "SELECT pg_walfile_name(pg_current_wal_lsn())")
+for ((waited = 0; waited < 120; waited += 2)); do
+  [[ ! "$(sql "SELECT coalesce(last_archived_wal, '') FROM pg_stat_archiver")" < "$segment" ]] && break
+  sleep 2
+done
+lost=$SECONDS
+standins="offsite-store offsite-init offsite mailbox"
+mapfile -t platform < <(compose config --services | grep -vxF -f <(tr ' ' '\n' <<<"$standins restore restore-drill"))
+compose rm -s -f -v "${platform[@]}" >/dev/null 2>&1
+for volume in pg_data pg_socket redis_data garage_meta garage_data gateway_data backup_state drill_data prometheus_data alertmanager_data; do
+  docker volume rm "${project}_$volume" >/dev/null 2>&1 || true
+done
+if [[ -z "$(docker volume ls -q --filter "name=^${project}_(pg_data|garage_data|backup_state)$")" ]]; then
+  ok "the server is lost: the stack's containers and volumes are gone"
+else
+  fail "volumes survived the loss"
+fi
+compose up -d --wait garage >/dev/null 2>&1
+compose run --rm --no-TTY storage-init >/dev/null 2>&1 || fail "the object store could not be set up again"
+if out=$(compose run --rm --no-TTY restore documents 2>&1 | tr -d '\r') && [[ "$out" == *"documents restored"* ]]; then
+  ok "the documents are restored first"
+else
+  fail "restoring the documents failed"; echo "$out"
+fi
+if out=$(compose run --rm --no-TTY restore database 2>&1 | tr -d '\r') && [[ "$out" == *"database restored"* ]]; then
+  ok "then the database, its new timeline archived"
+else
+  fail "restoring the database failed"; echo "$out"
+fi
+if compose up -d --wait --wait-timeout 900 >"$work/recover.log" 2>&1; then
+  ok "the stack starts on the restored data in $((SECONDS - lost))s (target: 4 hours)"
+else
+  fail "the stack did not start after the restore"
+  tail -40 "$work/recover.log"
+  compose ps -a
+fi
+same "nothing written before the loss is lost" 1 "$(sql "SELECT count(*) FROM org.education_group WHERE code = 'before-loss'")"
+same "every migration is still applied" "$here" "$(sql "SELECT count(*) FROM meta.schema_migrations")"
+same "the document is back with its contents" "$(printf '%s' "$contents" | sha256sum | cut -d' ' -f1)" \
+  "$(compose exec -T "${api_key[@]}" backup pythagoras-backup rclone cat "api:pythagoras-documents/v1/$document/$version" | sha256sum | cut -d' ' -f1)"
+same "the identity provider kept its realm" "pythagoras / pythagoras browser" "$(kc get realms/pythagoras | field "d['realm'] + ' / ' + d['browserFlow']")"
+compose exec -T gateway cat /data/caddy/pki/authorities/local/root.crt >"$work/root.crt"
+expect "the portal answers again" 200 portal.pythagoras.test /
+expect "the API is ready again after the restore" 200 api.pythagoras.test /health/ready
+backups=$(info)
+same "a full backup of the restored database is taken at once" full "$(field "d[0]['backup'][-1]['type']" <<<"$backups")"
+if backup pgbackrest --stanza=pythagoras check >/dev/null; then ok "the restored database archives its log again"; else fail "archiving does not work after the restore"; fi
 
 for service in api worker web cms gateway pgbouncer backup storage-init migrate \
   prometheus alertmanager node-exporter blackbox postgres-exporter pgbouncer-exporter redis-exporter; do

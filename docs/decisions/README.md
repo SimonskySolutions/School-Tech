@@ -40,3 +40,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0034](0034-production-identity.md) | Production identity: a generated realm and a second factor for staff | Accepted |
 | [0035](0035-continuous-backups.md) | Continuous backups: pgBackRest on a repository host, documents with rclone | Accepted |
 | [0036](0036-monitoring-and-alerts.md) | Monitoring and alerts: Prometheus on the host, alerts by e-mail | Accepted |
+| [0037](0037-restore-drills-and-recovery.md) | Restore drills and recovery: a monthly drill, and a runbook proven in CI | Accepted |
