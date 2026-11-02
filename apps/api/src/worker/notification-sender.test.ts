@@ -121,6 +121,8 @@ describe('mail settings', () => {
     DB_PASSWORD: 'x',
     REDIS_HOST: 'redis',
     REDIS_PASSWORD: 'x',
+    DB_SSL_ROOT_CERT: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
+    REDIS_TLS_CA: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n',
   };
 
   it('use the development mailbox in development', () => {

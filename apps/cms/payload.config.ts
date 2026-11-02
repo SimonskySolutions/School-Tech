@@ -55,6 +55,11 @@ export default buildConfig({
       user: setting('DB_USER', 'pyth_cms'),
       password: setting('DB_PASSWORD'),
       max: 10,
+      // M8.4: TLS verifying the server's certificate and name, when the
+      // authority's certificate is given (production).
+      ...(process.env.DB_SSL_ROOT_CERT_FILE
+        ? { ssl: { ca: readFileSync(process.env.DB_SSL_ROOT_CERT_FILE, 'utf8'), rejectUnauthorized: true } }
+        : {}),
     },
     // Development creates tables from the collections; production applies the
     // generated migrations in ./migrations when it starts (ADR 0033). After

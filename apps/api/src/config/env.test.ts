@@ -102,6 +102,10 @@ describe('API configuration', () => {
     expect(() => load({ NODE_ENV: 'production', ACCOUNT_SETUP: 'email' })).not.toThrow(/ACCOUNT_SETUP/);
   });
 
+  it('requires TLS to the database in production (M8.4)', () => {
+    expect(() => load({ NODE_ENV: 'production' })).toThrow(/DB_SSL_ROOT_CERT: required in production/);
+  });
+
   it('requires a second factor for staff in production only', () => {
     expect(() => load({ NODE_ENV: 'production' })).toThrow(/STAFF_SECOND_FACTOR: staff must sign in/);
     expect(() => load({ NODE_ENV: 'production', STAFF_SECOND_FACTOR: 'required' })).not.toThrow(

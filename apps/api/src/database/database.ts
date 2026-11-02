@@ -40,6 +40,19 @@ export interface DatabaseOptions {
   readonly user: string;
   readonly password: string | undefined;
   readonly max: number;
+  /** TLS settings for the connection, from databaseTls(); none when absent. */
+  readonly ssl?: DatabaseTls;
+}
+
+export type DatabaseTls = false | { readonly ca: string; readonly rejectUnauthorized: true };
+
+/**
+ * TLS for the database connection (M8.4): with the authority's certificate,
+ * the server's certificate must be signed by it and name the host connected
+ * to (node-postgres checks the name like a browser does); without, no TLS.
+ */
+export function databaseTls(rootCertificate: string | undefined): DatabaseTls {
+  return rootCertificate ? { ca: rootCertificate, rejectUnauthorized: true } : false;
 }
 
 export class Database {

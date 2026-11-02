@@ -296,7 +296,7 @@ Useful checks, as the superuser (`docker compose exec -u postgres postgres psql 
 Every service runs from an image (ADR 0033). Build them all from the repository root:
 
 ```bash
-for image in api web cms keycloak migrate postgres redis gateway garage; do docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:local .; done
+for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer; do docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:local .; done
 ```
 
 ```bash
@@ -314,6 +314,7 @@ bash scripts/images-test.sh
 | `pythagoras-redis` | Redis with its configuration and the ACL built from secret files | starts as root, runs as `redis` |
 | `pythagoras-gateway` | Caddy with `Caddyfile.production` | root, with every capability dropped except binding ports 80 and 443 (`no-new-privileges` blocks the file capability an unprivileged Caddy would need) |
 | `pythagoras-garage` | Garage with `infra/garage/garage.production.toml` and data directories it owns | `1000` |
+| `pythagoras-pgbouncer` | PgBouncer 1.26.1 (the PostgreSQL project's package) with `infra/pgbouncer/pgbouncer.ini` | `postgres` |
 
 The build context (`.dockerignore`) admits only the files the images copy, named one by one; `secrets/` never enters it. `scripts/images-test.sh` checks that the application images run unprivileged, that no image holds a file named like one of the platform's secrets, that the migration job carries exactly the repository's migrations, and that Keycloak was built for PostgreSQL with the theme.
 
@@ -351,7 +352,7 @@ The worker checks pending domains every minute (each at most every five minutes)
 | Network | Members | Reach |
 | --- | --- | --- |
 | `edge` | gateway, web, API, CMS, Keycloak | The gateway routes to the applications; outbound for Stripe and Keycloak's e-mail |
-| `data` (internal) | PostgreSQL, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init` | No way out; the gateway and the web server are not on it |
+| `data` (internal) | PostgreSQL, PgBouncer, Redis, Garage, and their clients: API, worker, CMS, Keycloak, `migrate`, `storage-init` | No way out; the gateway and the web server are not on it |
 | `egress` | worker | Outbound for SMTP and the DNS checks of school domains |
 
 Only the gateway publishes ports (`HTTP_PORT`, `HTTPS_PORT`, default 80 and 443). Every container has `no-new-privileges`, a restart policy, bounded logs and a CPU and memory limit; the application containers also drop every capability and have read-only filesystems with `/tmp` in memory. Data lives in the volumes `pg_data`, `redis_data`, `garage_meta`, `garage_data` and `gateway_data` (certificates and the ACME account).
@@ -372,7 +373,25 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d 
 
 Set the new `IMAGE_TAG` first. The migration job runs while the previous version is still serving; if a migration fails its transaction rolls back, the command exits non-zero and nothing is replaced. Fix it with a new migration and release again (migrations are expand, then contract, so the previous version works with the new schema). Rolling back the applications is setting the previous `IMAGE_TAG` and running the last command.
 
-**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). CI runs it on every push. Until M8.4 connections inside the host are not encrypted.
+**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). It also checks the connections inside the host: PostgreSQL and PgBouncer refuse anything without TLS, a certificate is refused for a name it does not carry, Redis answers only over TLS, every network connection PostgreSQL holds is TLS 1.3, and the API and the worker reach it only through PgBouncer. CI runs it on every push.
+
+### Encrypted connections inside the host (M8.4)
+
+`scripts/prod-secrets.sh` also makes a private certificate authority (`tls_ca_crt`, with its key `tls_ca_key`, which no container receives) and a certificate for each data service: `postgres`, `pgbouncer` and `redis`, each valid for its service name, `localhost` and `127.0.0.1`. Everything uses TLS 1.3 and checks the server's certificate against that authority and the name it connected to:
+
+| Client | Connects to | How |
+| --- | --- | --- |
+| API, worker | PgBouncer (`pgbouncer:6432`), which connects to PostgreSQL | `DB_SSL_ROOT_CERT_FILE`; PgBouncer verifies PostgreSQL (`server_tls_sslmode = verify-full`) |
+| Worker | Redis (`redis:6379`, TLS only) | `REDIS_TLS_CA_FILE` |
+| CMS | PostgreSQL | `DB_SSL_ROOT_CERT_FILE` |
+| Keycloak | PostgreSQL | `sslmode=verify-full` in `KC_DB_URL` |
+| Migration job | PostgreSQL | `DB_SSLMODE=verify-full`, `DB_SSLROOTCERT` |
+
+The API and the worker refuse to start in production without the authority's certificate. PostgreSQL refuses any network connection without TLS (`hostnossl … reject`).
+
+**PgBouncer** pools in transaction mode: a server connection is held for one transaction, which is how the platform sets its request context (`set_config(…, true)` inside each transaction). Nothing in the API or worker uses session state, advisory locks or `LISTEN`; keep it that way, or connect that code to PostgreSQL directly. Keycloak (prepared statements over JDBC), the CMS and the migration job connect to PostgreSQL directly. Limits: 400 clients, 20 server connections per role (60 in all) against PostgreSQL's 120.
+
+**Renewing the certificates.** They are valid for 825 days, the authority for ten years. Delete the service's two files (`tls_<service>_crt`, `tls_<service>_key`), run `scripts/prod-secrets.sh` again and restart that service: `docker compose … up -d --force-recreate <service>`. To replace the authority, delete `tls_ca_*` and every `tls_*` file, run the script, and recreate every service.
 
 ## Identity provider in production (M8.3, ADR 0034)
 
@@ -450,10 +469,10 @@ bash scripts/db-restore-check.sh
 
 | Area | Development | Production |
 | --- | --- | --- |
-| Transport security | No TLS inside the Compose network | TLS for every PostgreSQL and Redis connection; `hostssl` in `pg_hba.conf`; Redis `tls-port` only |
+| Transport security | No TLS inside the Compose network | TLS 1.3 to PostgreSQL, PgBouncer and Redis with certificates from the platform's own authority, verified by every client (M8.4); `hostssl` only (`infra/postgres/pg_hba.production.conf`); Redis on its TLS port only |
 | Storage | Docker volume | Encrypted disk; managed PostgreSQL is acceptable if it supports RLS, the roles above, and EU hosting |
 | Memory settings | Sized for a laptop | `shared_buffers` ~25 % of RAM, `effective_cache_size` ~50–75 % |
-| Connections | Direct | PgBouncer in transaction mode in front of PostgreSQL (`SET LOCAL` context is compatible) |
+| Connections | Direct | The API and the worker through PgBouncer in transaction mode (their request context is set per transaction); Keycloak, the CMS and the migration job directly |
 | Secrets | Files in `secrets/` | Host secret store or the platform's secret manager; never in images or the repository |
 | Logs | Docker `local` driver | Shipped to central logging; PostgreSQL never logs query parameters, so logs carry no personal data from queries |
 | Redis host setting | Docker Desktop default | `vm.overcommit_memory = 1` on the host, as Redis recommends for background saves |

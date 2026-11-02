@@ -35,6 +35,10 @@ const schema = z
     DB_USER: z.string().min(1).default('pyth_api'),
     DB_PASSWORD: z.string().min(1).optional(),
     DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+    // M8.4: the certificate authority that signed the database's (or
+    // PgBouncer's) certificate. When set, the connection uses TLS and verifies
+    // the server's certificate and name; production requires it.
+    DB_SSL_ROOT_CERT: z.string().includes('BEGIN CERTIFICATE').optional(),
 
     OIDC_ISSUER: z.url().optional(),
     OIDC_JWKS_URL: z.url().optional(),
@@ -100,6 +104,7 @@ const schema = z
       for (const key of [
         'DB_HOST',
         'DB_PASSWORD',
+        'DB_SSL_ROOT_CERT',
         'OIDC_ISSUER',
         'OIDC_JWKS_URL',
         'OIDC_ALLOWED_CLIENTS',
@@ -176,6 +181,7 @@ export interface EnvSource {
 
 const FILE_BACKED = [
   'DB_PASSWORD',
+  'DB_SSL_ROOT_CERT',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'DEV_PAYMENTS_SECRET',

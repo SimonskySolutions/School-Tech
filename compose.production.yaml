@@ -30,12 +30,18 @@ x-application: &application
   tmpfs:
     - /tmp:size=64m
 
-# Database connection settings shared by the services that use PostgreSQL.
-# TLS arrives in M8.4; until then the data network is internal to the host.
+# Database connections (M8.4): always TLS, verified against the platform's own
+# certificate authority. The API and the worker go through PgBouncer; the
+# migration job connects to PostgreSQL itself.
 x-database: &database
   DB_HOST: postgres
   DB_PORT: "5432"
   DB_NAME: pythagoras
+x-pooled-database: &pooled-database
+  DB_HOST: pgbouncer
+  DB_PORT: "6432"
+  DB_NAME: pythagoras
+  DB_SSL_ROOT_CERT_FILE: /run/secrets/tls_ca_crt
 
 services:
   postgres:
@@ -56,6 +62,8 @@ services:
       - pg_backup_password
       - pg_keycloak_password
       - pg_cms_password
+      - tls_postgres_crt
+      - tls_postgres_key
     networks: [data]
     volumes:
       - pg_data:/var/lib/postgresql
@@ -71,13 +79,50 @@ services:
       retries: 30
       start_period: 60s
 
+  # Pools the API's and the worker's connections (transaction mode) and
+  # speaks TLS on both sides.
+  pgbouncer:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-pgbouncer:${IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    secrets:
+      - pg_api_password
+      - pg_worker_password
+      - tls_ca_crt
+      - tls_pgbouncer_crt
+      - tls_pgbouncer_key
+    networks: [data]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /run/pgbouncer:size=1m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 256m }
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-p", "6432", "-U", "pyth_api", "-d", "dbname=pythagoras sslmode=require"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   redis:
     <<: *hardening
     image: ${IMAGE_REGISTRY:-}pythagoras-redis:${IMAGE_TAG}
+    # TLS only (M8.4): the plain port is closed.
+    command: ["--port", "0", "--tls-port", "6379", "--tls-protocols", "TLSv1.3", "--tls-auth-clients", "no",
+              "--tls-cert-file", "/run/secrets/tls_redis_crt", "--tls-key-file", "/run/secrets/tls_redis_key",
+              "--tls-ca-cert-file", "/run/secrets/tls_ca_crt"]
     secrets:
       - redis_queue_password
       - redis_health_password
       - redis_admin_password
+      - tls_ca_crt
+      - tls_redis_crt
+      - tls_redis_key
     networks: [data]
     volumes:
       - redis_data:/data
@@ -90,7 +135,7 @@ services:
       resources:
         limits: { cpus: "1", memory: 1g }
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_health_password)\" redis-cli --no-auth-warning --user pyth_health ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_health_password)\" redis-cli --tls --cacert /run/secrets/tls_ca_crt --no-auth-warning --user pyth_health ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -151,9 +196,11 @@ services:
     environment:
       <<: *database
       DB_PASSWORD_FILE: /run/secrets/pg_migrator_password
-      DB_SSLMODE: disable
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /run/secrets/tls_ca_crt
     secrets:
       - pg_migrator_password
+      - tls_ca_crt
     networks: [data]
 
   keycloak:
@@ -164,7 +211,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak?sslmode=verify-full&sslrootcert=/run/secrets/tls_ca_crt
       KC_DB_USERNAME: pyth_keycloak
       KC_HOSTNAME: https://${AUTH_HOST:?}${PUBLIC_PORT:-}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
@@ -189,6 +236,7 @@ services:
       - keycloak_provisioning_client_secret
       - keycloak_cms_client_secret
       - smtp_password
+      - tls_ca_crt
     networks: [edge, data]
     tmpfs:
       - /tmp:size=64m
@@ -211,10 +259,12 @@ services:
         condition: service_completed_successfully
       storage-init:
         condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
     environment:
-      <<: *database
+      <<: *pooled-database
       NODE_ENV: production
       DB_PASSWORD_FILE: /run/secrets/pg_api_password
       OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
@@ -233,6 +283,7 @@ services:
       STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
     secrets:
       - pg_api_password
+      - tls_ca_crt
       - stripe_secret_key
       - stripe_webhook_secret
       - keycloak_provisioning_client_secret
@@ -261,10 +312,11 @@ services:
       redis:
         condition: service_healthy
     environment:
-      <<: *database
+      <<: *pooled-database
       NODE_ENV: production
       DB_PASSWORD_FILE: /run/secrets/pg_worker_password
       REDIS_HOST: redis
+      REDIS_TLS_CA_FILE: /run/secrets/tls_ca_crt
       REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
       SMTP_HOST: ${SMTP_HOST:?}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -277,6 +329,7 @@ services:
     secrets:
       - pg_worker_password
       - redis_queue_password
+      - tls_ca_crt
       - smtp_password
     # The data network for its stores; egress for mail and DNS checks of school domains.
     networks: [data, egress]
@@ -336,6 +389,7 @@ services:
       CMS_PUBLIC_URL: https://${CMS_HOST:?}${PUBLIC_PORT:-}
       DB_HOST: postgres
       DB_PASSWORD_FILE: /run/secrets/pg_cms_password
+      DB_SSL_ROOT_CERT_FILE: /run/secrets/tls_ca_crt
       PAYLOAD_SECRET_FILE: /run/secrets/cms_payload_secret
       CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
       OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
@@ -343,6 +397,7 @@ services:
       OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_cms_client_secret
     secrets:
       - pg_cms_password
+      - tls_ca_crt
       - cms_payload_secret
       - cms_platform_api_key
       - keycloak_cms_client_secret
@@ -439,3 +494,11 @@ secrets:
   stripe_secret_key: { file: "${SECRETS_DIR}/stripe_secret_key" }
   stripe_webhook_secret: { file: "${SECRETS_DIR}/stripe_webhook_secret" }
   smtp_password: { file: "${SECRETS_DIR}/smtp_password" }
+  # The platform's certificate authority and each data service's certificate (M8.4).
+  tls_ca_crt: { file: "${SECRETS_DIR}/tls_ca_crt" }
+  tls_postgres_crt: { file: "${SECRETS_DIR}/tls_postgres_crt" }
+  tls_postgres_key: { file: "${SECRETS_DIR}/tls_postgres_key" }
+  tls_pgbouncer_crt: { file: "${SECRETS_DIR}/tls_pgbouncer_crt" }
+  tls_pgbouncer_key: { file: "${SECRETS_DIR}/tls_pgbouncer_key" }
+  tls_redis_crt: { file: "${SECRETS_DIR}/tls_redis_crt" }
+  tls_redis_key: { file: "${SECRETS_DIR}/tls_redis_key" }

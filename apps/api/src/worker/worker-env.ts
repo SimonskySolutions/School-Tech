@@ -14,10 +14,14 @@ const schema = z
     DB_USER: z.string().min(1).default('pyth_worker'),
     DB_PASSWORD: z.string().min(1).optional(),
     DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
+    // M8.4: certificate authorities for TLS to the database (PgBouncer) and to
+    // Redis; when set, the server's certificate and name are verified.
+    DB_SSL_ROOT_CERT: z.string().includes('BEGIN CERTIFICATE').optional(),
     REDIS_HOST: z.string().min(1).optional(),
     REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
     REDIS_USERNAME: z.string().min(1).default('pyth_queue'),
     REDIS_PASSWORD: z.string().min(1).optional(),
+    REDIS_TLS_CA: z.string().includes('BEGIN CERTIFICATE').optional(),
     QUEUE_PREFIX: z
       .string()
       .regex(/^pyth(:[a-z0-9-]+)?$/)
@@ -46,7 +50,14 @@ const schema = z
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
-      for (const key of ['DB_HOST', 'DB_PASSWORD', 'REDIS_HOST', 'REDIS_PASSWORD'] as const) {
+      for (const key of [
+        'DB_HOST',
+        'DB_PASSWORD',
+        'DB_SSL_ROOT_CERT',
+        'REDIS_HOST',
+        'REDIS_PASSWORD',
+        'REDIS_TLS_CA',
+      ] as const) {
         if (env[key] === undefined)
           ctx.addIssue({ code: 'custom', path: [key], message: 'required in production' });
       }
@@ -85,7 +96,13 @@ const schema = z
 
 export type WorkerEnv = z.infer<typeof schema>;
 
-const FILE_BACKED = ['DB_PASSWORD', 'REDIS_PASSWORD', 'SMTP_PASSWORD'] as const;
+const FILE_BACKED = [
+  'DB_PASSWORD',
+  'DB_SSL_ROOT_CERT',
+  'REDIS_PASSWORD',
+  'REDIS_TLS_CA',
+  'SMTP_PASSWORD',
+] as const;
 
 export function loadWorkerEnv(
   env: Readonly<Record<string, string | undefined>>,

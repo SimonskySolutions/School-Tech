@@ -8,6 +8,8 @@
 #   gateway's and the web server's reach;
 # - HTTPS with HSTS on every host, plain HTTP redirected, the identity
 #   console and the internal routes not public;
+# - TLS 1.3 to PostgreSQL, PgBouncer and Redis with verified certificates,
+#   nothing unencrypted accepted, the API and worker only through PgBouncer;
 # - the production realm: no users or development client, the step-up
 #   sign-in, e-mail, events kept 30 days; a parent signs in with a password,
 #   staff only after setting up and then entering a one-time code;
@@ -85,7 +87,7 @@ else
   fail "the data network is not internal"
 fi
 networks() { docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(compose ps -q "$1")" | sed "s/${project}_//g"; }
-for service in postgres redis garage; do
+for service in postgres pgbouncer redis garage; do
   if [[ "$(networks "$service")" == "data " ]]; then ok "$service is on the data network only"; else fail "$service is on $(networks "$service")"; fi
 done
 if compose exec -T gateway wget -q -T 3 -O /dev/null http://postgres:5432 2>/dev/null; then
@@ -190,6 +192,37 @@ PYTHONIOENCODING=utf-8 "$PY" scripts/prod-signin-check.py "$ca" "$https_port" po
 logins=$(kc get events -r pythagoras -q type=LOGIN --fields type | field "len(d)")
 if [[ "$logins" -ge 3 ]]; then ok "the sign-ins are recorded as events ($logins)"; else fail "sign-ins are not recorded ($logins)"; fi
 
+# Encrypted connections inside the host (M8.4). The PgBouncer container has the
+# PostgreSQL client and the API role's password, so it tries each way in.
+connects() { # libpq connection string: succeeds when SELECT 1 works
+  compose exec -T pgbouncer sh -c 'PGPASSWORD="$(cat /run/secrets/pg_api_password)" PGCONNECT_TIMEOUT=5 \
+    psql -XtAq "$1 dbname=pythagoras user=pyth_api" -c "SELECT 1"' sh "$1" >/dev/null 2>&1
+}
+verified='sslmode=verify-full sslrootcert=/run/secrets/tls_ca_crt'
+if connects "host=postgres $verified"; then ok "PostgreSQL accepts TLS with a certificate for its name"; else fail "PostgreSQL refused a verified TLS connection"; fi
+if connects "host=postgres sslmode=disable"; then fail "PostgreSQL accepts a connection without TLS"; else ok "PostgreSQL refuses a connection without TLS"; fi
+if connects "host=pgbouncer port=6432 $verified"; then ok "PgBouncer accepts TLS with a certificate for its name"; else fail "PgBouncer refused a verified TLS connection"; fi
+if connects "host=pgbouncer port=6432 sslmode=disable"; then fail "PgBouncer accepts a connection without TLS"; else ok "PgBouncer refuses a connection without TLS"; fi
+postgres_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"${project}_data\").IPAddress}}" "$(compose ps -q postgres)")
+if connects "host=$postgres_ip $verified"; then
+  fail "a certificate is accepted for a name it does not carry"
+else
+  ok "a certificate is refused for a name it does not carry"
+fi
+if compose exec -T redis sh -c 'REDISCLI_AUTH="$(cat /run/secrets/redis_health_password)" redis-cli --no-auth-warning --user pyth_health -h 127.0.0.1 ping' 2>/dev/null | grep -q PONG; then
+  fail "Redis answers without TLS"
+else
+  ok "Redis answers only over TLS"
+fi
+pgbouncer_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"${project}_data\").IPAddress}}" "$(compose ps -q pgbouncer)")
+connections=$(sql "SELECT count(*) || ' ' || bool_and(s.ssl AND s.version = 'TLSv1.3')
+                     || ' ' || bool_and(a.client_addr = '$pgbouncer_ip'::inet OR a.usename NOT IN ('pyth_api', 'pyth_worker'))
+                     || ' ' || count(*) FILTER (WHERE a.usename IN ('pyth_api', 'pyth_worker'))
+                     FROM pg_stat_activity a JOIN pg_stat_ssl s USING (pid) WHERE a.client_addr IS NOT NULL")
+read -r total encrypted pooled pooled_count <<<"$connections"
+if [[ "$total" -gt 0 && "$encrypted" == true ]]; then ok "all $total network connections to PostgreSQL use TLS 1.3"; else fail "unencrypted connections: $connections"; fi
+if [[ "$pooled_count" -gt 0 && "$pooled" == true ]]; then ok "the API and the worker reach PostgreSQL only through PgBouncer"; else fail "API or worker connections bypass PgBouncer: $connections"; fi
+
 # A release runs the migration job before replacing anything (docs/operations.md).
 cat >"$work/failing.sql" <<'EOF'
 -- migrate:up
@@ -214,7 +247,7 @@ else
 fi
 expect "the running version keeps serving" 200 api.pythagoras.test /health/ready
 
-for service in api worker web cms gateway storage-init migrate; do
+for service in api worker web cms gateway pgbouncer storage-init migrate; do
   id=$(compose ps -a -q "$service")
   settings=$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.Privileged}} {{.Config.User}}' "$id")
   read -r readonly capdrop privileged user <<<"$settings"

@@ -1,7 +1,7 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { ENV } from '../config/config.module';
 import { type Env } from '../config/env';
-import { Database } from './database';
+import { Database, databaseTls } from './database';
 
 @Global()
 @Module({
@@ -17,6 +17,7 @@ import { Database } from './database';
           user: env.DB_USER,
           password: env.DB_PASSWORD,
           max: env.DB_POOL_MAX,
+          ssl: databaseTls(env.DB_SSL_ROOT_CERT),
         }),
     },
   ],

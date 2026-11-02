@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { Logger } from '@nestjs/common';
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
+import { databaseTls } from '../database/database';
 import { SystemDatabase } from '../database/system-database';
 import { cancellationCreditHandler } from './cancellation-credit';
 import { EventDispatcher } from './event-dispatcher';
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
     user: env.DB_USER,
     password: env.DB_PASSWORD,
     max: env.DB_POOL_MAX,
+    ssl: databaseTls(env.DB_SSL_ROOT_CERT),
   });
 
   // BullMQ does not close connections it is given, so they are tracked and closed here.
@@ -41,6 +43,8 @@ async function main(): Promise<void> {
       password: env.REDIS_PASSWORD,
       maxRetriesPerRequest: null,
       connectionName: 'pythagoras-worker',
+      // M8.4: TLS, verifying that the certificate names the Redis host.
+      ...(env.REDIS_TLS_CA ? { tls: { ca: env.REDIS_TLS_CA, servername: env.REDIS_HOST } } : {}),
     });
     connections.push(client);
     return client;

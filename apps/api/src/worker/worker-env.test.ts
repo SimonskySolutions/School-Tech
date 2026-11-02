@@ -30,6 +30,23 @@ describe('worker configuration', () => {
     );
   });
 
+  it('requires TLS to the database and Redis in production (M8.4)', () => {
+    expect(() => loadWorkerEnv({ NODE_ENV: 'production' }, read({}))).toThrow(
+      /DB_SSL_ROOT_CERT: required[\s\S]*REDIS_TLS_CA: required/,
+    );
+  });
+
+  it('reads the certificate authority from a file, and refuses one that is not a certificate', () => {
+    const ca = ['-----BEGIN CERTIFICATE-----', 'MIIB', '-----END CERTIFICATE-----', ''].join('\n');
+    const env = loadWorkerEnv(
+      { DB_SSL_ROOT_CERT_FILE: '/run/secrets/ca', REDIS_TLS_CA_FILE: '/run/secrets/ca' },
+      read({ '/run/secrets/ca': ca }),
+    );
+    expect(env.DB_SSL_ROOT_CERT).toContain('BEGIN CERTIFICATE');
+    expect(env.REDIS_TLS_CA).toContain('BEGIN CERTIFICATE');
+    expect(() => loadWorkerEnv({ REDIS_TLS_CA: 'not a certificate' }, read({}))).toThrow(/REDIS_TLS_CA/);
+  });
+
   it('only allows queue prefixes inside the Redis ACL pattern', () => {
     expect(() => loadWorkerEnv({ QUEUE_PREFIX: 'bull' }, read({}))).toThrow(/QUEUE_PREFIX/);
     expect(loadWorkerEnv({ QUEUE_PREFIX: 'pyth:test' }, read({})).QUEUE_PREFIX).toBe('pyth:test');
