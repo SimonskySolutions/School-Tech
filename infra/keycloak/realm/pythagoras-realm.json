@@ -1,6 +1,8 @@
 {
   "realm": "pythagoras",
   "displayName": "Pythagoras",
+  "loginTheme": "pythagoras",
+  "emailTheme": "pythagoras",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,

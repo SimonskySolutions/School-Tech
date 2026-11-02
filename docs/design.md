@@ -1,8 +1,8 @@
 # Visual design
 
-The look of the portal (`apps/web`). It takes the layout of the school-management products families and staff already know (a dark sidebar, a dashboard of tiles) and makes it calmer and more modern: a deep ink frame, one violet accent with a few supporting hues, generous rounding and soft depth.
+The look of everything people see: the portal and the school websites (`apps/web`), the sign-in pages and their e-mails (Keycloak), the website editor (`apps/cms`), the development payment page and the notification e-mails (`apps/api`). It takes the layout of the school-management products families and staff already know (a dark sidebar, a dashboard of tiles) and makes it calmer and more modern: a deep ink frame, one violet accent with a few supporting hues, generous rounding and soft depth.
 
-Everything lives in one stylesheet, `apps/web/app/globals.css`. There is no CSS framework and no build step for styles.
+The portal and websites share one stylesheet, `apps/web/app/globals.css`. There is no CSS framework and no build step for styles. The other surfaces copy the same tokens (see [Every surface](#every-surface)).
 
 ## Principles
 
@@ -37,11 +37,28 @@ Defined on `:root` in `globals.css`.
 | Buttons | `button`, `.button` | Gradient violet; quieter inside list rows and tables |
 | Notices | `[role=status]` (green), `[role=alert]` (rose), `[data-testid=not-permitted]` (amber), `.dev-banner` | The development banner stays on every page while the build uses synthetic data |
 | Sign-in page | `.auth-page`, `.auth-card` | What a signed-out visitor sees |
-| School websites | `body.site` | The public school sites keep a simple frame of their own and no portal navigation |
+| Website frame | `app/sites/site-frame.tsx`, `.site-header`, `.site-footer` | The school's name and CMS menu, the Family portal button, a footer with the group's schools |
+| Website hero and highlights | `.site-hero`, `.site-banner`, `.site-highlights`, `.prose` | The start page's banner and the platform's own services for families; CMS text in a reading card. Only facts the platform knows, never invented claims about a school |
+| Inquiry form | `.inquiry-form`, `.notice-panel` | Two columns of fields; the privacy notice and the agreements across |
+| Empty states | `.empty-state` | Not found (`app/not-found.tsx`) and a failed page (`app/error.tsx`), in the shell or on their own |
+
+## Every surface
+
+| Surface | Where | How it gets the look |
+| --- | --- | --- |
+| Portal and school websites | `apps/web/app` | `globals.css`; websites use `body.site` and no portal navigation |
+| Sign-in, password reset and other Keycloak pages | `infra/keycloak/themes/pythagoras/login` | Keycloak's own login theme with `css/pythagoras.css` on top: colours, logo, card and buttons. Only styles change, so every field keeps its id. Selected by `loginTheme` in the realm file; dark mode is off, like the portal |
+| Keycloak's e-mails | `infra/keycloak/themes/pythagoras/email/html/template.ftl` | A branded frame around Keycloak's wording (`emailTheme`) |
+| Website editor | `apps/cms/components/brand.tsx`, `apps/cms/app/(payload)/custom.css` | The logo on the sign-in page and in the navigation, the accent on primary buttons, the dark sign-in backdrop |
+| One-time password page | `apps/web/lib/standalone-page.ts` | Plain HTML with the styles inline |
+| Development payment page | `apps/api/src/payments/dev-checkout.controller.ts` | Plain HTML with the styles inline; its policy allows no other request |
+| Notification e-mails | `apps/api/src/notifications/email-html.ts` | An HTML part made from the template's text (ADR 0031), with the portal link as a button. Tables and inline styles only, because e-mail programs ignore style sheets and SVG; the text part stays |
+
+The Keycloak theme is mounted into the development container (`compose.yaml`). The production Keycloak image must include `infra/keycloak/themes/pythagoras` (M8).
 
 ## Small screens
 
-Below 960px the sidebar becomes a band across the top with the links wrapping, and the dashboard grids drop to fewer columns. Everything fits a phone width without horizontal scrolling.
+Below 960px the sidebar becomes a band across the top with the links wrapping, and the dashboard grids drop to fewer columns. On the websites the menu moves under the name and the footer and inquiry form become one column. Everything fits a phone width without horizontal scrolling.
 
 ## Adding a page
 

@@ -1,0 +1,95 @@
+/* The Pythagoras sign-in pages (docs/design.md): the portal's tokens applied to
+   Keycloak's PatternFly login theme. System fonts only; nothing is fetched. */
+
+:root {
+  --pf-v5-global--FontFamily--text: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system,
+    'Helvetica Neue', Arial, sans-serif;
+  --pf-v5-global--FontFamily--heading: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system,
+    sans-serif;
+  --pf-v5-global--primary-color--100: #5b3ef0;
+  --pf-v5-global--primary-color--200: #4a2fd6;
+  --pf-v5-global--link--Color: #5b3ef0;
+  --pf-v5-global--link--Color--hover: #3a22b5;
+  --pf-v5-global--active-color--100: #5b3ef0;
+  --keycloak-card-top-color: transparent;
+}
+
+.login-pf body,
+body#keycloak-bg {
+  background:
+    radial-gradient(60% 60% at 15% 10%, rgb(116 89 255 / 35%), transparent 60%),
+    radial-gradient(50% 50% at 90% 90%, rgb(11 158 145 / 25%), transparent 60%),
+    #0e0c22 !important;
+  min-height: 100vh;
+}
+
+/* The header: the logo above the group's name instead of the realm name in capitals. */
+#kc-header-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+#kc-header-wrapper::before {
+  content: '';
+  width: 60px;
+  height: 60px;
+  background: url('../img/logo.svg') center / contain no-repeat;
+  filter: drop-shadow(0 10px 24px rgb(91 62 240 / 45%));
+}
+
+/* The card. */
+.pf-v5-c-login__main {
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 55%);
+}
+.pf-v5-c-login__main-header {
+  border-top: 0;
+  padding-top: 2rem;
+}
+#kc-page-title {
+  color: #16132e;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+/* Fields: rounded, with the violet focus ring. */
+.pf-v5-c-form-control {
+  border-radius: 10px;
+  overflow: hidden;
+  --pf-v5-c-form-control--focus--after--BorderBottomColor: #5b3ef0;
+  --pf-v5-c-form-control--hover--after--BorderBottomColor: #7459ff;
+}
+.pf-v5-c-form-control:focus-within {
+  box-shadow: 0 0 0 4px rgb(116 89 255 / 25%);
+}
+.pf-v5-c-form__label-text {
+  color: #4b4868;
+  font-weight: 600;
+}
+
+/* Buttons. */
+.pf-v5-c-button.pf-m-primary {
+  border-radius: 12px;
+  min-height: 46px;
+  font-weight: 650;
+  background: linear-gradient(135deg, #7459ff, #4a2fd6);
+  box-shadow: 0 6px 18px -8px rgb(91 62 240 / 70%);
+}
+.pf-v5-c-button.pf-m-primary:hover {
+  filter: brightness(1.05);
+}
+.pf-v5-c-button.pf-m-secondary {
+  border-radius: 12px;
+}
+
+/* Messages. */
+.pf-v5-c-alert {
+  border-radius: 12px;
+}

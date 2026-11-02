@@ -8,6 +8,8 @@ export interface OutgoingMail {
   to: string;
   subject: string;
   text: string;
+  /** The same message laid out (docs/design.md); the text part stays for programs that show only text. */
+  html?: string;
   /** The same on every attempt, so a repeat after a crash can be recognised. */
   messageId: string;
 }
@@ -46,6 +48,7 @@ export function smtpTransport(settings: SmtpSettings): MailTransport {
         to: mail.to,
         subject: mail.subject,
         text: mail.text,
+        ...(mail.html ? { html: mail.html } : {}),
         messageId: mail.messageId,
       });
     },

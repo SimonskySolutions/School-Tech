@@ -34,7 +34,10 @@ export default buildConfig({
   serverURL: process.env.CMS_PUBLIC_URL ?? '',
   admin: {
     user: Users.slug,
-    components: { afterLogin: ['/components/sso-button#SsoButton'] },
+    components: {
+      afterLogin: ['/components/sso-button#SsoButton'],
+      graphics: { Logo: '/components/brand#Logo', Icon: '/components/brand#Icon' },
+    },
     meta: { titleSuffix: ' · Pythagoras websites' },
   },
   collections: [Users, Websites, Pages],

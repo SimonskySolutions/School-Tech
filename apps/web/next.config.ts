@@ -1,13 +1,5 @@
 import type { NextConfig } from 'next';
-
-const securityHeaders = [
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  // The callback URL carries a one-time code; never pass it on as a referrer.
-  { key: 'Referrer-Policy', value: 'no-referrer' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-];
+import { securityHeaders } from './lib/security-headers';
 
 const config: NextConfig = {
   // Self-contained server bundle for the production image (M1.6).

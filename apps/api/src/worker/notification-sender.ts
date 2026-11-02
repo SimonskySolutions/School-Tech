@@ -1,3 +1,4 @@
+import { emailHtml } from '../notifications/email-html';
 import { renderMessage } from '../notifications/templates';
 import { type SystemDatabase } from '../database/system-database';
 import { type MailTransport } from './mail-transport';
@@ -80,6 +81,7 @@ export class NotificationSender {
           to: message.email,
           subject: rendered.subject,
           text: rendered.text,
+          html: emailHtml(rendered, this.options.portalUrl),
           messageId: `<${message.id}@${this.options.messageIdDomain}>`,
         });
         await this.database.withSystem('worker:notifications', (tx) =>

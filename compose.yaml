@@ -204,6 +204,8 @@ services:
       - keycloak_cms_client_secret
     volumes:
       - ./infra/keycloak/entrypoint.sh:/opt/pythagoras/keycloak-entrypoint.sh:ro
+      # The Pythagoras sign-in pages and e-mails (docs/design.md).
+      - ./infra/keycloak/themes/pythagoras:/opt/keycloak/themes/pythagoras:ro
       - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
     ports:
       - "127.0.0.1:${KEYCLOAK_HOST_PORT:-58080}:8080"
