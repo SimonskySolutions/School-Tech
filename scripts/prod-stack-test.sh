@@ -8,6 +8,9 @@
 #   gateway's and the web server's reach;
 # - HTTPS with HSTS on every host, plain HTTP redirected, the identity
 #   console and the internal routes not public;
+# - the production realm: no users or development client, the step-up
+#   sign-in, e-mail, events kept 30 days; a parent signs in with a password,
+#   staff only after setting up and then entering a one-time code;
 # - every migration applied, and a failing one stops a release without
 #   touching the database or the running version;
 # - application containers read-only, without capabilities, unprivileged.
@@ -129,6 +132,63 @@ sql() { compose exec -T postgres gosu postgres psql -XtAq -d pythagoras -c "$1";
 applied=$(sql "SELECT count(*) FROM meta.schema_migrations")
 here=$(ls db/migrations | wc -l | tr -d ' ')
 if [[ "$applied" == "$here" ]]; then ok "all $here migrations are applied"; else fail "$applied of $here migrations applied"; fi
+
+# The production realm (M8.3), read through Keycloak's own admin tool inside
+# its container: the way an administrator reaches it in production too.
+PY=$(command -v python3 || command -v python)
+kc() {
+  compose exec -T keycloak bash -c '
+    k=/opt/keycloak/bin/kcadm.sh
+    [[ -f /tmp/kcadm.config ]] || $k config credentials --config /tmp/kcadm.config --server http://localhost:8080 \
+      --realm master --user admin --password "$(cat /run/secrets/keycloak_admin_password)" >/dev/null 2>&1
+    $k "$@" --config /tmp/kcadm.config' kc "$@" | tr -d '\r'
+}
+field() { "$PY" -c "import json, sys; d = json.load(sys.stdin); print($1)"; }
+same() { # description expected actual
+  if [[ "$3" == "$2" ]]; then ok "$1"; else fail "$1 (found $3)"; fi
+}
+realm=$(kc get realms/pythagoras)
+same "sign-in is the step-up flow" "pythagoras browser" "$(field "d['browserFlow']" <<<"$realm")"
+same "the second factor is the mfa level" '{"password":1,"mfa":2}' "$(field "d['attributes'].get('acr.loa.map')" <<<"$realm")"
+same "sign-in events are kept 30 days, admin events without details" "(True, 2592000, False)" \
+  "$(field "(d['eventsEnabled'], d['eventsExpiration'], d['adminEventsDetailsEnabled'])" <<<"$realm")"
+same "e-mail goes through the SMTP service over TLS" "('smtp.example.bg', 'true', 'true')" \
+  "$(field "(d['smtpServer']['host'], d['smtpServer']['starttls'], d['smtpServer']['auth'])" <<<"$realm")"
+same "the realm has no users" 0 "$(kc get users -r pythagoras --fields username | field "len(d)")"
+clients=$(kc get clients -r pythagoras --fields clientId,redirectUris)
+same "no development client" "['pythagoras-api', 'pythagoras-cms', 'pythagoras-provisioning', 'pythagoras-web']" \
+  "$(field "sorted(c['clientId'] for c in d if c['clientId'].startswith('pythagoras'))" <<<"$clients")"
+same "the portal's only redirect is its own callback over HTTPS" "['https://portal.pythagoras.test:$https_port/auth/callback']" \
+  "$(field "[c['redirectUris'] for c in d if c['clientId'] == 'pythagoras-web'][0]" <<<"$clients")"
+
+# Signing in through the portal as a browser would: a parent and a member of staff.
+password="Pw-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+account() { # e-mail given family: prints the Keycloak id
+  kc create users -r pythagoras -s "username=$1" -s "email=$1" -s "firstName=$2" -s "lastName=$3" \
+    -s enabled=true -s emailVerified=true -i
+  kc set-password -r pythagoras --username "$1" --new-password "$password" >/dev/null
+}
+parent=$(account parent@example.bg Radost Proeva)
+staff=$(account principal@example.bg Stoyan Proev)
+compose exec -T postgres gosu postgres psql -X -q -v ON_ERROR_STOP=1 -d pythagoras <<SQL
+BEGIN;
+SET LOCAL app.actor = 'test:production-sign-in';
+INSERT INTO org.education_group (id, code, name) VALUES ('a8000000-0000-7000-8000-000000000001', 'pythagoras', 'Pythagoras');
+INSERT INTO people.person (id, group_id, given_name, family_name, email) VALUES
+  ('c8000000-0000-7000-8000-000000000001', 'a8000000-0000-7000-8000-000000000001', 'Radost', 'Proeva', 'parent@example.bg'),
+  ('c8000000-0000-7000-8000-000000000002', 'a8000000-0000-7000-8000-000000000001', 'Stoyan', 'Proev', 'principal@example.bg');
+INSERT INTO people.login_identity (person_id, group_id, provider, subject) VALUES
+  ('c8000000-0000-7000-8000-000000000001', 'a8000000-0000-7000-8000-000000000001', 'keycloak', '$parent'),
+  ('c8000000-0000-7000-8000-000000000002', 'a8000000-0000-7000-8000-000000000001', 'keycloak', '$staff');
+INSERT INTO access.role_assignment (group_id, person_id, role_code)
+VALUES ('a8000000-0000-7000-8000-000000000001', 'c8000000-0000-7000-8000-000000000002', 'group_admin');
+COMMIT;
+SQL
+printf '{"parent": {"email": "parent@example.bg", "password": "%s", "name": "Radost"},\n "staff": {"email": "principal@example.bg", "password": "%s", "name": "Stoyan"}}\n' \
+  "$password" "$password" >"$work/users.json"
+PYTHONIOENCODING=utf-8 "$PY" scripts/prod-signin-check.py "$ca" "$https_port" portal.pythagoras.test "$(host_path "$work/users.json")" || failed=1
+logins=$(kc get events -r pythagoras -q type=LOGIN --fields type | field "len(d)")
+if [[ "$logins" -ge 3 ]]; then ok "the sign-ins are recorded as events ($logins)"; else fail "sign-ins are not recorded ($logins)"; fi
 
 # A release runs the migration job before replacing anything (docs/operations.md).
 cat >"$work/failing.sql" <<'EOF'

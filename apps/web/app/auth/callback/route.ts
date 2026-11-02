@@ -46,6 +46,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await endIdentitySession(config, session.refreshToken).catch(() => false);
     return redirect('/not-linked');
   }
+  if (me.kind === 'signed-out' && me.secondFactor && !transaction.secondFactor) {
+    // Staff: sign in again with the second factor. Keycloak keeps the password
+    // step, so only the one-time code is asked for.
+    const again = new URLSearchParams({ 'second-factor': '1', returnTo: transaction.returnTo });
+    return redirect(`/auth/sign-in?${again.toString()}`);
+  }
   if (me.kind !== 'ok') {
     return redirect('/?error=sign-in-failed');
   }

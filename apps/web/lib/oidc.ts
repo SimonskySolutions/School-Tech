@@ -16,12 +16,17 @@ export function oidcConfiguration(config: WebConfig): client.Configuration {
     code_challenge_methods_supported: ['S256'],
   };
   const configuration = new client.Configuration(metadata, config.OIDC_CLIENT_ID, config.OIDC_CLIENT_SECRET);
-  if (config.NODE_ENV !== 'production') {
-    // Development runs over plain HTTP inside Docker; production refuses this.
+  // The token, key and logout calls go to Keycloak's address on the platform's
+  // private service network, which is plain HTTP inside the host (ADR 0033).
+  // Browsers only ever see the public issuer, which production requires to be HTTPS.
+  if (new URL(config.OIDC_INTERNAL_URL).protocol === 'http:') {
     client.allowInsecureRequests(configuration);
   }
   return configuration;
 }
+
+/** The ACR value Keycloak's step-up flow gives a sign-in with the second factor (M8.3, ADR 0034). */
+export const SECOND_FACTOR_ACR = 'mfa';
 
 export function callbackUrl(config: WebConfig): string {
   return new URL('/auth/callback', config.APP_URL).toString();
@@ -31,6 +36,7 @@ export async function beginSignIn(
   configuration: client.Configuration,
   config: WebConfig,
   returnTo: string,
+  { secondFactor = false }: { secondFactor?: boolean } = {},
 ): Promise<{ url: URL; transaction: SignInTransaction }> {
   const codeVerifier = client.randomPKCECodeVerifier();
   const transaction: SignInTransaction = {
@@ -38,6 +44,7 @@ export async function beginSignIn(
     nonce: client.randomNonce(),
     codeVerifier,
     returnTo,
+    ...(secondFactor ? { secondFactor: true } : {}),
   };
   const url = client.buildAuthorizationUrl(configuration, {
     redirect_uri: callbackUrl(config),
@@ -47,6 +54,8 @@ export async function beginSignIn(
     code_challenge_method: 'S256',
     state: transaction.state,
     nonce: transaction.nonce,
+    // Keycloak asks for the one-time code (and has it set up the first time).
+    ...(secondFactor ? { acr_values: SECOND_FACTOR_ACR } : {}),
   });
   return { url, transaction };
 }

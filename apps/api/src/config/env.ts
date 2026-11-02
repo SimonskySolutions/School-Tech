@@ -40,6 +40,11 @@ const schema = z
     OIDC_JWKS_URL: z.url().optional(),
     OIDC_AUDIENCE: z.string().min(1).default('pythagoras-api'),
     OIDC_ALLOWED_CLIENTS: list.optional(),
+    // M8.3: staff (anyone holding a role) must have signed in with a second
+    // factor, which Keycloak shows as this ACR value. Off in development, where
+    // the synthetic users have none; production refuses "off".
+    STAFF_SECOND_FACTOR: z.enum(['required', 'off']).default('off'),
+    SECOND_FACTOR_ACR: z.string().min(1).default('mfa'),
 
     // Where parents return after checkout. Payment providers redirect only here.
     PORTAL_URL: z.url().default('http://portal.pythagoras.localhost:53000'),
@@ -107,6 +112,13 @@ const schema = z
       }
       if (!env.PORTAL_URL.startsWith('https://')) {
         ctx.addIssue({ code: 'custom', path: ['PORTAL_URL'], message: 'must use https in production' });
+      }
+      if (env.STAFF_SECOND_FACTOR !== 'required') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['STAFF_SECOND_FACTOR'],
+          message: 'staff must sign in with a second factor in production',
+        });
       }
       if (env.OIDC_ALLOWED_CLIENTS?.includes(DEV_TEST_CLIENT)) {
         ctx.addIssue({

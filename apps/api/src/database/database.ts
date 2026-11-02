@@ -78,6 +78,15 @@ export class Database {
     return result.rows[0]?.person_id ?? null;
   }
 
+  /** Whether the person's sign-in needs a second factor: true while they hold any role (M8.3). */
+  async requiresSecondFactor(personId: PersonId): Promise<boolean> {
+    const result = await this.pool.query<{ required: boolean }>(
+      'SELECT access.requires_second_factor($1) AS required',
+      [personId],
+    );
+    return result.rows[0]?.required === true;
+  }
+
   /** System operation: the live website a verified host name belongs to, or null. */
   async resolveHostname(hostname: string): Promise<{ websiteId: string; purpose: string } | null> {
     const result = await this.pool.query<{ website_id: string; website_purpose: string }>(

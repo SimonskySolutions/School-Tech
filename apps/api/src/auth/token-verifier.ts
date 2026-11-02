@@ -8,6 +8,8 @@ export interface VerifiedToken {
   readonly subject: string;
   readonly clientId: string;
   readonly expiresAt: Date;
+  /** How the person signed in (OpenID Connect `acr`), e.g. "mfa" after a second factor. */
+  readonly acr: string | null;
 }
 
 export class TokenRejected extends Error {
@@ -49,7 +51,12 @@ export class TokenVerifier {
     if (typeof payload.sub !== 'string' || payload.sub.length === 0 || payload.exp === undefined) {
       throw new TokenRejected('missing subject or expiry');
     }
-    return { subject: payload.sub, clientId: payload.azp, expiresAt: new Date(payload.exp * 1000) };
+    return {
+      subject: payload.sub,
+      clientId: payload.azp,
+      expiresAt: new Date(payload.exp * 1000),
+      acr: typeof payload.acr === 'string' ? payload.acr : null,
+    };
   }
 }
 

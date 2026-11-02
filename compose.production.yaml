@@ -173,12 +173,22 @@ services:
       KC_CACHE: local
       KC_LOG_LEVEL: info
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      # Filled into the realm when it is first imported (ADR 0034).
+      KC_PORTAL_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+      KC_CMS_URL: https://${CMS_HOST}${PUBLIC_PORT:-}
+      KC_SMTP_HOST: ${SMTP_HOST}
+      KC_SMTP_PORT: ${SMTP_PORT:-587}
+      KC_SMTP_STARTTLS: ${SMTP_REQUIRE_TLS:-true}
+      KC_SMTP_SSL: ${SMTP_SECURE:-false}
+      KC_SMTP_USER: ${SMTP_USER}
+      MAIL_FROM: ${MAIL_FROM}
     secrets:
       - pg_keycloak_password
       - keycloak_admin_password
       - keycloak_web_client_secret
       - keycloak_provisioning_client_secret
       - keycloak_cms_client_secret
+      - smtp_password
     networks: [edge, data]
     tmpfs:
       - /tmp:size=64m
@@ -210,6 +220,7 @@ services:
       OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
       OIDC_JWKS_URL: http://keycloak:8080/realms/pythagoras/protocol/openid-connect/certs
       OIDC_ALLOWED_CLIENTS: pythagoras-web
+      STAFF_SECOND_FACTOR: required
       PORTAL_URL: https://${PORTAL_HOST:?}${PUBLIC_PORT:-}
       PAYMENT_PROVIDER: stripe
       STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key

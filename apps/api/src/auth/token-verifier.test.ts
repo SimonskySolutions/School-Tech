@@ -24,6 +24,11 @@ describe('TokenVerifier', () => {
     expect(verified.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it('reports how the person signed in', async () => {
+    expect((await verifier.verify(await issuer.sign({ acr: 'mfa' }))).acr).toBe('mfa');
+    expect((await verifier.verify(await issuer.sign())).acr).toBeNull();
+  });
+
   it.each([
     ['a different issuer', { iss: 'http://evil.example.test/realms/pythagoras' }, 'claim "iss"'],
     ['a different audience', { aud: 'some-other-api' }, 'claim "aud"'],

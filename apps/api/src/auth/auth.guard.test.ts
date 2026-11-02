@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { type NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../app.module';
+import { ENV } from '../config/config.module';
+import { loadEnv } from '../config/env';
 import { configureApp } from '../configure-app';
 import { Database, type PersonTransaction, type RequestContext } from '../database/database';
 import { createTestIssuer, TEST_AUDIENCE, TEST_ISSUER } from './test-keys';
@@ -9,12 +11,22 @@ import { TokenVerifier } from './token-verifier';
 
 const ANNA_SUBJECT = 'f1000000-0000-7000-8000-000000000020';
 const ANNA_PERSON = 'c1000000-0000-7000-8000-000000000020';
+const PRINCIPAL_SUBJECT = 'f1000000-0000-7000-8000-000000000006';
+const PRINCIPAL_PERSON = 'c1000000-0000-7000-8000-000000000006';
 
 /** Stands in for PostgreSQL: records the context each transaction ran with. */
 class FakeDatabase {
   contexts: RequestContext[] = [];
   resolveLogin(_provider: string, subject: string) {
-    return Promise.resolve(subject === ANNA_SUBJECT ? ANNA_PERSON : null);
+    const people: Record<string, string> = {
+      [ANNA_SUBJECT]: ANNA_PERSON,
+      [PRINCIPAL_SUBJECT]: PRINCIPAL_PERSON,
+    };
+    return Promise.resolve(people[subject] ?? null);
+  }
+  /** Anna is a parent; the principal holds a role. */
+  requiresSecondFactor(personId: string) {
+    return Promise.resolve(personId === PRINCIPAL_PERSON);
   }
   withPerson<T>(context: RequestContext, work: (tx: PersonTransaction) => Promise<T>): Promise<T> {
     this.contexts.push(context);
@@ -121,5 +133,56 @@ describe('AuthGuard', () => {
   it('leaves health checks public', async () => {
     expect((await get('/health/live')).status).toBe(200);
     expect((await get('/health/ready')).status).toBe(200);
+  });
+});
+
+describe('AuthGuard with the second factor required (M8.3)', () => {
+  let app: NestExpressApplication;
+  let baseUrl: string;
+  let issuer: Awaited<ReturnType<typeof createTestIssuer>>;
+
+  beforeAll(async () => {
+    issuer = await createTestIssuer();
+    const env = loadEnv({ env: process.env, readFile: () => '' });
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(ENV)
+      .useValue({ ...env, STAFF_SECOND_FACTOR: 'required' })
+      .overrideProvider(Database)
+      .useValue(new FakeDatabase())
+      .overrideProvider(TokenVerifier)
+      .useValue(
+        new TokenVerifier({
+          issuer: TEST_ISSUER,
+          audience: TEST_AUDIENCE,
+          allowedClients: ['pythagoras-web'],
+          keys: issuer.keys,
+        }),
+      )
+      .compile();
+    app = configureApp(moduleRef.createNestApplication<NestExpressApplication>({ logger: false }));
+    await app.listen(0, '127.0.0.1');
+    baseUrl = await app.getUrl();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const me = async (claims: Record<string, unknown>) =>
+    fetch(`${baseUrl}/me`, { headers: { authorization: `Bearer ${await issuer.sign(claims)}` } });
+
+  it('refuses staff signed in with a password only, saying a second factor is needed', async () => {
+    const response = await me({ sub: PRINCIPAL_SUBJECT, acr: '1' });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: string }).error).toBe('second_factor_required');
+    expect((await me({ sub: PRINCIPAL_SUBJECT })).status).toBe(403);
+  });
+
+  it('accepts staff who signed in with the second factor', async () => {
+    expect((await me({ sub: PRINCIPAL_SUBJECT, acr: 'mfa' })).status).toBe(200);
+  });
+
+  it('never asks a parent for one', async () => {
+    expect((await me({ acr: '1' })).status).toBe(200);
   });
 });

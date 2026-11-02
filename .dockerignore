@@ -27,5 +27,6 @@ tests
 !infra/gateway/Caddyfile.production
 !infra/keycloak/entrypoint.sh
 !infra/keycloak/themes
+!infra/keycloak/realm-production
 !infra/garage/init.mjs
 !infra/garage/garage.production.toml

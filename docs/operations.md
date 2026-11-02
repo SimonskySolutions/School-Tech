@@ -372,16 +372,23 @@ docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env up -d 
 
 Set the new `IMAGE_TAG` first. The migration job runs while the previous version is still serving; if a migration fails its transaction rolls back, the command exits non-zero and nothing is replaced. Fix it with a new migration and release again (migrations are expand, then contract, so the previous version works with the new schema). Rolling back the applications is setting the previous `IMAGE_TAG` and running the last command.
 
-**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). CI runs it on every push. Until M8.3 Keycloak starts without the platform's realm and until M8.4 connections inside the host are not encrypted.
+**The proof.** `bash scripts/prod-stack-test.sh [tag]` starts the stack from nothing under the project name `pythagoras-prod-check`, with throwaway secrets, the `*.pythagoras.test` host names and the gateway's own certificate authority (`LOCAL_CERTS=local_certs`) on ports 54080 and 54443 (`PUBLIC_PORT=:54443`, so the public addresses carry the port), and checks the start-up order, health, networks, published ports, HTTPS with HSTS, the redirect from HTTP, that the identity console and internal routes are not public, that every migration is applied, that a failing migration stops a release without changing the database or the running version, and the container restrictions; then it removes everything (`KEEP=1` keeps it running). It also checks the production realm (no users or development client, the step-up flow, e-mail, events) and signs in through the portal over HTTPS as a parent, with a password, and as a member of staff, who must first set up a one-time code and then enter it (`scripts/prod-signin-check.py`). CI runs it on every push. Until M8.4 connections inside the host are not encrypted.
 
-## Identity provider in production (to do in M8)
+## Identity provider in production (M8.3, ADR 0034)
 
-- `start --optimized` with a pre-built image, behind the gateway with `KC_PROXY_HEADERS=xforwarded`, on its own host name (for example `auth.<domain>`), TLS terminated at the gateway.
-- A user-free realm export: no development users, no `pythagoras-dev-tests` client, production redirect URIs only.
-- Multi-factor sign-in required for staff through the realm's authentication flow.
-- SMTP configured so that e-mail verification and password reset work.
-- Login events are kept 30 days (`eventsExpiration`); admin events without request details, so no personal data is copied into them.
-- Back up the `keycloak` database together with `pythagoras` (same cluster, same backup job).
+- Keycloak runs `start --optimized --import-realm` from the platform's image, behind the gateway on `AUTH_HOST`, with TLS ending at the gateway (`KC_PROXY_HEADERS=xforwarded`).
+- **The realm** is `infra/keycloak/realm-production/pythagoras-realm.json`, generated from the development realm: no users except the provisioning service account, no `pythagoras-dev-tests` client, the portal and CMS redirecting only to their own callbacks. After changing the development realm, regenerate it (`docker compose run --rm workspace node infra/keycloak/production-realm.mjs`) and commit both; `scripts/check.sh` fails while it is out of date. It is imported on the first start only: an existing realm is never overwritten, so change a running one with the administration tool and the generator together.
+- **Staff sign in with a second factor.** Anyone holding a role must have signed in at the `mfa` level (`STAFF_SECOND_FACTOR=required`, which production insists on); the portal asks for it, and the first time the person sets up an authenticator app (any TOTP app: 6 digits, 30 seconds). Parents sign in with a password. A role granted or revoked applies at the next request. **A lost phone:** in the administration tool, remove the person's one-time-code credential (`kcadm.sh get users/<id>/credentials -r pythagoras`, then `delete users/<id>/credentials/<credential id>`); the next sign-in sets up a new one.
+- **E-mail** (password reset, address verification, the set-up e-mail for new accounts) goes through the SMTP service in `.env`, with STARTTLS or TLS and the `smtp_password` secret; the sender is `MAIL_FROM`. These are filled in when the realm is imported; afterwards change them in the realm.
+- **Events:** sign-in events are kept 30 days; admin events without request details, so they copy no personal data. Read them with `kcadm.sh get events -r pythagoras`.
+- **The console is not public:** the gateway answers 404 for `/admin`. Use the administration tool inside the container:
+
+```bash
+docker compose -f compose.production.yaml --env-file /etc/pythagoras/.env exec keycloak bash -c '/opt/keycloak/bin/kcadm.sh config credentials --config /tmp/kcadm.config --server http://localhost:8080 --realm master --user admin --password "$(cat /run/secrets/keycloak_admin_password)"'
+```
+
+  then `kcadm.sh <command> --config /tmp/kcadm.config` in the same container, reached over SSH to the host. The web console is not set up for production use.
+- Back up the `keycloak` database together with `pythagoras` (same cluster, same backup job, M8.5).
 
 Passwords are in `secrets/` (git-ignored), one file per role. For an administrative session as the superuser (local socket only):
 

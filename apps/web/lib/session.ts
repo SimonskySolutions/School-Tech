@@ -23,6 +23,8 @@ const signInSchema = z.object({
   nonce: z.string().min(16),
   codeVerifier: z.string().min(43),
   returnTo: z.string().startsWith('/'),
+  // M8.3: this sign-in asked Keycloak for the second factor.
+  secondFactor: z.boolean().optional(),
 });
 
 export type Session = Omit<z.infer<typeof sessionSchema>, 'purpose'>;

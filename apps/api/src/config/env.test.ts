@@ -102,6 +102,14 @@ describe('API configuration', () => {
     expect(() => load({ NODE_ENV: 'production', ACCOUNT_SETUP: 'email' })).not.toThrow(/ACCOUNT_SETUP/);
   });
 
+  it('requires a second factor for staff in production only', () => {
+    expect(() => load({ NODE_ENV: 'production' })).toThrow(/STAFF_SECOND_FACTOR: staff must sign in/);
+    expect(() => load({ NODE_ENV: 'production', STAFF_SECOND_FACTOR: 'required' })).not.toThrow(
+      /STAFF_SECOND_FACTOR/,
+    );
+    expect(load({}).STAFF_SECOND_FACTOR).toBe('off');
+  });
+
   it('rejects an invalid port', () => {
     expect(() => load({ PORT: '70000' })).toThrow(/PORT/);
   });

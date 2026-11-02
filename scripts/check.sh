@@ -17,5 +17,6 @@ docker compose run --rm --no-TTY workspace sh -c '
   step "format";                     pnpm format:check
   step "unit tests";                 pnpm -r run test
   step "production builds";          pnpm -r run build
+  step "production realm is current"; node infra/keycloak/production-realm.mjs --check
   printf "\ncheck: all steps passed\n"
 '

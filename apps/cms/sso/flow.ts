@@ -48,8 +48,9 @@ export function oidc(settings: Settings): client.Configuration {
     settings.clientId,
     settings.clientSecret,
   );
-  // Development runs over plain HTTP inside Docker; production uses HTTPS.
-  if (!settings.secure) client.allowInsecureRequests(configuration);
+  // Token and key calls go to Keycloak on the private service network, plain
+  // HTTP inside the host (ADR 0033); browsers only see the public issuer.
+  if (new URL(settings.internalUrl).protocol === 'http:') client.allowInsecureRequests(configuration);
   return configuration;
 }
 

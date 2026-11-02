@@ -49,7 +49,19 @@ import {
 // access token. The token is attached here and never sent to the browser.
 
 export type ApiResult<T> =
-  { kind: 'ok'; value: T } | { kind: 'signed-out' } | { kind: 'unlinked' } | { kind: 'not-found' };
+  | { kind: 'ok'; value: T }
+  // secondFactor: staff signed in without it (M8.3); signing in again asks for it.
+  | { kind: 'signed-out'; secondFactor?: true }
+  | { kind: 'unlinked' }
+  | { kind: 'not-found' };
+
+const SECOND_FACTOR_REQUIRED = 'second_factor_required';
+
+/** Whether a 403 from the API means staff must sign in with the second factor. */
+async function needsSecondFactor(response: Response): Promise<boolean> {
+  const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  return body?.error === SECOND_FACTOR_REQUIRED;
+}
 
 async function get<T>(apiUrl: string, path: string, accessToken: string): Promise<ApiResult<T>> {
   const response = await fetch(new URL(path, apiUrl), {
@@ -57,7 +69,11 @@ async function get<T>(apiUrl: string, path: string, accessToken: string): Promis
     cache: 'no-store',
   });
   if (response.status === 401) return { kind: 'signed-out' };
-  if (response.status === 403) return { kind: 'unlinked' };
+  if (response.status === 403) {
+    return (await needsSecondFactor(response))
+      ? { kind: 'signed-out', secondFactor: true }
+      : { kind: 'unlinked' };
+  }
   if (response.status === 404) return { kind: 'not-found' };
   if (!response.ok) throw new Error(`API ${path} answered ${response.status}`);
   return { kind: 'ok', value: (await response.json()) as T };
