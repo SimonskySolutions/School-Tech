@@ -18,6 +18,7 @@ const person = (givenName: string): MeResponse['person'] => ({
   givenName,
   familyName: 'Test',
   preferredName: null,
+  language: null,
   email: null,
 });
 

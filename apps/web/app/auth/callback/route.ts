@@ -1,5 +1,7 @@
+import { isLanguage } from '@pythagoras/shared';
 import { type NextRequest, NextResponse } from 'next/server';
-import { fetchMe } from '../../../lib/api-client';
+import { fetchMe, writeApi } from '../../../lib/api-client';
+import { LANGUAGE_COOKIE, LANGUAGE_COOKIE_MAX_AGE } from '../../../lib/i18n/messages';
 import { completeSignIn, endIdentitySession } from '../../../lib/oidc';
 import { runtime } from '../../../lib/server';
 import {
@@ -63,5 +65,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await sealSession(session, key),
     cookieOptions(config.secureCookies, session.refreshExpiresAt - now),
   );
+
+  // The person's language (M9.1): a saved choice comes back to this browser;
+  // one made here before signing in becomes theirs.
+  const saved = me.value.person.language;
+  const chosen = request.cookies.get(LANGUAGE_COOKIE)?.value;
+  if (saved) {
+    response.cookies.set(
+      LANGUAGE_COOKIE,
+      saved,
+      cookieOptions(config.secureCookies, LANGUAGE_COOKIE_MAX_AGE),
+    );
+  } else if (isLanguage(chosen)) {
+    await writeApi(config.API_INTERNAL_URL, session.accessToken, 'PUT', '/me/language', {
+      language: chosen,
+    }).catch(() => undefined);
+  }
   return response;
 }

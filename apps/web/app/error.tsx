@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Logo } from './brand';
+import { useMessages } from './language-switch';
 
 /** A page that failed while rendering. The details stay in the server log; the digest ties them together. */
 export default function ErrorPage({
@@ -11,19 +12,20 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const text = useMessages().errorPage;
   return (
     <main className="empty-state" data-testid="error-page">
       <Logo size={56} />
-      <p className="eyebrow">Something went wrong</p>
-      <h1>This page could not be shown</h1>
-      <p>Please try again in a moment. If it keeps happening, tell the school office what you were doing.</p>
-      {error.digest ? <p className="muted">{`Reference: ${error.digest}`}</p> : null}
+      <p className="eyebrow">{text.eyebrow}</p>
+      <h1>{text.title}</h1>
+      <p>{text.text}</p>
+      {error.digest ? <p className="muted">{text.reference(error.digest)}</p> : null}
       <p className="empty-state-actions">
         <button type="button" onClick={reset}>
-          Try again
+          {text.tryAgain}
         </button>
         <Link href="/" className="button soft">
-          Start page
+          {text.startPage}
         </Link>
       </p>
     </main>

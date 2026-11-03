@@ -1,54 +1,66 @@
 import Link from 'next/link';
 import { type ReactNode } from 'react';
-import { fetchMe, fetchSchools } from '../lib/api-client';
-import { buildHome, type HomeView, NOTICES } from '../lib/home';
+import { fetchSchools } from '../lib/api-client';
+import { buildHome, type HomeView } from '../lib/home';
+import { localeOf, type Messages } from '../lib/i18n/messages';
 import { initials, type IconName } from '../lib/navigation';
-import { currentSession, runtime } from '../lib/server';
+import { currentMessages, currentSession, myself, runtime } from '../lib/server';
 import { Logo } from './brand';
 import { DevelopmentBanner } from './development-banner';
 import { Icon } from './icons';
+import { LanguageSwitch } from './language-switch';
 
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type Tone = 'violet' | 'teal' | 'amber' | 'rose' | 'sky' | 'green';
 
-function notice(params: Record<string, string | string[] | undefined>): string | null {
-  if (params['signed-out']) return NOTICES['signed-out'] ?? null;
+function notice(params: Record<string, string | string[] | undefined>, notices: Record<string, string>) {
+  if (params['signed-out']) return notices['signed-out'] ?? null;
   const error = typeof params.error === 'string' ? params.error : null;
-  return error ? (NOTICES[error] ?? null) : null;
+  return error ? (notices[error] ?? null) : null;
 }
 
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
-  const message = notice(await searchParams);
+  const { language, text } = await currentMessages();
+  const message = notice(await searchParams, text.notices);
   const session = await currentSession();
 
   if (!session) {
-    return <SignedOut message={message} />;
+    return <SignedOut message={message} text={text} />;
   }
 
   const { config } = runtime();
   const [me, schools] = await Promise.all([
-    fetchMe(config.API_INTERNAL_URL, session.accessToken),
+    myself(session.accessToken),
     fetchSchools(config.API_INTERNAL_URL, session.accessToken),
   ]);
   if (me.kind !== 'ok') {
-    return <SignedOut message={NOTICES['sign-in-failed'] ?? null} />;
+    return <SignedOut message={text.notices['sign-in-failed'] ?? null} text={text} />;
   }
-  return <Home view={buildHome(me.value, schools.kind === 'ok' ? schools.value : [])} />;
+  return (
+    <Home
+      view={buildHome(me.value, schools.kind === 'ok' ? schools.value : [], text)}
+      text={text}
+      locale={localeOf(language)}
+    />
+  );
 }
 
-function SignedOut({ message }: { message: string | null }) {
+function SignedOut({ message, text }: { message: string | null; text: Messages }) {
   return (
     <div className="auth-page">
       <main className="auth-card" style={{ padding: 0 }}>
-        <Logo size={56} />
-        <h1>Pythagoras</h1>
-        <p>One place for families and staff of the Pythagoras schools.</p>
+        <div className="auth-card-head">
+          <Logo size={56} />
+          <LanguageSwitch />
+        </div>
+        <h1>{text.shell.brand}</h1>
+        <p>{text.home.signedOutIntro}</p>
         {message ? <p role="status">{message}</p> : null}
         <p style={{ margin: 0 }}>
           <a href="/auth/sign-in" data-testid="sign-in" className="button">
-            Sign in
+            {text.home.signIn}
           </a>
         </p>
         <DevelopmentBanner />
@@ -111,20 +123,20 @@ function Area({
   );
 }
 
-function Home({ view }: { view: HomeView }) {
-  const roles = [...view.groupRoles, ...view.schoolRoles.map((entry) => `${entry.role}, ${entry.school}`)];
-  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+function Home({ view, text, locale }: { view: HomeView; text: Messages; locale: string }) {
+  const t = text.home;
+  const roles = [
+    ...view.groupRoles,
+    ...view.schoolRoles.map((entry) => t.roleChip(entry.role, entry.school)),
+  ];
+  const today = new Date().toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
   return (
     <main>
       <DevelopmentBanner />
       <section className="hero">
         <p className="eyebrow">{today}</p>
         <h1>{view.greeting}</h1>
-        <p>
-          {view.children.length > 0 && roles.length === 0
-            ? 'Everything for your children in one place: lunch and clubs, trips, messages to the school and consents.'
-            : 'Here is everything you can reach today.'}
-        </p>
+        <p>{view.children.length > 0 && roles.length === 0 ? t.familyIntro : t.intro}</p>
         {roles.length > 0 ? (
           <div className="chips">
             {roles.map((role) => (
@@ -140,10 +152,10 @@ function Home({ view }: { view: HomeView }) {
         <Area
           id="children"
           testId="children"
-          title="Your children"
+          title={t.yourChildren}
           aside={
             <a href="/services" data-testid="book-services" className="button">
-              <Icon name="basket" /> Book lunch and clubs
+              <Icon name="basket" /> {text.nav.bookLunchAndClubs}
             </a>
           }
         >
@@ -156,27 +168,27 @@ function Home({ view }: { view: HomeView }) {
                     <span className="avatar large">{initials(given, family)}</span>
                     <span>
                       <strong>{child.name}</strong>
-                      <span>{child.places.join('; ') || 'no current enrolment'}</span>
+                      <span>{child.places.join('; ') || t.noEnrolment}</span>
                     </span>
                   </header>
-                  <nav className="action-chips" aria-label={`For ${child.name}`}>
+                  <nav className="action-chips" aria-label={t.forChild(child.name)}>
                     <Link href={`/children/${child.id}/dietary`} data-testid="child-dietary-link">
-                      <Icon name="dietary" size={14} /> Dietary needs
+                      <Icon name="dietary" size={14} /> {t.dietaryNeeds}
                     </Link>
                     <Link href={`/children/${child.id}/activities`} data-testid="child-activities-link">
-                      <Icon name="registers" size={14} /> Clubs and attendance
+                      <Icon name="registers" size={14} /> {t.clubsAndAttendance}
                     </Link>
                     <Link href={`/children/${child.id}/lessons`} data-testid="child-lessons-link">
-                      <Icon name="lessons" size={14} /> Lessons
+                      <Icon name="lessons" size={14} /> {t.lessons}
                     </Link>
                     <Link href={`/children/${child.id}/trips`} data-testid="child-trips-link">
-                      <Icon name="trips" size={14} /> Trips
+                      <Icon name="trips" size={14} /> {t.trips}
                     </Link>
                     <Link href={`/children/${child.id}/requests`} data-testid="child-requests-link">
-                      <Icon name="requests" size={14} /> Messages to the school
+                      <Icon name="requests" size={14} /> {t.messagesToSchool}
                     </Link>
                     <Link href={`/children/${child.id}/consents`} data-testid="child-consents-link">
-                      <Icon name="photos" size={14} /> Consents
+                      <Icon name="photos" size={14} /> {t.consents}
                     </Link>
                   </nav>
                 </article>
@@ -187,16 +199,10 @@ function Home({ view }: { view: HomeView }) {
       ) : null}
 
       {view.showsMyEmployment || view.showsApprovals || view.showsAccounting || view.showsConsentWording ? (
-        <Area id="my-work" testId="my-work" title="Your work">
+        <Area id="my-work" testId="my-work" title={t.yourWork}>
           <ul className="tiles">
             {view.showsMyEmployment ? (
-              <Tile
-                href="/tasks"
-                testId="tasks-link"
-                icon="tasks"
-                title="Tasks"
-                text="Yours, set by you, overdue"
-              />
+              <Tile href="/tasks" testId="tasks-link" icon="tasks" title={t.tasks} text={t.tasksText} />
             ) : null}
             {view.showsApprovals ? (
               <Tile
@@ -204,8 +210,8 @@ function Home({ view }: { view: HomeView }) {
                 testId="approvals-link"
                 icon="approvals"
                 tone="amber"
-                title="Approvals"
-                text="Documents waiting for you"
+                title={t.approvals}
+                text={t.approvalsText}
               />
             ) : null}
             {view.showsMyEmployment ? (
@@ -214,8 +220,8 @@ function Home({ view }: { view: HomeView }) {
                 testId="my-employment-link"
                 icon="employment"
                 tone="sky"
-                title="My employment"
-                text="Records, training and documents"
+                title={t.myEmployment}
+                text={t.myEmploymentText}
               />
             ) : null}
             {view.showsAccounting ? (
@@ -224,8 +230,8 @@ function Home({ view }: { view: HomeView }) {
                 testId="accounting-link"
                 icon="accounting"
                 tone="green"
-                title="Accounting export"
-                text="Each company's ledger"
+                title={t.accountingExport}
+                text={t.accountingExportText}
               />
             ) : null}
             {view.showsConsentWording ? (
@@ -234,8 +240,8 @@ function Home({ view }: { view: HomeView }) {
                 testId="consent-wording-link"
                 icon="privacy"
                 tone="teal"
-                title="Consent wording"
-                text="What families agree to"
+                title={t.consentWording}
+                text={t.consentWordingText}
               />
             ) : null}
           </ul>
@@ -243,18 +249,20 @@ function Home({ view }: { view: HomeView }) {
       ) : null}
 
       {view.schoolRoles.length > 0 ? (
-        <Area id="school-roles" testId="school-roles" title="Your school">
+        <Area id="school-roles" testId="school-roles" title={t.yourSchool}>
           {view.schoolRoles.map((entry) => (
             <div key={`${entry.role}-${entry.school}`} style={{ marginBottom: 18 }}>
-              <p className="muted" style={{ fontWeight: 600 }}>{`${entry.role} at ${entry.school}`}</p>
+              <p className="muted" style={{ fontWeight: 600 }}>
+                {t.roleAt(entry.role, entry.school)}
+              </p>
               <ul className="tiles">
                 {entry.studentsHref ? (
                   <Tile
                     href={entry.studentsHref}
                     testId="students-link"
                     icon="students"
-                    title="Students and families"
-                    text="Enrolments and guardians"
+                    title={t.studentsAndFamilies}
+                    text={t.studentsAndFamiliesText}
                   />
                 ) : null}
                 {entry.staffHref ? (
@@ -263,8 +271,8 @@ function Home({ view }: { view: HomeView }) {
                     testId="staff-link"
                     icon="staff"
                     tone="sky"
-                    title="Staff"
-                    text="Records and training"
+                    title={t.staff}
+                    text={t.staffText}
                   />
                 ) : null}
                 <Tile
@@ -272,8 +280,8 @@ function Home({ view }: { view: HomeView }) {
                   testId="documents-link"
                   icon="documents"
                   tone="amber"
-                  title="Documents"
-                  text="Private files and versions"
+                  title={t.documents}
+                  text={t.documentsText}
                 />
                 {entry.lessonsHref ? (
                   <Tile
@@ -281,7 +289,7 @@ function Home({ view }: { view: HomeView }) {
                     testId="lessons-link"
                     icon="lessons"
                     tone="teal"
-                    title="Lessons"
+                    title={t.lessons}
                   />
                 ) : null}
                 {entry.uniformsHref ? (
@@ -290,7 +298,7 @@ function Home({ view }: { view: HomeView }) {
                     testId="uniforms-link"
                     icon="uniforms"
                     tone="rose"
-                    title="Uniforms"
+                    title={t.uniforms}
                   />
                 ) : null}
                 {entry.consentsHref ? (
@@ -299,8 +307,8 @@ function Home({ view }: { view: HomeView }) {
                     testId="consents-link"
                     icon="photos"
                     tone="green"
-                    title="Photo consents"
-                    text="Who may appear"
+                    title={t.photoConsents}
+                    text={t.photoConsentsText}
                   />
                 ) : null}
               </ul>
@@ -310,8 +318,8 @@ function Home({ view }: { view: HomeView }) {
       ) : null}
 
       {view.groupRoles.length > 0 ? (
-        <Area id="group-roles" testId="group-roles" title="Across the group">
-          <p className="muted">{`${view.groupRoles.join(', ')}: all schools`}</p>
+        <Area id="group-roles" testId="group-roles" title={t.acrossGroup}>
+          <p className="muted">{t.allSchools(view.groupRoles.join(', '))}</p>
           <ul className="tiles">
             {view.groupSchools.map((school) => {
               const staff = view.staffSchools.find((entry) => entry.name === school);
@@ -329,17 +337,17 @@ function Home({ view }: { view: HomeView }) {
                       <span className="action-chips">
                         {staff ? (
                           <Link href={`/schools/${staff.id}/staff`} data-testid="group-staff-link">
-                            <Icon name="staff" size={14} /> Staff
+                            <Icon name="staff" size={14} /> {t.staff}
                           </Link>
                         ) : null}
                         {staff ? (
                           <Link href={`/schools/${staff.id}/documents`} data-testid="group-documents-link">
-                            <Icon name="documents" size={14} /> Documents
+                            <Icon name="documents" size={14} /> {t.documents}
                           </Link>
                         ) : null}
                         {consents ? (
                           <Link href={`/schools/${consents.id}/consents`} data-testid="group-consents-link">
-                            <Icon name="photos" size={14} /> Photo consents
+                            <Icon name="photos" size={14} /> {t.photoConsents}
                           </Link>
                         ) : null}
                       </span>
@@ -353,52 +361,52 @@ function Home({ view }: { view: HomeView }) {
       ) : null}
 
       {view.showsSchoolLife ? (
-        <Area id="school-life" testId="school-life" title="School Life">
+        <Area id="school-life" testId="school-life" title={t.schoolLife}>
           <ul className="tiles">
             <Tile
               href="/school-life/day"
               testId="day-link"
               icon="today"
               tone="amber"
-              title="Today at school"
-              text="Everything in one place"
+              title={t.todayAtSchool}
+              text={t.todayAtSchoolText}
             />
             <Tile
               href="/school-life/kitchen"
               testId="kitchen-link"
               icon="kitchen"
               tone="rose"
-              title="Kitchen"
-              text="Lunches per day"
+              title={t.kitchen}
+              text={t.kitchenText}
             />
             <Tile
               href="/school-life/registers"
               testId="registers-link"
               icon="registers"
-              title="Club registers"
+              title={t.clubRegisters}
             />
             <Tile
               href="/school-life/menus"
               testId="menus-link"
               icon="menus"
               tone="green"
-              title="Lunch menus"
+              title={t.lunchMenus}
             />
             <Tile
               href="/school-life/trips"
               testId="trips-link"
               icon="trips"
               tone="sky"
-              title="Trips"
-              text="Who is coming"
+              title={t.trips}
+              text={t.tripsText}
             />
             <Tile
               href="/school-life/transport"
               testId="transport-link"
               icon="transport"
               tone="teal"
-              title="Transport"
-              text="The day's lists for drivers"
+              title={t.transport}
+              text={t.transportText}
             />
             {view.lessonSchools.map((school) => (
               <Tile
@@ -407,7 +415,7 @@ function Home({ view }: { view: HomeView }) {
                 testId="school-lessons-link"
                 icon="lessons"
                 tone="teal"
-                title={`Lessons at ${school.name}`}
+                title={t.lessonsAt(school.name)}
               />
             ))}
             {view.lessonSchools.map((school) => (
@@ -417,7 +425,7 @@ function Home({ view }: { view: HomeView }) {
                 testId="school-uniforms-link"
                 icon="uniforms"
                 tone="rose"
-                title={`Uniforms at ${school.name}`}
+                title={t.uniformsAt(school.name)}
               />
             ))}
             {view.showsRequests ? (
@@ -425,7 +433,7 @@ function Home({ view }: { view: HomeView }) {
                 href="/school-life/requests"
                 testId="requests-link"
                 icon="requests"
-                title="Families' requests"
+                title={t.familiesRequests}
               />
             ) : null}
             {view.showsDietaryReview ? (
@@ -434,7 +442,7 @@ function Home({ view }: { view: HomeView }) {
                 testId="dietary-review-link"
                 icon="dietary"
                 tone="green"
-                title="Dietary needs to verify"
+                title={t.dietaryToVerify}
               />
             ) : null}
           </ul>
@@ -442,36 +450,36 @@ function Home({ view }: { view: HomeView }) {
       ) : null}
 
       {view.showsAdmissions ? (
-        <Area id="admissions" testId="admissions" title="Admissions">
+        <Area id="admissions" testId="admissions" title={t.admissions}>
           <ul className="tiles">
             <Tile
               href="/admissions/inquiries"
               testId="inquiries-link"
               icon="inquiries"
               tone="sky"
-              title="Inquiries"
-              text="From the school websites"
+              title={t.inquiries}
+              text={t.inquiriesText}
             />
             <Tile
               href="/admissions/applications"
               testId="applications-link"
               icon="applications"
-              title="Intakes and applications"
+              title={t.intakesAndApplications}
             />
             <Tile
               href="/admissions/pipeline"
               testId="pipeline-link"
               icon="pipeline"
               tone="teal"
-              title="Pipeline"
-              text="Numbers, and what to follow up"
+              title={t.pipeline}
+              text={t.pipelineText}
             />
           </ul>
         </Area>
       ) : null}
 
       {view.showsReports || view.showsSchoolSetup ? (
-        <Area id="reports" testId="reports" title="Reports and set-up">
+        <Area id="reports" testId="reports" title={t.reportsAndSetup}>
           <ul className="tiles">
             {view.showsReports ? (
               <Tile
@@ -479,8 +487,8 @@ function Home({ view }: { view: HomeView }) {
                 testId="revenue-link"
                 icon="reports"
                 tone="green"
-                title="Revenue and balances"
-                text="Per school"
+                title={t.revenue}
+                text={t.revenueText}
               />
             ) : null}
             {view.showsAdmissionsReport ? (
@@ -489,7 +497,7 @@ function Home({ view }: { view: HomeView }) {
                 testId="admissions-report-link"
                 icon="pipeline"
                 tone="teal"
-                title="Admissions per school"
+                title={t.admissionsPerSchool}
               />
             ) : null}
             {view.showsSchoolSetup ? (
@@ -498,31 +506,30 @@ function Home({ view }: { view: HomeView }) {
                 testId="schools-admin-link"
                 icon="setup"
                 tone="amber"
-                title="Schools and set-up"
-                text="Schools, companies and staff"
+                title={t.schoolsAndSetup}
+                text={t.schoolsAndSetupText}
               />
             ) : null}
           </ul>
         </Area>
       ) : null}
 
-      <Area id="apply" testId="apply-for-a-place" title="Admission to our schools">
+      <Area id="apply" testId="apply-for-a-place" title={t.admissionToSchools}>
         <ul className="tiles">
           <Tile
             href="/admissions/apply"
             testId="apply-link"
             icon="apply"
             tone="sky"
-            title="Apply for a place"
-            text="For a child of yours"
+            title={t.applyForPlace}
+            text={t.applyForPlaceText}
           />
         </ul>
       </Area>
 
       {view.hasNothing ? (
         <p data-testid="nothing-yet" className="card">
-          Your account has no children or roles linked yet. If you expected to see your children, please
-          contact the school office: a member of staff needs to confirm the link.
+          {t.nothingYet}
         </p>
       ) : null}
     </main>

@@ -2,6 +2,7 @@
 // and the web app (which reads them).
 
 import { type PersonId, type SchoolId } from './ids.js';
+import { type Language } from './language.js';
 
 export type RoleScope = 'group' | 'school';
 
@@ -12,6 +13,8 @@ export interface MeResponse {
     familyName: string;
     preferredName: string | null;
     email: string | null;
+    /** Their own choice of language; null lets the browser decide (M9.1). */
+    language: Language | null;
   };
   roles: {
     code: string;

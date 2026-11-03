@@ -42,3 +42,4 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0036](0036-monitoring-and-alerts.md) | Monitoring and alerts: Prometheus on the host, alerts by e-mail | Accepted |
 | [0037](0037-restore-drills-and-recovery.md) | Restore drills and recovery: a monthly drill, and a runbook proven in CI | Accepted |
 | [0038](0038-production-end-to-end.md) | Production end to end: a Stripe stand-in, and rolling back proven in CI | Accepted |
+| [0039](0039-languages.md) | Languages: Bulgarian and English, each person's own choice | Accepted |

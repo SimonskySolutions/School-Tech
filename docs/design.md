@@ -28,7 +28,7 @@ Defined on `:root` in `globals.css`.
 
 | Component | Where | Notes |
 | --- | --- | --- |
-| Application shell | `app/app-shell.tsx`, `.shell`, `.sidebar`, `.topbar` | Shown by `app/layout.tsx` to anyone signed in. Sidebar groups from `lib/navigation.ts`; the top bar holds notifications, who is signed in and signing out |
+| Application shell | `app/app-shell.tsx`, `.shell`, `.sidebar`, `.topbar` | Shown by `app/layout.tsx` to anyone signed in. Sidebar groups from `lib/navigation.ts`; the top bar holds the language switch (EN / BG, `app/language-switch.tsx`), notifications, who is signed in and signing out |
 | Navigation link | `app/nav-link.tsx`, `.nav-link` | Client component; marks the current page with `aria-current` (`isCurrent` in `lib/navigation.ts`) |
 | Hero | `.hero`, `.eyebrow`, `.chips` | The dashboard greeting with today's date and the person's roles |
 | Tiles | `.tiles`, `.tile`, `.tile-icon` (`.teal`, `.amber`, `.rose`, `.sky`, `.green`) | One per page the person can reach |

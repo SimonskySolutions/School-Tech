@@ -65,9 +65,8 @@ export class Browser {
   }
 }
 
-/** Signs in through the real Keycloak login form. */
-export async function signIn(username: string, password: string, returnTo?: string) {
-  const browser = new Browser();
+/** Signs in through the real Keycloak login form, in a new browser unless given one. */
+export async function signIn(username: string, password: string, returnTo?: string, browser = new Browser()) {
   const start = `${APP}/auth/sign-in${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`;
   const loginPage = await browser.follow(start);
   const html = await loginPage.response.text();

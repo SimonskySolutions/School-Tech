@@ -1,4 +1,4 @@
-import { type PersonId, type SchoolId } from '@pythagoras/shared';
+import { type Language, type PersonId, type SchoolId } from '@pythagoras/shared';
 import { type PersonTransaction } from '../database/database';
 
 // Reads for the signed-in person. Every query runs inside withPerson(), so the
@@ -11,6 +11,7 @@ export interface MeRow {
   family_name: string;
   preferred_name: string | null;
   email: string | null;
+  preferred_locale: Language | null;
 }
 
 export interface RoleRow {
@@ -45,7 +46,7 @@ export interface EnrolmentRow {
 
 export function findMe(tx: PersonTransaction): Promise<MeRow[]> {
   return tx.query<MeRow>(
-    `SELECT id, given_name, family_name, preferred_name, email
+    `SELECT id, given_name, family_name, preferred_name, email, preferred_locale
        FROM people.person
       WHERE id = app.current_person_id()`,
   );

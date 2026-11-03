@@ -242,6 +242,13 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - Who may take a club: on the school's set-up page, under each club, "Who may take it" (grades as the school names them, and ages in whole years on the day). Bookings already made stay when the rules change. An age rule needs the child's date of birth on their record.
 - Registers (`/school-life/registers`): once a meeting has started, teachers, principals, school administrators and School Life mark each child Attended or Absent; corrections are allowed and recorded. Parents see it under "Clubs and attendance".
 
+### Languages (M9.1, ADR 0039)
+
+- The portal speaks English and Bulgarian. **EN / BG** in the top bar (and in the corner of the signed-out pages) switches it. Signed in, the choice is saved for the person and follows them to any browser; before signing in, the browser's own language decides until the switch is used.
+- The words are in `apps/web/lib/i18n/en.ts` and `bg.ts`, grouped by where they appear. To correct a Bulgarian text, change it in `bg.ts`; to add a text, add it to `en.ts` first, then the same key to `bg.ts` (the type check and `lib/i18n/messages.test.ts` fail until both have it).
+- A page reads its words with `currentMessages()` (`lib/server.ts`) on the server, or `useMessages()` in a client component. M9.1 covers the frame and the start page; the other pages follow in M9.2 and M9.3.
+- A person's language is `people.person.preferred_locale` (`bg`, `en`, or NULL for "my browser decides"); the API sets it with `PUT /me/language`.
+
 ### Websites and the CMS (ADR 0017)
 
 - School and group websites: `http://school-a.pythagoras.localhost:53000` (also `school-b`, `school-c`, and `pythagoras.localhost` for the group). They show the website's published CMS pages, or a start page built from the platform when there is none.

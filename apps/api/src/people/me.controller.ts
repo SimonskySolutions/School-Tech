@@ -1,8 +1,20 @@
-import { Controller, Get, Inject, NotFoundException } from '@nestjs/common';
-import { type MeResponse } from '@pythagoras/shared';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  NotFoundException,
+  Put,
+} from '@nestjs/common';
+import { type Language, LANGUAGES, type MeResponse } from '@pythagoras/shared';
+import { z } from 'zod';
 import { CurrentPrincipal, type Principal } from '../auth/principal';
 import { Database } from '../database/database';
 import { findCurrentEnrolments, findMe, findMyChildren, findMyRoles } from './me.repository';
+
+const languageSchema = z.object({ language: z.enum(LANGUAGES).nullable() });
 
 @Controller('me')
 export class MeController {
@@ -29,6 +41,7 @@ export class MeController {
           familyName: person.family_name,
           preferredName: person.preferred_name,
           email: person.email,
+          language: person.preferred_locale,
         },
         roles: roles.map((role) => ({
           code: role.role_code,
@@ -59,5 +72,23 @@ export class MeController {
         })),
       };
     });
+  }
+
+  /** The signed-in person's own language, or null to let their browser decide (M9.1). */
+  @Put('language')
+  @HttpCode(200)
+  async setLanguage(
+    @CurrentPrincipal() principal: Principal,
+    @Body() body: unknown,
+  ): Promise<{ language: Language | null }> {
+    const parsed = languageSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException(`give a language: ${LANGUAGES.join(' or ')}, or null`);
+    const { language } = parsed.data;
+    await this.database.withPerson(principal, (tx) =>
+      tx.query('UPDATE people.person SET preferred_locale = $1 WHERE id = app.current_person_id()', [
+        language,
+      ]),
+    );
+    return { language };
   }
 }

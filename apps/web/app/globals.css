@@ -659,6 +659,49 @@ td form {
   font-size: 1rem;
   border-radius: 14px;
 }
+/* EN / BG (M9.1): two segments, the page's language pressed. */
+.language-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.language-switch button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  background: transparent;
+  box-shadow: none;
+}
+.language-switch button:hover {
+  transform: none;
+  box-shadow: none;
+  filter: none;
+  color: var(--violet-700);
+  background: var(--violet-50);
+}
+.language-switch button[aria-pressed='true'] {
+  color: var(--violet-700);
+  background: var(--violet-100);
+}
+.auth-card-head {
+  display: flex;
+  justify-content: center;
+}
+.auth-card-head .language-switch {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  box-shadow: none;
+}
 .sign-out-form {
   margin: 0;
 }
@@ -899,6 +942,7 @@ td form {
     radial-gradient(50% 50% at 90% 90%, rgb(11 158 145 / 25%), transparent 60%), var(--ink-950);
 }
 .auth-card {
+  position: relative;
   width: min(440px, 100%);
   background: var(--surface);
   border-radius: var(--radius-xl);

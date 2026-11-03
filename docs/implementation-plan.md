@@ -1,6 +1,6 @@
 # Implementation plan
 
-Last updated: 2026-11-02. M8 is complete (all eight steps, all seven acceptance criteria met on the local and CI proof; the hosting, the domain and the off-site storage are still to be decided, see `docs/handoff.md`). M7 is complete (all six steps, all seven acceptance criteria met; CI green on GitHub for every M7 commit, runs #96–#104 and the M7.6 run). M6 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M6 commit, runs #80–#92 and the M6.8 run). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M5 commit, runs #64–#78). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
+Last updated: 2026-11-03. Current milestone: **M9 · Bulgarian and English** (planned 2026-11-03). M8 is complete (all eight steps, all seven acceptance criteria met on the local and CI proof; the hosting, the domain and the off-site storage are still to be decided, see `docs/handoff.md`). M7 is complete (all six steps, all seven acceptance criteria met; CI green on GitHub for every M7 commit, runs #96–#104 and the M7.6 run). M6 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M6 commit, runs #80–#92 and the M6.8 run). M5 is complete (all eight steps, all seven acceptance criteria met; CI green on GitHub for every M5 commit, runs #64–#78). M4 is complete (all eight steps; CI green on GitHub for every M4 commit, runs #40–#62). M3 is complete (CI green on GitHub for every M3 commit, runs #13–#30) and CMS editors sign in through Keycloak since (ADR 0019, run #38).
 
 On request, the PostgreSQL and Redis foundation was built before the rest of the plan. M0 records what exists. Each milestone is planned in detail when it starts; later milestones are outlined.
 
@@ -332,9 +332,27 @@ Tests added for M6.3: 19 database checks (the school year, one's own record and 
 6. Met: every target of the checklist is scraped; each of the 36 alerts fires in a `promtool` test; an alert is e-mailed over TLS, and a real Redis outage is reported (M8.6).
 7. Met: releases, rollbacks and upgrades are in `docs/operations.md`; CI rolls back to the previous commit's images on the new schema and releases again (M8.8).
 
+## M9 · Bulgarian and English
+
+**Goal:** every person can use the platform in Bulgarian or English, switching with EN / BG in the top bar; the choice is their own and follows them; sign-in pages and e-mails are in their language too. Asked for by the group's owner on 2026-11-03 (ADR 0039). School websites keep the language their editors write in.
+
+| Step | Depends on | Delivers | Status |
+| --- | --- | --- | --- |
+| M9.1 The switch and the foundation | M8 | Each person's language stored and offered by the API; typed catalogs with the language chosen per request (the person's choice, this browser's, the browser's own, English); EN / BG in the top bar and on the signed-out pages; the shell translated: menu, top bar, start page, error and not-found pages, the banner | **Done** (2026-11-03), ADR 0039: `people.person.preferred_locale` limited to `bg` or `en`, set by the person through their own update policy; `PUT /me/language` and `person.language` in `GET /me`. `apps/web/lib/i18n` holds `en.ts`, the source, and `bg.ts`, which must match it key for key (the type check and a unit test); `currentLanguage()` decides once per request and `/me` is asked once per request. The switch is a form (`POST /language`): origin checked, a cookie for this browser, saved for the person when signed in, back to the same page; signing in brings the saved choice back, and a choice made before signing in becomes the person's own. The menu, top bar, roles, start page, banner, error, not-found and not-linked pages are in both languages, with `<html lang>` and the date following |
+| M9.2 The family pages | M9.1 | Services and booking, orders and payment, children (dietary needs, clubs, lessons, trips, requests, consents), documents, notifications, applications for a place; money and dates in the language's format | Planned |
+| M9.3 The staff pages | M9.1 | Schools and set-up, offerings, admissions, staff records and training, documents and approvals, tasks and projects, reports, the accounting export, School Life | Planned |
+| M9.4 Sign-in and e-mails | M9.1 | Keycloak's sign-in and account pages in the person's language (`ui_locales`, the theme's own texts in both languages); every e-mail from the worker and from Keycloak in the recipient's language | Planned |
+| M9.5 Checks | M9.2–M9.4 | A check that no page text is left outside the catalogs; the end-to-end journeys run once in Bulgarian; the Bulgarian texts reviewed by a native speaker at the group | Planned |
+
+**Acceptance criteria**
+1. Every person can switch between Bulgarian and English from any page, signed in or not, without a script; the choice is saved for them and follows them to another browser.
+2. Every page of the portal, the sign-in pages and every e-mail is fully in the chosen language, with dates and money in its format.
+3. A text missing from one language fails the checks before it can be released.
+4. The Bulgarian texts have been reviewed by a native speaker at the group.
+
 ## Later milestones (outline)
 
-None planned beyond M8. Open items below remain.
+None planned beyond M9. Open items below remain.
 
 ## Open items
 

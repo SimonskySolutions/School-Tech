@@ -1,4 +1,6 @@
 import { type MeResponse, type SchoolSummary } from '@pythagoras/shared';
+import { en } from './i18n/en';
+import { type Messages } from './i18n/messages';
 
 // What the home page shows, derived from what the API says about the person.
 // A person can be several things at once (a teacher who is also a parent).
@@ -107,13 +109,14 @@ const STUDENT_ROLES = new Set(['principal', 'school_admin', 'teacher']);
 // Roles that hold org.manage; adding offerings also needs catalog.manage, which only the administrator has.
 const SETUP_ROLES = new Set(['group_admin', 'group_ceo']);
 
-export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): HomeView {
-  const groupRoles = me.roles.filter((role) => role.scope === 'group').map((role) => role.name);
+export function buildHome(me: MeResponse, schools: readonly SchoolSummary[], text: Messages = en): HomeView {
+  const roleName = (role: MeResponse['roles'][number]) => text.roles[role.code] ?? role.name;
+  const groupRoles = me.roles.filter((role) => role.scope === 'group').map(roleName);
   const children = me.children.map((child) => ({
     id: child.id,
     name: `${child.givenName} ${child.familyName}`,
     places: child.enrolments.map((enrolment) =>
-      [enrolment.school.name, enrolment.classLabel ? `class ${enrolment.classLabel}` : null]
+      [enrolment.school.name, enrolment.classLabel ? text.home.classLabel(enrolment.classLabel) : null]
         .filter(Boolean)
         .join(', '),
     ),
@@ -121,7 +124,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
   const schoolRoles = me.roles
     .filter((role) => role.scope === 'school' && role.school)
     .map((role) => ({
-      role: role.name,
+      role: roleName(role),
       school: role.school!.name,
       studentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/students` : null,
       // Every school role holds bookings.read or catalog.read there (access.role_permission).
@@ -133,7 +136,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
     }));
 
   return {
-    greeting: `Hello, ${me.person.preferredName ?? me.person.givenName}`,
+    greeting: text.home.greeting(me.person.preferredName ?? me.person.givenName),
     children,
     schoolRoles,
     groupRoles,
@@ -162,8 +165,5 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[]): Ho
   };
 }
 
-export const NOTICES: Record<string, string> = {
-  'signed-out': 'You have signed out.',
-  'sign-in-expired': 'Signing in took too long. Please try again.',
-  'sign-in-failed': 'Signing in did not complete. Please try again.',
-};
+/** The start page's notices after signing in or out, by the code in its address. */
+export const NOTICES: Record<string, string> = en.notices;
