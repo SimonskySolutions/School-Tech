@@ -18,6 +18,7 @@ describe('message templates', () => {
         'offer.expiring',
         'order.paid',
         'request.answered',
+        'waitlist.place_free',
         'staff.renewals',
         'task.assigned',
         'task.due',
@@ -158,7 +159,7 @@ describe('message events', () => {
         'documents.approval.advanced',
       )(event('documents.approval.advanced', { request_id: 'x' })),
     ).rejects.toThrow();
-    expect(MESSAGE_EVENTS).toHaveLength(5);
+    expect(MESSAGE_EVENTS).toHaveLength(6);
   });
 
   it('let people choose a kind of message by its code', () => {

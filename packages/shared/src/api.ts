@@ -590,6 +590,9 @@ export interface SchoolSetup {
 }
 
 /** The public website a host name belongs to (M3.5), for rendering its pages. */
+/** The blocks of a website's start page; every website has all of them, in its own order. */
+export type HomeSection = 'hero' | 'content' | 'highlights' | 'ask';
+
 export interface SiteInfo {
   websiteId: string;
   code: string;
@@ -598,7 +601,10 @@ export interface SiteInfo {
   /** The website's tenant in the CMS; null for sites without CMS content (the portal). */
   cmsKey: string | null;
   locale: string;
-  schools: { name: string; kind: string }[];
+  /** The order of the start page's blocks. */
+  homeSections: HomeSection[];
+  /** `host` is the school's own website, when it has a live one. */
+  schools: { name: string; kind: string; host: string | null }[];
 }
 
 /** A lesson slot: one place, a teacher and a room (ADR 0022). */
@@ -1651,4 +1657,237 @@ export interface AccountingSummary {
   }[];
   /** Per currency and mode: the sum of all entries (received + paid by credit − refunded − credited). */
   net: { currency: string; mode: 'live' | 'test'; amountMinor: number }[];
+}
+
+/** A class of one school year, with how full it is. */
+export interface SchoolClass {
+  id: string;
+  label: string;
+  gradeLevel: string;
+  capacity: number;
+  seatsTaken: number;
+  formTeacherId: string | null;
+  formTeacher: string | null;
+  homeRoomId: string | null;
+  homeRoom: string | null;
+}
+
+export interface NamedChoice {
+  id: string;
+  name: string;
+}
+
+export interface SchoolClasses {
+  school: { id: string; name: string };
+  academicYear: string;
+  canManage: boolean;
+  classes: SchoolClass[];
+  /** Children enrolled this year without a class yet. */
+  unplaced: { enrolmentId: string; name: string }[];
+  teachers: NamedChoice[];
+  rooms: NamedChoice[];
+}
+
+export interface ClassDetail {
+  school: { id: string; name: string };
+  canManage: boolean;
+  /** May take the register and give grades. */
+  canTeach: boolean;
+  class: SchoolClass;
+  students: { enrolmentId: string; studentId: string; name: string }[];
+  unplaced: { enrolmentId: string; name: string }[];
+  teachers: NamedChoice[];
+  rooms: NamedChoice[];
+}
+
+export interface TimetablePeriod {
+  id: string;
+  position: number;
+  /** "HH:MM" in the school's time. */
+  starts: string;
+  ends: string;
+}
+
+export interface TimetableEntry {
+  id: string;
+  /** 1 Monday to 5 Friday. */
+  weekday: number;
+  periodId: string;
+  subject: string;
+  classId: string;
+  classLabel: string;
+  teacherId: string;
+  teacher: string;
+  roomId: string;
+  room: string;
+}
+
+/** Whose week a timetable shows. */
+export type TimetableView = 'class' | 'teacher' | 'room';
+
+export interface SchoolTimetable {
+  school: { id: string; name: string };
+  academicYear: string;
+  canManage: boolean;
+  view: TimetableView;
+  /** The classes, teachers or rooms this view can show. */
+  choices: NamedChoice[];
+  selectedId: string | null;
+  periods: TimetablePeriod[];
+  entries: TimetableEntry[];
+  classes: NamedChoice[];
+  teachers: NamedChoice[];
+  rooms: NamedChoice[];
+}
+
+export interface StudentTimetable {
+  student: { id: string; givenName: string; familyName: string };
+  academicYear: string;
+  schoolName: string | null;
+  classLabel: string | null;
+  periods: TimetablePeriod[];
+  entries: TimetableEntry[];
+}
+
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
+
+export interface GradeMark {
+  id: string;
+  subject: string;
+  term: number;
+  /** 2 to 6, the Bulgarian scale. */
+  value: number;
+  givenOn: string;
+}
+
+export interface ClassRegister {
+  school: { id: string; name: string };
+  class: { id: string; label: string };
+  day: string;
+  /** The class's subjects from the timetable. */
+  subjects: string[];
+  students: {
+    studentId: string;
+    name: string;
+    status: AttendanceStatus | null;
+    grades: GradeMark[];
+    average: number | null;
+  }[];
+}
+
+export interface StudentProgress {
+  student: { id: string; givenName: string; familyName: string };
+  academicYear: string;
+  attendance: Record<AttendanceStatus, number>;
+  /** The latest days not marked present. */
+  missed: { day: string; status: AttendanceStatus }[];
+  subjects: { subject: string; grades: GradeMark[]; average: number | null }[];
+}
+
+export type StockKind = 'book' | 'equipment' | 'supply';
+
+export interface SchoolInventory {
+  school: { id: string; name: string };
+  canManage: boolean;
+  items: {
+    id: string;
+    kind: StockKind;
+    name: string;
+    onHand: number;
+    reorderLevel: number;
+    supplier: string | null;
+  }[];
+  suppliers: { id: string; name: string; email: string | null; phone: string | null }[];
+}
+
+export type ExpenseCategory =
+  'materials' | 'food' | 'utilities' | 'maintenance' | 'transport' | 'events' | 'marketing' | 'other';
+
+export interface SchoolFinance {
+  school: { id: string; name: string };
+  academicYear: string;
+  canManage: boolean;
+  currency: string;
+  /** What families paid this school year, net of refunds. */
+  incomeMinor: number;
+  categories: { category: ExpenseCategory; budgetMinor: number; spentMinor: number }[];
+  expenses: {
+    id: string;
+    category: ExpenseCategory;
+    description: string;
+    supplier: string | null;
+    amountMinor: number;
+    spentOn: string;
+  }[];
+  suppliers: NamedChoice[];
+}
+
+export interface InvoiceSummary {
+  id: string;
+  /** Ten digits, without gaps per company. */
+  number: string;
+  issuedOn: string;
+  currency: string;
+  totalMinor: number;
+  orderNumber: string;
+  company: string;
+}
+
+export interface MyInvoices {
+  invoices: InvoiceSummary[];
+}
+
+export interface InvoiceDetail extends InvoiceSummary {
+  registrationNumber: string;
+  vatNumber: string | null;
+  address: string | null;
+  billedTo: string;
+  lines: {
+    description: string;
+    quantity: number;
+    unitMinor: number;
+    totalMinor: number;
+    vatRateBp: number;
+  }[];
+}
+
+/** One line per school, for those who run the group. */
+export interface GroupOverview {
+  academicYear: string;
+  currency: string;
+  schools: {
+    id: string;
+    name: string;
+    children: number;
+    places: number;
+    seatsTaken: number;
+    classes: number;
+    fullClasses: number;
+    waiting: number;
+    lowStock: number;
+    incomeMinor: number;
+    spentMinor: number;
+    budgetMinor: number;
+  }[];
+}
+
+export interface StudentWaitingList {
+  entries: {
+    id: string;
+    offeringName: string;
+    status: 'waiting' | 'place_free';
+    position: number;
+  }[];
+}
+
+export interface SchoolWaitingLists {
+  school: { id: string; name: string };
+  entries: {
+    id: string;
+    offeringName: string;
+    student: string;
+    status: 'waiting' | 'place_free';
+    position: number;
+    since: string;
+  }[];
 }

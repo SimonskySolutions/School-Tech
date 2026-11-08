@@ -27,6 +27,7 @@ export class SitesController {
       purpose: row.purpose as SiteInfo['purpose'],
       cmsKey: row.cms_tenant_key,
       locale: row.default_locale,
+      homeSections: row.home_sections as SiteInfo['homeSections'],
       schools: row.schools,
     };
   }

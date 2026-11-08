@@ -36,10 +36,11 @@ export function AppShell({
             <small>{text.shell.tagline}</small>
           </span>
         </Link>
-        <nav
-          aria-label={text.shell.sectionsLabel}
-          style={{ display: 'flex', flexDirection: 'column', gap: 18 }}
-        >
+        <input id="nav-toggle" type="checkbox" className="nav-toggle" aria-label={text.shell.menu} />
+        <label htmlFor="nav-toggle" className="nav-toggle-button" aria-hidden="true">
+          <Icon name="menu" />
+        </label>
+        <nav aria-label={text.shell.sectionsLabel} className="sidebar-nav">
           {groups.map((group) => (
             <div key={group.label} className="nav-group">
               <div className="nav-label">{group.label}</div>

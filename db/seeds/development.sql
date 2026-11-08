@@ -40,6 +40,12 @@ INSERT INTO org.website (id, group_id, code, name, purpose, cms_tenant_key, stat
   ('c2000000-0000-7000-8000-00000000000c', :G, 'school-c', 'School C', 'school', 'school-c', 'live')
 ON CONFLICT (id) DO NOTHING;
 
+-- The same start-page blocks, in each school's own order.
+UPDATE org.website SET home_sections = ARRAY['hero', 'highlights', 'content', 'ask']
+ WHERE code = 'school-b' AND home_sections <> ARRAY['hero', 'highlights', 'content', 'ask'];
+UPDATE org.website SET home_sections = ARRAY['hero', 'ask', 'content', 'highlights']
+ WHERE code = 'school-c' AND home_sections <> ARRAY['hero', 'ask', 'content', 'highlights'];
+
 INSERT INTO org.website_school (website_id, school_id, group_id, is_primary_website_for_school) VALUES
   ('c2000000-0000-7000-8000-00000000000a', :SA, :G, true),
   ('c2000000-0000-7000-8000-00000000000b', :SB, :G, true),

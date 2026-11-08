@@ -52,7 +52,10 @@ Not yet modelled (later milestones): academics and timetables, lunch menus, trip
 | `people` | Persons, login identities, guardian relationships, enrolments |
 | `access` | Roles, permissions, assignments, authorization helper functions |
 | `catalog` | Service definitions, school offerings, price and policy versions |
-| `scheduling` | Sessions, capacity counters, bookings |
+| `scheduling` | Sessions, capacity counters, bookings; classes with a limit, the weekly timetable and the waiting lists for full clubs (ADR 0040) |
+| `academic` | The daily class register and grades, 2 to 6 (ADR 0040) |
+| `inventory` | Suppliers, stock items and the movements that keep their counts (ADR 0040) |
+| `finance` | Expenses, budgets and an invoice for each paid order (ADR 0040) |
 | `commerce` | Orders, lines, payments, allocations, credits, refunds |
 | `integration` | Transactional outbox, verified inbound provider events, external references |
 | `privacy` | Processing purposes, retention policies, consent records, data subject requests |
@@ -161,6 +164,11 @@ The worker (`pyth_worker`) acts as the system on the tables its jobs need. It ca
 | `PY024` | No place left in the intake: offers out (offered or accepted) already equal its places |
 | `PY025` | The offer has expired and can no longer be accepted or declined |
 | `PY026` | An enrolment fee line for a child not enrolled from an intake that charges it, or already paid or being paid |
+| `PY027` | The class is full, or its limit would drop below the children already in it |
+| `PY028` | A class or timetable lesson names something that is not a teacher or room in use |
+| `PY029` | The child is not in this class, so cannot be marked or graded in it |
+| `PY030` | Not enough of the item in stock |
+| `PY031` | The club has places, so it has no waiting list |
 
 Standard codes the API should also map: `42501` (not permitted), `23505` (duplicate, e.g. idempotency key), `23503` (wrong school or company reference), `23P01` (overlapping version), `23514` (check failed).
 

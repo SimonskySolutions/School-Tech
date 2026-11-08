@@ -43,7 +43,7 @@ describe('navigation', () => {
     };
     expect(labels(me)).toEqual([
       ['Overview', ['Dashboard', 'Notifications']],
-      ['Family', ['Book lunch and clubs', 'Apply for a place']],
+      ['Family', ['Book lunch and clubs', 'Invoices', 'Apply for a place']],
     ]);
   });
 
@@ -77,8 +77,13 @@ describe('navigation', () => {
       '/schools/a/students',
       '/schools/a/staff',
       '/schools/a/documents',
+      '/schools/a/classes',
+      '/schools/a/timetable',
+      '/schools/a/waiting-lists',
       '/schools/a/lessons',
       '/schools/a/uniforms',
+      '/schools/a/inventory',
+      '/schools/a/finance',
       '/schools/a/consents',
     ]);
   });

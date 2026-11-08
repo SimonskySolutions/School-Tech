@@ -13,7 +13,7 @@ describe('emailHtml', () => {
       PORTAL,
     );
     expect(html).toContain(
-      '<h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;color:#16132e;">Payment received',
+      '<h1 style="margin:0 0 18px;font-size:20px;line-height:1.3;color:#0e1738;">Payment received',
     );
     expect(html).toContain('<p style="margin:0 0 14px;">Dear Anna Ivanova,</p>');
     expect(html).toContain('We have received your payment.<br>Your bookings are confirmed.');

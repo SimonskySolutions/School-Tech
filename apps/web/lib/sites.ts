@@ -31,6 +31,12 @@ export function websiteHost(
   return name;
 }
 
+/** The address of another website on this platform: the portal's scheme and port, its own host. */
+export function siteUrl(host: string, portalUrl: string): string {
+  const { protocol, port } = new URL(portalUrl);
+  return `${protocol}//${host}${port ? `:${port}` : ''}`;
+}
+
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /** The CMS page a website path shows: "/" is "home", "/about" is "about"; anything deeper is not a page. */

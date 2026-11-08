@@ -259,6 +259,16 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 
 ## Development data and accounts
 
+To show the system with full schools, load the demo data on top of the seed:
+
+```bash
+bash scripts/db-seed-demo.sh
+```
+
+It adds about 200 synthetic children and their parents in ten classes (one full in each school), each class's week, three weeks of attendance, grades, stock and suppliers, a year's budgets with the spending so far, tuition payments with invoices, and a full club with a queue (Art studio at School B: sign in as Hristo Georgiev to join it). It can run again safely. The end-to-end tests expect the plain seed, so run them before loading it.
+
+The order of each school's start-page blocks is `org.website.home_sections`, set in SQL for now.
+
 `scripts/db-seed.sh` loads `db/seeds/development.sql`: synthetic data only, idempotent, and refused for any database other than the local `pythagoras`. It contains one company, **Testing Company** (placeholder name), billing **School A**, **School B** and **School C**; their websites under `*.pythagoras.localhost`; lunch, chess, robotics and tuition offerings with per-school prices; the next 20 school days of lunch and eight weeks of club sessions.
 
 All accounts share one generated password, stored in `secrets/keycloak_dev_user_password`. Sign in through the web app at `http://portal.pythagoras.localhost:53000`.

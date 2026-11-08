@@ -26,22 +26,22 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from './provider';
 
 // The portal's look (docs/design.md), inline: the page's policy allows no other request.
 const CHECKOUT_STYLE = `*{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;line-height:1.5;color:#1b1a2e;
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;line-height:1.5;color:#121a33;
 font-family:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
-background:radial-gradient(60% 60% at 15% 10%,rgb(116 89 255/35%),transparent 60%),radial-gradient(50% 50% at 90% 90%,rgb(11 158 145/25%),transparent 60%),#0e0c22}
+background:radial-gradient(60% 60% at 15% 10%,rgb(84 128 255/35%),transparent 60%),radial-gradient(50% 50% at 90% 90%,rgb(11 158 145/25%),transparent 60%),#080e26}
 .card{width:min(440px,100%);background:#fff;border-radius:22px;padding:30px;box-shadow:0 30px 80px -20px rgb(0 0 0/55%)}
 .dev{margin:0 0 22px;padding:10px 14px;border-radius:12px;background:#fff6e0;color:#8a5a00;border:1px solid #f5d68f;font-size:.85rem}
-.label{margin:0;font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#7459ff}
-h1{margin:4px 0 6px;font-size:2rem;letter-spacing:-.02em;color:#16132e}
-.what{margin:0 0 22px;color:#4b4868}
+.label{margin:0;font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5480ff}
+h1{margin:4px 0 6px;font-size:2rem;letter-spacing:-.02em;color:#0e1738}
+.what{margin:0 0 22px;color:#414b6b}
 .expired{padding:10px 14px;border-radius:12px;background:#ffecf2;color:#a01d4d}
 form{margin:0 0 10px}
 button{width:100%;min-height:46px;border:0;border-radius:12px;font:inherit;font-weight:650;color:#fff;cursor:pointer;
-background:linear-gradient(135deg,#7459ff,#4a2fd6);box-shadow:0 6px 18px -8px rgb(91 62 240/70%)}
+background:linear-gradient(135deg,#5480ff,#2546db);box-shadow:0 6px 18px -8px rgb(47 91 245/70%)}
 button.decline{background:#fff;color:#d6336c;border:1px solid #f3bfd1;box-shadow:none}
 button:hover{filter:brightness(1.05)}
 .leave{margin:16px 0 0;text-align:center}
-a{color:#5b3ef0;font-weight:600;text-decoration:none}`;
+a{color:#2f5bf5;font-weight:600;text-decoration:none}`;
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 

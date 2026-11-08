@@ -17,7 +17,8 @@ export interface SiteRow {
   purpose: string;
   cms_tenant_key: string | null;
   default_locale: string;
-  schools: { name: string; kind: string }[];
+  home_sections: string[];
+  schools: { name: string; kind: string; host: string | null }[];
 }
 
 export interface InquiryFormRow {
@@ -116,8 +117,9 @@ export class Database {
    */
   async resolveWebsite(hostname: string): Promise<SiteRow | null> {
     const result = await this.pool.query<SiteRow>(
-      `SELECT w.id AS website_id, w.code, w.name, w.purpose, w.cms_tenant_key, w.default_locale,
-              coalesce(json_agg(json_build_object('name', s.name, 'kind', s.kind) ORDER BY ws.is_primary_website_for_school DESC, s.name)
+      `SELECT w.id AS website_id, w.code, w.name, w.purpose, w.cms_tenant_key, w.default_locale, w.home_sections,
+              coalesce(json_agg(json_build_object('name', s.name, 'kind', s.kind,
+                                                  'host', org.school_website_host(s.id)) ORDER BY ws.is_primary_website_for_school DESC, s.name)
                          FILTER (WHERE s.id IS NOT NULL), '[]') AS schools
          FROM org.resolve_hostname($1) r
          JOIN org.website w ON w.id = r.website_id

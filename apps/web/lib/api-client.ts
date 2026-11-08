@@ -43,6 +43,20 @@ import {
   type StudentTrips,
   type TransportRuns,
   type TripParticipants,
+  type ClassDetail,
+  type GroupOverview,
+  type InvoiceDetail,
+  type MyInvoices,
+  type SchoolFinance,
+  type SchoolInventory,
+  type SchoolWaitingLists,
+  type StudentWaitingList,
+  type ClassRegister,
+  type StudentProgress,
+  type SchoolClasses,
+  type SchoolTimetable,
+  type StudentTimetable,
+  type TimetableView,
 } from '@pythagoras/shared';
 
 // Server-side calls from the web app to the API, with the signed-in person's
@@ -225,6 +239,69 @@ export const fetchStudentActivities = (apiUrl: string, accessToken: string, stud
 
 export const fetchStudentLessons = (apiUrl: string, accessToken: string, studentId: string) =>
   get<StudentLessons>(apiUrl, `/students/${encodeURIComponent(studentId)}/lessons`, accessToken);
+
+export const fetchSchoolClasses = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolClasses>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/classes`, accessToken);
+
+export const fetchClassDetail = (apiUrl: string, accessToken: string, schoolId: string, classId: string) =>
+  get<ClassDetail>(
+    apiUrl,
+    `/schools/${encodeURIComponent(schoolId)}/classes/${encodeURIComponent(classId)}`,
+    accessToken,
+  );
+
+export const fetchSchoolTimetable = (
+  apiUrl: string,
+  accessToken: string,
+  schoolId: string,
+  view: TimetableView,
+  of: string | null,
+) =>
+  get<SchoolTimetable>(
+    apiUrl,
+    `/schools/${encodeURIComponent(schoolId)}/timetable?${new URLSearchParams({ view, ...(of ? { of } : {}) })}`,
+    accessToken,
+  );
+
+export const fetchStudentTimetable = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentTimetable>(apiUrl, `/students/${encodeURIComponent(studentId)}/timetable`, accessToken);
+
+export const fetchClassRegister = (
+  apiUrl: string,
+  accessToken: string,
+  schoolId: string,
+  classId: string,
+  day: string,
+) =>
+  get<ClassRegister>(
+    apiUrl,
+    `/schools/${encodeURIComponent(schoolId)}/classes/${encodeURIComponent(classId)}/register?${new URLSearchParams({ day })}`,
+    accessToken,
+  );
+
+export const fetchStudentProgress = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentProgress>(apiUrl, `/students/${encodeURIComponent(studentId)}/progress`, accessToken);
+
+export const fetchSchoolInventory = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolInventory>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/inventory`, accessToken);
+
+export const fetchSchoolFinance = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolFinance>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/finance`, accessToken);
+
+export const fetchGroupOverview = (apiUrl: string, accessToken: string) =>
+  get<GroupOverview>(apiUrl, '/group/overview', accessToken);
+
+export const fetchMyInvoices = (apiUrl: string, accessToken: string) =>
+  get<MyInvoices>(apiUrl, '/me/invoices', accessToken);
+
+export const fetchInvoice = (apiUrl: string, accessToken: string, invoiceId: string) =>
+  get<InvoiceDetail>(apiUrl, `/me/invoices/${encodeURIComponent(invoiceId)}`, accessToken);
+
+export const fetchStudentWaitingList = (apiUrl: string, accessToken: string, studentId: string) =>
+  get<StudentWaitingList>(apiUrl, `/students/${encodeURIComponent(studentId)}/waiting-list`, accessToken);
+
+export const fetchSchoolWaitingLists = (apiUrl: string, accessToken: string, schoolId: string) =>
+  get<SchoolWaitingLists>(apiUrl, `/schools/${encodeURIComponent(schoolId)}/waiting-lists`, accessToken);
 
 export const fetchSchoolLessons = (
   apiUrl: string,

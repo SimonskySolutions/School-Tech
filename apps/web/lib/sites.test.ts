@@ -1,5 +1,6 @@
+import { type HomeSection } from '@pythagoras/shared';
 import { describe, expect, it } from 'vitest';
-import { defaultIntro, menu, pageSlug, websiteHost } from './sites';
+import { defaultIntro, menu, pageSlug, siteUrl, websiteHost } from './sites';
 
 const headers = (values: Record<string, string>) => ({ get: (name: string) => values[name] ?? null });
 const PORTAL = 'portal.pythagoras.localhost:53000';
@@ -51,6 +52,13 @@ describe('menu and default page', () => {
     ]);
   });
 
+  it('addresses another website on the scheme and port of the portal', () => {
+    expect(siteUrl('school-b.pythagoras.localhost', 'http://portal.pythagoras.localhost:53000')).toBe(
+      'http://school-b.pythagoras.localhost:53000',
+    );
+    expect(siteUrl('school-b.example', 'https://portal.example')).toBe('https://school-b.example');
+  });
+
   it('introduces a website from the platform when it has no start page yet', () => {
     const site = {
       websiteId: 'w',
@@ -58,14 +66,15 @@ describe('menu and default page', () => {
       name: 'Pythagoras',
       cmsKey: 'pythagoras',
       locale: 'bg',
+      homeSections: ['hero', 'content', 'highlights', 'ask'] as HomeSection[],
     };
     expect(
       defaultIntro({
         ...site,
         purpose: 'group',
         schools: [
-          { name: 'School A', kind: 'school' },
-          { name: 'School B', kind: 'school' },
+          { name: 'School A', kind: 'school', host: 'school-a.example' },
+          { name: 'School B', kind: 'school', host: null },
         ],
       }),
     ).toBe('Pythagoras runs 2 schools: School A, School B.');

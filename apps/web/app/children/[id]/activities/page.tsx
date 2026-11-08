@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { fetchStudentActivities } from '../../../../lib/api-client';
+import { fetchStudentActivities, fetchStudentWaitingList } from '../../../../lib/api-client';
+import { OPERATIONS_NOTICES } from '../../../../lib/operations';
 import { attendanceLabel, formatSessionTime } from '../../../../lib/school-life';
 import { currentSession, runtime } from '../../../../lib/server';
 import { DevelopmentBanner } from '../../../development-banner';
@@ -10,8 +11,15 @@ export const dynamic = 'force-dynamic';
 type Params = Promise<{ id: string }>;
 
 /** A guardian sees their child's club meetings and whether they attended. */
-export default async function ChildActivitiesPage({ params }: { params: Params }) {
+export default async function ChildActivitiesPage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const session = await currentSession();
   if (!session) redirect('/auth/sign-in');
 
@@ -31,6 +39,10 @@ export default async function ChildActivitiesPage({ params }: { params: Params }
     );
   }
   const child = result.value;
+  const queue = await fetchStudentWaitingList(config.API_INTERNAL_URL, session.accessToken, id);
+  const waiting = queue.kind === 'ok' ? queue.value.entries : [];
+  const done = typeof query.done === 'string' ? (OPERATIONS_NOTICES[query.done] ?? null) : null;
+  const error = typeof query.error === 'string' ? query.error : null;
   const past = child.sessions.filter((entry) => entry.started);
   const upcoming = child.sessions.filter((entry) => !entry.started);
 
@@ -41,6 +53,40 @@ export default async function ChildActivitiesPage({ params }: { params: Params }
         <Link href="/">Home</Link> · <Link href="/services">Book lunch and clubs</Link>
       </p>
       <h1>{`Clubs and attendance: ${child.student.givenName} ${child.student.familyName}`}</h1>
+      {done ? (
+        <p role="status" data-testid="done">
+          {done}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" data-testid="error">
+          {error}
+        </p>
+      ) : null}
+      {waiting.length > 0 ? (
+        <section aria-labelledby="waiting" data-testid="waiting">
+          <h2 id="waiting">Waiting lists</h2>
+          <ul>
+            {waiting.map((entry) => (
+              <li key={entry.id}>
+                {entry.offeringName}:{' '}
+                {entry.status === 'place_free' ? (
+                  <>
+                    <span className="badge ok">A place is free</span>{' '}
+                    <Link href="/services">Book it now</Link>
+                  </>
+                ) : (
+                  `number ${entry.position} in the queue`
+                )}
+                <form method="post" action={`/children/${child.student.id}/waiting-list`}>
+                  <input type="hidden" name="entry_id" value={entry.id} />
+                  <button type="submit">Leave the list</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {child.sessions.length === 0 ? <p>No club meetings booked.</p> : null}
       {past.length ? (
         <section aria-labelledby="past" data-testid="past">

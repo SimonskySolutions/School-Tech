@@ -3,7 +3,7 @@ import type { Payload } from 'payload';
 
 // DEVELOPMENT ONLY. A website for each seeded platform website (the keys match
 // org.website.cms_tenant_key in db/seeds/development.sql), a published start
-// page for School A, and one administrator who can sign in to the admin.
+// page for each school, and one administrator who can sign in to the admin.
 // Idempotent: it only adds what is missing.
 
 const WEBSITES = [
@@ -11,6 +11,24 @@ const WEBSITES = [
   { key: 'school-a', name: 'School A' },
   { key: 'school-b', name: 'School B' },
   { key: 'school-c', name: 'School C' },
+];
+
+const START_PAGES = [
+  {
+    website: 'school-a',
+    title: 'Welcome to School A',
+    text: 'School A is part of the Pythagoras group. This start page comes from the CMS.',
+  },
+  {
+    website: 'school-b',
+    title: 'Welcome to School B',
+    text: 'School B is part of the Pythagoras group. Our team writes this page in the website editor.',
+  },
+  {
+    website: 'school-c',
+    title: 'Welcome to School C',
+    text: 'School C is part of the Pythagoras group. Our team writes this page in the website editor.',
+  },
 ];
 
 const paragraph = (text: string) => ({
@@ -38,21 +56,22 @@ export async function seedDevelopment(payload: Payload): Promise<void> {
     );
   }
 
-  const home = await payload.find({
-    collection: 'pages',
-    where: { and: [{ slug: { equals: 'home' } }, { tenant: { equals: tenants.get('school-a') } }] },
-    limit: 1,
-    draft: true,
-  });
-  if (home.docs.length === 0) {
+  for (const page of START_PAGES) {
+    const home = await payload.find({
+      collection: 'pages',
+      where: { and: [{ slug: { equals: 'home' } }, { tenant: { equals: tenants.get(page.website) } }] },
+      limit: 1,
+      draft: true,
+    });
+    if (home.docs.length > 0) continue;
     await payload.create({
       collection: 'pages',
       draft: false,
       data: {
-        title: 'Welcome to School A',
+        title: page.title,
         slug: 'home',
         navOrder: 1,
-        tenant: tenants.get('school-a'),
+        tenant: tenants.get(page.website),
         _status: 'published',
         body: {
           root: {
@@ -61,9 +80,7 @@ export async function seedDevelopment(payload: Payload): Promise<void> {
             direction: 'ltr',
             format: '',
             indent: 0,
-            children: [
-              paragraph('School A is part of the Pythagoras group. This start page comes from the CMS.'),
-            ],
+            children: [paragraph(page.text)],
           },
         },
       } as never,

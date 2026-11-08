@@ -14,6 +14,13 @@ export interface HomeView {
     school: string;
     studentsHref: string | null;
     lessonsHref: string | null;
+    /** The school's classes and its week, for roles that can read enrolments there. */
+    classesHref: string | null;
+    timetableHref: string | null;
+    /** Stock and money, for those who run the school; the waiting lists for all who read enrolments. */
+    inventoryHref: string | null;
+    financeHref: string | null;
+    waitingHref: string | null;
     uniformsHref: string | null;
     /** The school's staff records, for roles with staff.read there (M6.1). */
     staffHref: string | null;
@@ -44,6 +51,7 @@ export interface HomeView {
   showsConsentWording: boolean;
   /** Group finance exports each company's ledger (M7.4). */
   showsAccounting: boolean;
+  showsGroupOverview: boolean;
   /** Anyone with a role sees their own employment records. */
   showsMyEmployment: boolean;
   /** Roles that approve document versions (M6.5); the API decides which steps are theirs. */
@@ -106,6 +114,12 @@ const REPORT_ROLES = new Set([
 // School roles that hold enrolment.read at their school (access.role_permission); a hint for links only.
 const STUDENT_ROLES = new Set(['principal', 'school_admin', 'teacher']);
 
+// Roles that run a school's stock and money.
+const OFFICE_ROLES = new Set(['principal', 'school_admin']);
+
+// Roles that see every school on one screen: finance.read and enrolment.read across the group.
+const GROUP_OVERVIEW_ROLES = new Set(['group_ceo', 'group_admin', 'group_finance']);
+
 // Roles that hold org.manage; adding offerings also needs catalog.manage, which only the administrator has.
 const SETUP_ROLES = new Set(['group_admin', 'group_ceo']);
 
@@ -129,6 +143,11 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[], tex
       studentsHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/students` : null,
       // Every school role holds bookings.read or catalog.read there (access.role_permission).
       lessonsHref: `/schools/${role.school!.id}/lessons`,
+      classesHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/classes` : null,
+      timetableHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/timetable` : null,
+      inventoryHref: OFFICE_ROLES.has(role.code) ? `/schools/${role.school!.id}/inventory` : null,
+      financeHref: OFFICE_ROLES.has(role.code) ? `/schools/${role.school!.id}/finance` : null,
+      waitingHref: STUDENT_ROLES.has(role.code) ? `/schools/${role.school!.id}/waiting-lists` : null,
       uniformsHref: `/schools/${role.school!.id}/uniforms`,
       staffHref: STAFF_ROLES.has(role.code) ? `/schools/${role.school!.id}/staff` : null,
       documentsHref: `/schools/${role.school!.id}/documents`,
@@ -157,6 +176,7 @@ export function buildHome(me: MeResponse, schools: readonly SchoolSummary[], tex
       : [],
     showsConsentWording: me.roles.some((role) => role.code === 'privacy_officer'),
     showsAccounting: me.roles.some((role) => role.code === 'group_finance'),
+    showsGroupOverview: me.roles.some((role) => GROUP_OVERVIEW_ROLES.has(role.code)),
     showsMyEmployment: me.roles.length > 0,
     showsApprovals: me.roles.some((role) => APPROVER_ROLES.has(role.code)),
     showsReports: me.roles.some((role) => REPORT_ROLES.has(role.code)),

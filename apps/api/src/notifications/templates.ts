@@ -90,6 +90,19 @@ const TEMPLATES = {
       ),
     }),
   ),
+  'waitlist.place_free': template(
+    z.strictObject({ childName: name, offeringName: name, studentId: id }),
+    (params, to, portal) => ({
+      subject: `A place is free in ${params.offeringName}`,
+      text: lines(
+        greeting(to),
+        '',
+        `A place is free in ${params.offeringName}, and ${params.childName} is first on the waiting list.`,
+        '',
+        `Book it in the family portal (sign in first): ${portal}/services`,
+      ),
+    }),
+  ),
   'request.answered': template(z.strictObject({ schoolName: name, studentId: id }), (params, to, portal) => ({
     subject: `${params.schoolName} has replied to your message`,
     text: lines(

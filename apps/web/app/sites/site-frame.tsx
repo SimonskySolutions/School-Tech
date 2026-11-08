@@ -1,6 +1,7 @@
 import { type SiteInfo } from '@pythagoras/shared';
 import Link from 'next/link';
 import { type ReactNode } from 'react';
+import { siteUrl } from '../../lib/sites';
 import { Logo } from '../brand';
 import { Icon } from '../icons';
 
@@ -79,7 +80,9 @@ export function SiteFooter({
             <h2>Our schools</h2>
             <ul>
               {site.schools.map((school) => (
-                <li key={school.name}>{school.name}</li>
+                <li key={school.name}>
+                  {school.host ? <a href={siteUrl(school.host, portalUrl)}>{school.name}</a> : school.name}
+                </li>
               ))}
             </ul>
           </div>

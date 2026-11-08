@@ -24,6 +24,11 @@ const HANDLERS = {
     sql: 'SELECT notify.on_request_answered($1, $2) AS queued',
     args: (p: { request_id: string; message_id: string }) => [p.request_id, p.message_id],
   },
+  'scheduling.waiting_entry.place_free': {
+    payload: z.object({ entry_id: uuid }),
+    sql: 'SELECT notify.on_place_free($1) AS queued',
+    args: (p: { entry_id: string }) => [p.entry_id],
+  },
   'privacy.consent_wording.renewal': {
     payload: z.object({ wording_id: uuid }),
     sql: 'SELECT notify.on_wording_renewal($1) AS queued',

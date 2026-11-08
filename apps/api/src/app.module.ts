@@ -16,6 +16,15 @@ import { AccountingController } from './accounting/accounting.controller';
 import { CatalogController } from './catalog/catalog.controller';
 import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
 import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
+import { ClassRegisterController, StudentProgressController } from './academic/academic.controller';
+import {
+  GroupOverviewController,
+  MyInvoicesController,
+  SchoolFinanceController,
+} from './finance/finance.controller';
+import { InventoryController } from './inventory/inventory.controller';
+import { SchoolWaitingController, StudentWaitingController } from './waiting/waiting.controller';
+import { SchoolTimetableController, StudentTimetableController } from './timetable/timetable.controller';
 import { SchoolRequestsController, StudentRequestsController } from './requests/requests.controller';
 import { SchoolTransportController, TransportRunsController } from './transport/transport.controller';
 import { SchoolUniformsController } from './uniforms/uniforms.controller';
@@ -71,9 +80,19 @@ import { type Env } from './config/env';
     DietaryController,
     DietaryReviewController,
     SchoolLessonsController,
+    SchoolTimetableController,
+    InventoryController,
+    SchoolFinanceController,
+    MyInvoicesController,
+    GroupOverviewController,
+    StudentWaitingController,
+    SchoolWaitingController,
+    ClassRegisterController,
+    StudentProgressController,
     SchoolRequestsController,
     StudentRequestsController,
     StudentLessonsController,
+    StudentTimetableController,
     StudentTripsController,
     SchoolTransportController,
     SchoolUniformsController,

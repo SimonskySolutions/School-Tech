@@ -217,6 +217,19 @@ function Activity({ studentId, offering }: { studentId: string; offering: Bookab
                 ? ' (no meetings open)'
                 : ''}
       </label>
+      {full && !booked && problem === null ? (
+        <button
+          type="submit"
+          className="button soft"
+          formAction={`/children/${studentId}/waiting-list`}
+          formMethod="post"
+          name="waiting_offering_id"
+          value={offering.id}
+          data-testid={`join-waiting-${offering.id}`}
+        >
+          Join the waiting list
+        </button>
+      ) : null}
     </fieldset>
   );
 }

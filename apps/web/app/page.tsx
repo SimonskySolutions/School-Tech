@@ -13,7 +13,7 @@ import { LanguageSwitch } from './language-switch';
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-type Tone = 'violet' | 'teal' | 'amber' | 'rose' | 'sky' | 'green';
+type Tone = 'blue' | 'teal' | 'amber' | 'rose' | 'sky' | 'green';
 
 function notice(params: Record<string, string | string[] | undefined>, notices: Record<string, string>) {
   if (params['signed-out']) return notices['signed-out'] ?? null;
@@ -73,7 +73,7 @@ function Tile({
   href,
   testId,
   icon,
-  tone = 'violet',
+  tone = 'blue',
   title,
   text,
 }: {
@@ -178,6 +178,12 @@ function Home({ view, text, locale }: { view: HomeView; text: Messages; locale: 
                     <Link href={`/children/${child.id}/activities`} data-testid="child-activities-link">
                       <Icon name="registers" size={14} /> {t.clubsAndAttendance}
                     </Link>
+                    <Link href={`/children/${child.id}/progress`} data-testid="child-progress-link">
+                      <Icon name="approvals" size={14} /> {t.progress}
+                    </Link>
+                    <Link href={`/children/${child.id}/timetable`} data-testid="child-timetable-link">
+                      <Icon name="timetable" size={14} /> {t.timetable}
+                    </Link>
                     <Link href={`/children/${child.id}/lessons`} data-testid="child-lessons-link">
                       <Icon name="lessons" size={14} /> {t.lessons}
                     </Link>
@@ -198,9 +204,22 @@ function Home({ view, text, locale }: { view: HomeView; text: Messages; locale: 
         </Area>
       ) : null}
 
-      {view.showsMyEmployment || view.showsApprovals || view.showsAccounting || view.showsConsentWording ? (
+      {view.showsGroupOverview ||
+      view.showsMyEmployment ||
+      view.showsApprovals ||
+      view.showsAccounting ||
+      view.showsConsentWording ? (
         <Area id="my-work" testId="my-work" title={t.yourWork}>
           <ul className="tiles">
+            {view.showsGroupOverview ? (
+              <Tile
+                href="/group"
+                testId="group-overview-link"
+                icon="overview"
+                title={t.groupOverview}
+                text={t.groupOverviewText}
+              />
+            ) : null}
             {view.showsMyEmployment ? (
               <Tile href="/tasks" testId="tasks-link" icon="tasks" title={t.tasks} text={t.tasksText} />
             ) : null}
@@ -283,6 +302,45 @@ function Home({ view, text, locale }: { view: HomeView; text: Messages; locale: 
                   title={t.documents}
                   text={t.documentsText}
                 />
+                {entry.classesHref ? (
+                  <Tile
+                    href={entry.classesHref}
+                    testId="classes-link"
+                    icon="classes"
+                    tone="sky"
+                    title={t.classes}
+                  />
+                ) : null}
+                {entry.timetableHref ? (
+                  <Tile
+                    href={entry.timetableHref}
+                    testId="timetable-link"
+                    icon="timetable"
+                    tone="amber"
+                    title={t.timetable}
+                  />
+                ) : null}
+                {entry.waitingHref ? (
+                  <Tile
+                    href={entry.waitingHref}
+                    testId="waiting-link"
+                    icon="waiting"
+                    tone="rose"
+                    title={t.waitingLists}
+                  />
+                ) : null}
+                {entry.inventoryHref ? (
+                  <Tile
+                    href={entry.inventoryHref}
+                    testId="inventory-link"
+                    icon="inventory"
+                    tone="green"
+                    title={t.inventory}
+                  />
+                ) : null}
+                {entry.financeHref ? (
+                  <Tile href={entry.financeHref} testId="finance-link" icon="finance" title={t.finance} />
+                ) : null}
                 {entry.lessonsHref ? (
                   <Tile
                     href={entry.lessonsHref}

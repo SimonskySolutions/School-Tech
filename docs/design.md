@@ -4,12 +4,14 @@ The look of everything people see: the portal and the school websites (`apps/web
 
 The portal and websites share one stylesheet, `apps/web/app/globals.css`. There is no CSS framework and no build step for styles. The other surfaces copy the same tokens (see [Every surface](#every-surface)).
 
+The look is called Blueprint and chalk: deep navy, electric blue, a little pencil yellow and graph-paper backgrounds, so it reads as modern and technical and still as a school.
+
 ## Principles
 
 - **The pages stay plain HTML.** Most pages are semantic markup (`main`, `section`, `article`, `details`, `table`, `form`, `[role=status]`), and the stylesheet styles those elements directly. A new page looks right without class names; classes are only for the dashboard and the shell.
 - **No external fonts or assets.** Fonts come from the operating system (Segoe UI Variable on Windows, San Francisco on Apple devices, the system sans-serif elsewhere); Inter is used only if the device already has it. Loading Google Fonts or a CDN would send every visitor's address to a third party (GDPR), so nothing is fetched from outside the platform. The logo is an inline SVG (`app/brand.tsx`) and icons are bundled from `lucide-react` (ISC licence).
 - **The sidebar is a guide, not a permission.** `lib/navigation.ts` builds the links from what the API says the person is, the same as the home page. Every page still asks the API, which decides what the person may see.
-- **Accessible by default.** Text meets WCAG AA contrast on its background; focus is a visible violet ring (`--focus`); the current page is marked with `aria-current="page"`, not only by colour; icons are `aria-hidden` next to a text label; motion is turned off under `prefers-reduced-motion`.
+- **Accessible by default.** Text meets WCAG AA contrast on its background; focus is a visible blue ring (`--focus`); the current page is marked with `aria-current="page"`, not only by colour; icons are `aria-hidden` next to a text label; motion is turned off under `prefers-reduced-motion`.
 
 ## Tokens
 
@@ -18,7 +20,9 @@ Defined on `:root` in `globals.css`.
 | Group | Tokens | Use |
 | --- | --- | --- |
 | Ink | `--ink-950` … `--ink-700` | Sidebar, hero banner, headings |
-| Violet | `--violet-800` … `--violet-50` | The accent: buttons, links, the current page, focus |
+| Accent | `--accent-800` … `--accent-50` | Electric blue: buttons, links, the current page, focus |
+| Pencil | `--pencil` | A touch of school yellow on marks and the brand, never for text |
+| Paper | `--font-mono`, `--grid-light`, `--grid-dark`, `--grid-size` | Monospaced figures and the graph-paper backgrounds |
 | Supporting hues | `--teal-*`, `--amber-*`, `--rose-*`, `--sky-*`, `--green-*` (600 and 50) | Tile icons and notices; never as the only signal |
 | Surfaces | `--canvas`, `--surface`, `--surface-soft`, `--border`, `--border-strong` | Page background, cards, dividers |
 | Text | `--text`, `--text-soft`, `--muted` | Body, secondary and quiet text |
@@ -34,12 +38,18 @@ Defined on `:root` in `globals.css`.
 | Tiles | `.tiles`, `.tile`, `.tile-icon` (`.teal`, `.amber`, `.rose`, `.sky`, `.green`) | One per page the person can reach |
 | Child card | `.card-grid`, `.child-card`, `.action-chips` | A parent's children with links for each |
 | Cards | `main > section`, `article`, `details`, `form`, `table`, `.card` | Automatic for the plain pages |
-| Buttons | `button`, `.button` | Gradient violet; quieter inside list rows and tables |
+| Buttons | `button`, `.button` | Solid electric blue; quieter inside list rows and tables |
 | Notices | `[role=status]` (green), `[role=alert]` (rose), `[data-testid=not-permitted]` (amber), `.dev-banner` | The development banner stays on every page while the build uses synthetic data |
 | Sign-in page | `.auth-page`, `.auth-card` | What a signed-out visitor sees |
 | Website frame | `app/sites/site-frame.tsx`, `.site-header`, `.site-footer` | The school's name and CMS menu, the Family portal button, a footer with the group's schools |
 | Website hero and highlights | `.site-hero`, `.site-banner`, `.site-highlights`, `.prose` | The start page's banner and the platform's own services for families; CMS text in a reading card. Only facts the platform knows, never invented claims about a school |
 | Inquiry form | `.inquiry-form`, `.notice-panel` | Two columns of fields; the privacy notice and the agreements across |
+| Figures | `.stats`, `.stat-value`, `.stat-label` | A row of headline numbers at the top of a page |
+| Badges and meters | `.badge` (`.ok`, `.warn`, `.full`), `.meter` (`.warn`, `.full`, `--value`) | Places taken and budgets used; the words beside them carry the meaning, not the colour |
+| Class cards | `.class-grid`, `.class-head`, `.class-name`, `.seats` | Each class with its places |
+| Timetable | `app/timetable-grid.tsx`, `.timetable`, `.lesson` (`.tone-1` … `.tone-6`), `.view-switch` | A week across the page, one column a day on a phone |
+| Register and grades | `.register`, `.marks`, `.grades` (`.grade-2` … `.grade-6`) | One row per child; the marks are real radio buttons |
+| Group overview | `.school-card`, `.facts` | Every school on one screen (`/group`) |
 | Empty states | `.empty-state` | Not found (`app/not-found.tsx`) and a failed page (`app/error.tsx`), in the shell or on their own |
 
 ## Every surface
@@ -58,7 +68,7 @@ The Keycloak theme is mounted into the development container (`compose.yaml`). T
 
 ## Small screens
 
-Below 960px the sidebar becomes a band across the top with the links wrapping, and the dashboard grids drop to fewer columns. On the websites the menu moves under the name and the footer and inquiry form become one column. Everything fits a phone width without horizontal scrolling.
+Below 960px the sidebar folds behind a Menu button (a plain checkbox and label, so it works without JavaScript) and the dashboard grids drop to fewer columns. Timetables show one column a day, wide tables scroll inside their own card, and the page itself never scrolls sideways. On the websites the header and blocks stack.
 
 ## Adding a page
 

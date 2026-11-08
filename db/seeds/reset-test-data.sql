@@ -16,6 +16,7 @@ BEGIN
   END IF;
 END $$;
 SET LOCAL session_replication_role = replica;
+DELETE FROM finance.invoice;
 DELETE FROM commerce.payment_allocation;
 DELETE FROM commerce.credit_application;
 DELETE FROM commerce.refund;
@@ -158,6 +159,18 @@ DELETE FROM org.website_school
  WHERE school_id IN (SELECT id FROM test_school) OR website_id IN (SELECT id FROM org.website WHERE code LIKE 'test-%');
 DELETE FROM org.website WHERE code LIKE 'test-%';
 DELETE FROM org.school WHERE id IN (SELECT id FROM test_school);
+-- What the school operations test adds.
+DELETE FROM academic.attendance WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM academic.grade WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM scheduling.timetable_entry WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+UPDATE people.enrolment SET class_id = NULL WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM scheduling.school_class WHERE label = '3A' AND capacity = 1;
+DELETE FROM scheduling.timetable_period WHERE position = 9 AND starts = '16:00';
+DELETE FROM inventory.movement WHERE item_id IN (SELECT id FROM inventory.item WHERE name LIKE 'E2E %');
+DELETE FROM inventory.item WHERE name LIKE 'E2E %';
+DELETE FROM inventory.supplier WHERE name LIKE 'E2E %';
+DELETE FROM finance.expense WHERE description LIKE 'E2E %';
+DELETE FROM finance.budget WHERE category = 'other' AND amount_minor = 123400;
 DELETE FROM org.legal_entity e
  WHERE e.legal_name LIKE 'Test company %' AND NOT EXISTS (SELECT 1 FROM org.school s WHERE s.default_billing_entity_id = e.id);
 COMMIT;

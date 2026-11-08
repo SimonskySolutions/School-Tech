@@ -26,6 +26,12 @@ bash scripts/db-migrate.sh up
 bash scripts/db-seed.sh
 ```
 
+To fill the three schools with demo classes, timetables, grades, stock and money:
+
+```bash
+bash scripts/db-seed-demo.sh
+```
+
 Development accounts and where their password lives: [docs/operations.md](docs/operations.md#development-data-and-accounts).
 
 ## Test

@@ -78,6 +78,10 @@ SELECT test.as_person(:SL);
 SELECT scheduling.mark_attendance(:PASTB, 'absent');
 SELECT test.expect_error(format('SELECT scheduling.mark_attendance(%L, %L)', :PASTB, 'present'),
   '22023', 'attendance is attended or absent');
+-- The fixture's session has a fixed date, so keep it in the future here.
+RESET ROLE;
+UPDATE scheduling.session SET starts_at = now() + interval '1 day', ends_at = now() + interval '25 hours' WHERE id = :SCHA;
+SELECT test.as_person(:SL);
 SELECT test.expect_error(format('SELECT scheduling.mark_attendance(b.id, %L) FROM scheduling.booking b WHERE b.session_id = %L', 'attended', :SCHA),
   'PY013', 'attendance cannot be marked before the session starts');
 RESET ROLE;

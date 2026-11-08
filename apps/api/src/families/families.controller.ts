@@ -106,6 +106,7 @@ export class FamiliesController {
       const code = (error as { code?: unknown } | null)?.code;
       if (code === '23505') throw new ConflictException('this guardian is already recorded for the child');
       if (code === '23514') throw new UnprocessableEntityException('a value is not allowed here');
+      if (code === 'PY027') throw new ConflictException('this class is full');
       throw asHttpError(error);
     }
   }

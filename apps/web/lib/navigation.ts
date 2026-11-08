@@ -8,6 +8,13 @@ import { type Messages } from './i18n/messages';
 
 export type IconName =
   | 'home'
+  | 'menu'
+  | 'overview'
+  | 'inventory'
+  | 'finance'
+  | 'waiting'
+  | 'classes'
+  | 'timetable'
   | 'bell'
   | 'tasks'
   | 'approvals'
@@ -63,6 +70,7 @@ export function navigation(view: HomeView, text: Messages = en): NavGroup[] {
       label: t.family,
       items: [
         { href: '/services', label: t.bookLunchAndClubs, icon: 'basket' },
+        { href: '/invoices', label: t.invoices, icon: 'documents' },
         { href: '/admissions/apply', label: t.applyForPlace, icon: 'apply' },
       ],
     });
@@ -73,8 +81,13 @@ export function navigation(view: HomeView, text: Messages = en): NavGroup[] {
     if (role.studentsHref) items.push({ href: role.studentsHref, label: t.students, icon: 'students' });
     if (role.staffHref) items.push({ href: role.staffHref, label: t.staff, icon: 'staff' });
     items.push({ href: role.documentsHref, label: t.documents, icon: 'documents' });
+    if (role.classesHref) items.push({ href: role.classesHref, label: t.classes, icon: 'classes' });
+    if (role.timetableHref) items.push({ href: role.timetableHref, label: t.timetable, icon: 'timetable' });
+    if (role.waitingHref) items.push({ href: role.waitingHref, label: t.waitingLists, icon: 'waiting' });
     if (role.lessonsHref) items.push({ href: role.lessonsHref, label: t.lessons, icon: 'lessons' });
     if (role.uniformsHref) items.push({ href: role.uniformsHref, label: t.uniforms, icon: 'uniforms' });
+    if (role.inventoryHref) items.push({ href: role.inventoryHref, label: t.inventory, icon: 'inventory' });
+    if (role.financeHref) items.push({ href: role.financeHref, label: t.finance, icon: 'finance' });
     if (role.consentsHref) items.push({ href: role.consentsHref, label: t.photoConsents, icon: 'photos' });
     groups.push({ label: role.school, items });
   }
@@ -108,6 +121,7 @@ export function navigation(view: HomeView, text: Messages = en): NavGroup[] {
   }
 
   const group: NavItem[] = [];
+  if (view.showsGroupOverview) group.push({ href: '/group', label: t.allSchools, icon: 'overview' });
   if (view.showsReports) group.push({ href: '/reports/revenue', label: t.revenue, icon: 'reports' });
   if (view.showsAdmissionsReport && !view.showsAdmissions) {
     group.push({ href: '/admissions/pipeline', label: t.admissions, icon: 'pipeline' });

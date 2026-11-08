@@ -30,6 +30,7 @@ const DATABASE_REFUSALS: Record<string, [InquiriesRejected['status'], string]> =
   PY021: [429, 'too many inquiries just now; please try again later'],
   PY022: [409, 'this intake is not taking applications'],
   PY023: [409, 'this address is already known to the group; a group administrator can link the family'],
+  PY027: [409, 'this class is full'],
   PY024: [409, 'no place left in this intake; put the application on the waiting list'],
   PY025: [409, 'the offer has expired'],
   '22007': [422, 'the answer date is in the past'],
