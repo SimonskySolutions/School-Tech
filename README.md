@@ -26,7 +26,7 @@ bash scripts/db-migrate.sh up
 bash scripts/db-seed.sh
 ```
 
-To fill the three schools with demo classes, timetables, grades, stock and money:
+To fill the three schools with demo classes, timetables, grades, stock and money, name them Pythagoras Sofia, Varna and Academy, and write their websites (`http://sofia.pythagoras.localhost:53000` and so on):
 
 ```bash
 bash scripts/db-seed-demo.sh

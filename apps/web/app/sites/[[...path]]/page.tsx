@@ -28,9 +28,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   if (site.kind !== 'ok') return { title: 'Pythagoras' };
   const { path } = await params;
   const slug = pageSlug(path);
-  return {
-    title: slug && slug !== 'home' ? `${slug.replace(/-/g, ' ')} · ${site.value.name}` : site.value.name,
-  };
+  if (!slug || slug === 'home' || !site.value.cmsKey) return { title: site.value.name };
+  const pages = await publishedPages(config.CMS_INTERNAL_URL, site.value.cmsKey);
+  const page = pages.kind === 'ok' ? pages.value.find((candidate) => candidate.slug === slug) : undefined;
+  return { title: `${page?.title ?? slug.replace(/-/g, ' ')} · ${site.value.name}` };
 }
 
 /** A public school or group website (M3.5, ADR 0017): its CMS pages, or a start page from the platform. */

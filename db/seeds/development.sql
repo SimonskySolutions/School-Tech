@@ -29,7 +29,8 @@ INSERT INTO org.school (id, group_id, code, name, kind, default_billing_entity_i
   (:SA, :G, 'school-a', 'School A', 'school', :CO, 'active'),
   (:SB, :G, 'school-b', 'School B', 'school', :CO, 'active'),
   (:SC, :G, 'school-c', 'School C', 'school', :CO, 'active')
-ON CONFLICT (id) DO NOTHING;
+-- The demo data (db/seeds/demo.sql) renames the schools; this puts the names the tests use back.
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name WHERE org.school.name IS DISTINCT FROM EXCLUDED.name;
 
 -- Websites: one per school, the group site and the family portal (ADR 0011).
 INSERT INTO org.website (id, group_id, code, name, purpose, cms_tenant_key, status) VALUES
@@ -38,7 +39,8 @@ INSERT INTO org.website (id, group_id, code, name, purpose, cms_tenant_key, stat
   ('c2000000-0000-7000-8000-00000000000a', :G, 'school-a', 'School A', 'school', 'school-a', 'live'),
   ('c2000000-0000-7000-8000-00000000000b', :G, 'school-b', 'School B', 'school', 'school-b', 'live'),
   ('c2000000-0000-7000-8000-00000000000c', :G, 'school-c', 'School C', 'school', 'school-c', 'live')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, default_locale = EXCLUDED.default_locale
+ WHERE (org.website.name, org.website.default_locale) IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.default_locale);
 
 -- The same start-page blocks, in each school's own order.
 UPDATE org.website SET home_sections = ARRAY['hero', 'highlights', 'content', 'ask']
@@ -62,6 +64,12 @@ INSERT INTO org.website_domain (website_id, group_id, hostname, is_primary, veri
   ('c2000000-0000-7000-8000-00000000000b', :G, 'school-b.pythagoras.localhost', true, 'local_development', 'verified', now()),
   ('c2000000-0000-7000-8000-00000000000c', :G, 'school-c.pythagoras.localhost', true, 'local_development', 'verified', now())
 ON CONFLICT (hostname) DO NOTHING;
+-- The demo makes sofia., varna. and academy.pythagoras.localhost the main
+-- addresses; the tests expect these, so they become the main ones again.
+UPDATE org.website_domain SET is_primary = false
+ WHERE hostname IN ('sofia.pythagoras.localhost', 'varna.pythagoras.localhost', 'academy.pythagoras.localhost') AND is_primary;
+UPDATE org.website_domain SET is_primary = true
+ WHERE hostname IN ('school-a.pythagoras.localhost', 'school-b.pythagoras.localhost', 'school-c.pythagoras.localhost') AND NOT is_primary;
 
 -- People ---------------------------------------------------------------------
 -- c1...: persons. Staff 01-10, parents 20-22, an unlinked login 23 has no person.
@@ -179,7 +187,7 @@ INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition
   ('d2000000-0000-7000-8000-0000000000b4', :G, :SB, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School B',    'published'),
   ('d2000000-0000-7000-8000-0000000000c4', :G, :SC, 'd1000000-0000-7000-8000-000000000004', :CO, 'tuition',  'Tuition, School C',    'published'),
   ('d2000000-0000-7000-8000-0000000000af', :G, :SA, 'd1000000-0000-7000-8000-00000000000a', :CO, 'enrolment-fee', 'Enrolment fee, School A', 'published')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name WHERE catalog.school_offering.name IS DISTINCT FROM EXCLUDED.name;
 
 INSERT INTO catalog.price_version (id, group_id, offering_id, version, unit_amount_minor, vat_rate_bp, price_unit, valid_from)
 SELECT ('d3' || substr(o.id::text, 3))::uuid, :G, o.id, 1, v.amount, 0, v.unit, TIMESTAMPTZ '2026-09-01 00:00 Europe/Sofia'

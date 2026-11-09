@@ -265,7 +265,11 @@ To show the system with full schools, load the demo data on top of the seed:
 bash scripts/db-seed-demo.sh
 ```
 
-It adds about 200 synthetic children and their parents in ten classes (one full in each school), each class's week, three weeks of attendance, grades, stock and suppliers, a year's budgets with the spending so far, tuition payments with invoices, and a full club with a queue (Art studio at School B: sign in as Hristo Georgiev to join it). It can run again safely. The end-to-end tests expect the plain seed, so run them before loading it.
+It adds about 200 synthetic children and their parents in ten classes (one full in each school), each class's week, three weeks of attendance, grades, stock and suppliers, a year's budgets with the spending so far, tuition payments with invoices, and a full club with a queue (Art studio at Pythagoras Varna: sign in as Hristo Georgiev to join it). It can run again safely.
+
+It also gives the schools the names the group uses, **Pythagoras Sofia**, **Pythagoras Varna** and **Pythagoras Academy** (School A, B and C), with their own website addresses, `http://sofia.pythagoras.localhost:53000`, `varna.` and `academy.` (the `school-a/b/c` addresses keep working), and writes the four websites' pages into the CMS through its API as the development editor (`scripts/cms-demo-content.mjs`, run in the `cms` container, so the CMS must be up). The pages are English and use the platform's own facts: classes, prices, clubs, teachers and the grade 1 intake. Edit that file and run the script again to change them.
+
+The end-to-end tests expect the plain seed. To go back to it: `bash scripts/db-seed.sh` puts the School A, B and C names and addresses back, and `bash scripts/db-seed-demo.sh --remove-websites` deletes the demo pages and restarts the CMS, which brings back its development start pages. `scripts/db-reset-test-data.sh` removes every order, so load the demo again after the tests.
 
 The order of each school's start-page blocks is `org.website.home_sections`, set in SQL for now.
 

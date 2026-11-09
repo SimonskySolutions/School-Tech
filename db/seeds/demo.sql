@@ -286,7 +286,7 @@ BEGIN
   VALUES ('d1000000-0000-7000-8000-0000000000d1', g, 'art', 'activity', 'Art studio')
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO catalog.school_offering (id, group_id, school_id, service_definition_id, billing_entity_id, code, name, status, eligibility)
-  VALUES (art_offering, g, schools[2], 'd1000000-0000-7000-8000-0000000000d1', company, 'art', 'Art studio, School B', 'published',
+  VALUES (art_offering, g, schools[2], 'd1000000-0000-7000-8000-0000000000d1', company, 'art', 'Art studio, Pythagoras Varna', 'published',
           '{"grades": ["5", "6", "7"]}')
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO catalog.price_version (id, group_id, offering_id, version, unit_amount_minor, vat_rate_bp, price_unit, valid_from)
@@ -337,6 +337,37 @@ BEGIN
   END LOOP;
 END
 $demo$;
+
+-- The names the group uses, and an address for each school's website. The
+-- development seed keeps School A, B and C for the tests and puts them back
+-- when it runs again. Website text is English for now, so the sites say so.
+UPDATE org.school s SET name = n.name
+  FROM (VALUES ('b1000000-0000-7000-8000-00000000000a'::uuid, 'Pythagoras Sofia'),
+               ('b1000000-0000-7000-8000-00000000000b'::uuid, 'Pythagoras Varna'),
+               ('b1000000-0000-7000-8000-00000000000c'::uuid, 'Pythagoras Academy')) AS n (id, name)
+ WHERE s.id = n.id AND s.name IS DISTINCT FROM n.name;
+
+UPDATE org.website w SET name = n.name, default_locale = 'en'
+  FROM (VALUES ('c2000000-0000-7000-8000-000000000001'::uuid, 'Pythagoras'),
+               ('c2000000-0000-7000-8000-00000000000a'::uuid, 'Pythagoras Sofia'),
+               ('c2000000-0000-7000-8000-00000000000b'::uuid, 'Pythagoras Varna'),
+               ('c2000000-0000-7000-8000-00000000000c'::uuid, 'Pythagoras Academy')) AS n (id, name)
+ WHERE w.id = n.id AND (w.name IS DISTINCT FROM n.name OR w.default_locale <> 'en');
+
+UPDATE catalog.school_offering
+   SET name = replace(replace(replace(name, 'School A', 'Pythagoras Sofia'), 'School B', 'Pythagoras Varna'), 'School C', 'Pythagoras Academy')
+ WHERE name ~ 'School [ABC]';
+
+-- sofia., varna. and academy.pythagoras.localhost become each site's main
+-- address; the school-a/b/c ones keep working.
+UPDATE org.website_domain SET is_primary = false
+ WHERE hostname IN ('school-a.pythagoras.localhost', 'school-b.pythagoras.localhost', 'school-c.pythagoras.localhost')
+   AND is_primary;
+INSERT INTO org.website_domain (website_id, group_id, hostname, is_primary, verification_method, status, verified_at) VALUES
+  ('c2000000-0000-7000-8000-00000000000a', 'a1000000-0000-7000-8000-000000000001', 'sofia.pythagoras.localhost',   true, 'local_development', 'verified', now()),
+  ('c2000000-0000-7000-8000-00000000000b', 'a1000000-0000-7000-8000-000000000001', 'varna.pythagoras.localhost',   true, 'local_development', 'verified', now()),
+  ('c2000000-0000-7000-8000-00000000000c', 'a1000000-0000-7000-8000-000000000001', 'academy.pythagoras.localhost', true, 'local_development', 'verified', now())
+ON CONFLICT (hostname) DO UPDATE SET is_primary = true WHERE NOT org.website_domain.is_primary;
 
 COMMIT;
 
