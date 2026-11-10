@@ -256,6 +256,7 @@ If you add a role or a secret to an existing installation, apply it with `bash s
 - The CMS has its own database `pythagoras_cms` (role `pyth_cms`, secret `secrets/pg_cms_password`) and session secret (`secrets/cms_payload_secret`). If you add the CMS to an existing installation: `bash scripts/dev-secrets.sh`, `docker compose up -d --force-recreate postgres`, `bash scripts/db-bootstrap.sh`, then `docker compose up -d cms`.
 - A new school's website: on the school's set-up page, "Create the school's website". It answers on `http://<school code>.pythagoras.localhost:53000` once the school is active. The API adds its space in the CMS with the platform key (`secrets/cms_platform_api_key`, shared by the API and the CMS).
 - The CMS log shows many `watch error … No such file or directory` lines from the development file watcher; they are harmless.
+- Development Keycloak has a fixed heap of 512 MB (`JAVA_OPTS_KC_HEAP` in `compose.yaml`). Its default lets the JVM grow to 70 % of the Docker VM, and on a shared 8 GB VM the kernel killed it when memory ran short, which signed everyone out until it restarted. The development CMS compiles its whole editor the first time `/admin` is opened, which needs 1–2 GB more; give Docker 12 GB or more before opening it.
 
 ## Development data and accounts
 

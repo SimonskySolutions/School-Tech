@@ -194,6 +194,10 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_CACHE: local
       KC_LOG_LEVEL: info
+      # A fixed heap. Keycloak's default lets the JVM grow to 70% of the shared
+      # Docker VM, and when memory ran short the kernel killed it, signing
+      # everyone out for a minute.
+      JAVA_OPTS_KC_HEAP: -Xms128m -Xmx512m
       # Social login brokers the platform does not use.
       KC_FEATURES_DISABLED: twitter-broker
     secrets:
