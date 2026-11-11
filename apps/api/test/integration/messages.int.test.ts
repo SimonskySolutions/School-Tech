@@ -55,6 +55,7 @@ describe('messages for staff and families', () => {
         'task.assigned',
         'task.due',
         'task.overdue',
+        'waitlist.place_free',
       ].sort(),
     );
     const title = `Count the plates (${run})`;
