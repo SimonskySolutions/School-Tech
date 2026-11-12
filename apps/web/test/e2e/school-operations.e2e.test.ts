@@ -9,6 +9,7 @@ import { APP, type Browser, signIn } from './browser';
 const PASSWORD = readFileSync('/workspace/secrets/keycloak_dev_user_password', 'utf8').trim();
 const SCHOOL_A = 'b1000000-0000-7000-8000-00000000000a';
 const SCHOOL_B = 'b1000000-0000-7000-8000-00000000000b';
+const SCHOOL_C = 'b1000000-0000-7000-8000-00000000000c';
 const MILA = 'c1000000-0000-7000-8000-000000000030';
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
@@ -173,9 +174,11 @@ describe('running a school', () => {
   it('shows every school on one screen to those who run the group', async () => {
     const ceo = await signedIn('ceo');
     const overview = (await page(ceo, '/group')).html;
-    expect(overview.match(/data-testid="school-overview"/g)).toHaveLength(3);
+    // Other test files add schools of their own, so look for the three seeded ones.
+    expect(overview.match(/data-testid="school-overview"/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    for (const school of [SCHOOL_A, SCHOOL_B, SCHOOL_C])
+      expect(overview).toContain(`/schools/${school}/finance`);
     expect(overview).toContain('School A');
-    expect(overview).toContain(`/schools/${SCHOOL_B}/finance`);
 
     const parent = await signedIn('hristo.georgiev');
     expect((await page(parent, '/group')).html).toContain('data-testid="not-permitted"');
