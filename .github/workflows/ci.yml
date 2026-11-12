@@ -1,0 +1,94 @@
+# Continuous integration (ADR 0015). Every push and every pull request into Dev
+# or main runs the same checks as the local scripts. Third-party actions are
+# pinned to full commit hashes.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [Dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code:
+    name: Type check, lint, unit tests, builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0 (version from packageManager)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pythagoras/shared build
+      - run: pnpm -r run typecheck
+      - run: pnpm -r run lint
+      - run: pnpm format:check
+      - run: pnpm -r run test
+      - run: pnpm -r run build
+
+  images:
+    name: Production images and stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the previous commit stands for the previous release (M8.8)
+      - name: Build every production image (ADR 0033)
+        run: |
+          for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
+            docker build -f infra/images/$image.Dockerfile -t pythagoras-$image:${{ github.sha }} .
+          done
+      - name: Unprivileged users, no secret files, migrations, Keycloak build, alert tests
+        run: bash scripts/images-test.sh ${{ github.sha }}
+      - name: Build the previous commit's images and keep its compose file, to roll back to
+        run: |
+          git worktree add "$RUNNER_TEMP/previous" HEAD^
+          cp "$RUNNER_TEMP/previous/compose.production.yaml" "$RUNNER_TEMP/compose.previous.yaml"
+          for image in api web cms keycloak migrate postgres redis gateway garage pgbouncer monitoring; do
+            docker build -f "$RUNNER_TEMP/previous/infra/images/$image.Dockerfile" -t pythagoras-$image:previous "$RUNNER_TEMP/previous"
+          done
+      - name: Start the production stack from the images and check it, then roll back and release again (M8.2, M8.8)
+        env:
+          PREVIOUS_TAG: previous
+          PREVIOUS_COMPOSE: ${{ runner.temp }}/compose.previous.yaml
+        run: bash scripts/prod-stack-test.sh ${{ github.sha }}
+
+  stack:
+    name: Database, identity, API, worker, gateway and sign-in suites
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Generate throwaway secrets
+        run: |
+          bash scripts/dev-secrets.sh
+          # Containers run as their own users (postgres, node, keycloak) and read
+          # bind-mounted files; CI is ephemeral, so make them readable.
+          chmod a+r secrets/*
+          chmod -R a+rwX apps packages
+      - name: Start data services
+        run: docker compose up -d --wait postgres redis
+      - run: bash scripts/db-migrate.sh up
+      - run: bash scripts/db-test.sh
+      - run: bash scripts/redis-test.sh
+      - name: Start the whole stack
+        run: docker compose up -d --wait postgres redis keycloak api worker cms web gateway
+      - run: bash scripts/db-seed.sh
+      - run: bash scripts/identity-test.sh
+      - run: bash scripts/api-integration-test.sh
+      - run: bash scripts/web-e2e-test.sh
+      - run: bash scripts/gateway-test.sh
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200

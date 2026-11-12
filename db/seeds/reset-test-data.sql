@@ -1,0 +1,176 @@
+-- DEVELOPMENT ONLY - removes every order, booking, trip permission, lesson
+-- package, payment, credit and provider event so purchase tests start from
+-- the seeded catalogue, and every school the onboarding tests added (code
+-- starting "test-") with its offerings, sessions, staff and students, and
+-- "Test company" billing entities. Refuses to run when
+-- the database holds anyone without a reserved .test address (that is, real
+-- people). Needs a superuser: the ledger is append-only, so its triggers are
+-- switched off for this one transaction, and session counters are reset.
+\set ON_ERROR_STOP on
+BEGIN;
+DO $$
+BEGIN
+  IF current_database() <> 'pythagoras'
+     OR EXISTS (SELECT 1 FROM people.person WHERE email IS NOT NULL AND email NOT LIKE '%@pythagoras.test') THEN
+    RAISE EXCEPTION 'reset-test-data: this is not the synthetic development database';
+  END IF;
+END $$;
+SET LOCAL session_replication_role = replica;
+DELETE FROM finance.invoice;
+DELETE FROM commerce.payment_allocation;
+DELETE FROM commerce.credit_application;
+DELETE FROM commerce.refund;
+DELETE FROM commerce.account_credit;
+DELETE FROM scheduling.trip_permission;
+-- Requests the tests opened, with their messages.
+DELETE FROM people.family_request_message
+ WHERE request_id IN (SELECT id FROM people.family_request
+                       WHERE subject LIKE '%(integration test)' OR subject LIKE '%(e2e test)');
+DELETE FROM people.family_request WHERE subject LIKE '%(integration test)' OR subject LIKE '%(e2e test)';
+-- The seeded request starts again as Anna sent it.
+DELETE FROM people.family_request_message
+ WHERE request_id = 'd8000000-0000-7000-8000-0000000000a1' AND id <> 'd8100000-0000-7000-8000-0000000000a1';
+UPDATE people.family_request SET status = 'open', closed_at = NULL WHERE id = 'd8000000-0000-7000-8000-0000000000a1';
+-- Enrolments the tests made from applications, with the children the hand-off
+-- created (seeded people all have ids starting c1000000-) and their guardians.
+CREATE TEMP TABLE enrolled_application ON COMMIT DROP AS
+  SELECT enrolment_id, student_person_id FROM admissions.application WHERE status = 'enrolled';
+CREATE TEMP TABLE enrolled_child ON COMMIT DROP AS
+  SELECT student_person_id AS id FROM enrolled_application
+   WHERE student_person_id::text NOT LIKE 'c1000000-0000-7000-8000-%';
+DELETE FROM people.enrolment WHERE id IN (SELECT enrolment_id FROM enrolled_application);
+DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM enrolled_child);
+DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM enrolled_child);
+DELETE FROM people.person WHERE id IN (SELECT id FROM enrolled_child);
+-- Documents the tests filed (none are seeded). Their objects stay in the
+-- development bucket, under keys nothing refers to any more.
+DELETE FROM documents.download_link;
+DELETE FROM documents.version;
+DELETE FROM documents.document;
+-- Messages the tests caused and preferences they set (none are seeded); the
+-- development mailbox keeps its copies until Mailpit is restarted.
+DELETE FROM notify.message;
+DELETE FROM notify.preference;
+-- Tasks and projects the tests added (seeded ones: e3000000-), the seeded ones as seeded.
+DELETE FROM work.task WHERE id::text NOT LIKE 'e3000000-%';
+DELETE FROM work.project WHERE id::text NOT LIKE 'e3000000-%';
+UPDATE work.project SET status = 'active', closed_at = NULL WHERE id::text LIKE 'e3000000-%';
+UPDATE work.task SET status = CASE id WHEN 'e3000000-0000-7000-8000-000000000102' THEN 'in_progress' ELSE 'open' END,
+       completed_at = NULL
+ WHERE id::text LIKE 'e3000000-%';
+-- Consents and wording the tests gave or published (seeded ones: e2000000-);
+-- Anna's seeded consent for Mila given again.
+DELETE FROM privacy.consent_record WHERE id::text NOT LIKE 'e2000000-%';
+DELETE FROM privacy.consent_wording WHERE id::text NOT LIKE 'e2000000-%';
+UPDATE privacy.consent_record SET status = 'given', withdrawn_at = NULL, withdrawn_by_person_id = NULL
+ WHERE id = 'e2000000-0000-7000-8000-000000000201';
+-- Training the tests recorded; the seeded planned conference planned again.
+DELETE FROM staff.training WHERE id::text NOT LIKE 'df000000-%';
+UPDATE staff.training SET status = 'planned' WHERE id = 'df000000-0000-7000-8000-000000000102';
+-- Qualifications and checks the tests recorded; the seeded ones (dd000000-, de000000-) as seeded.
+DELETE FROM staff.qualification WHERE id::text NOT LIKE 'dd000000-%';
+UPDATE staff.qualification SET withdrawn_at = NULL WHERE withdrawn_at IS NOT NULL;
+DELETE FROM staff.record_check WHERE id::text NOT LIKE 'de000000-%';
+-- Employments the tests recorded; the seeded ones (ids dc000000-) as seeded.
+DELETE FROM staff.employment WHERE id::text NOT LIKE 'dc000000-%';
+UPDATE staff.employment SET end_date = CASE WHEN id = 'dc000000-0000-7000-8000-000000000010' THEN DATE '2027-08-31' END
+ WHERE id::text LIKE 'dc000000-%';
+-- Requests the tests recorded by erasing or exporting admissions records.
+DELETE FROM privacy.data_subject_request WHERE outcome_note LIKE 'Admissions % on request';
+-- Applications and intakes the tests made, and the seeded intake open again.
+DELETE FROM admissions.application_note;
+DELETE FROM admissions.application;
+DELETE FROM admissions.intake WHERE id <> 'db000000-0000-7000-8000-0000000000a1';
+UPDATE admissions.intake SET status = 'open', fee_offering_id = 'd2000000-0000-7000-8000-0000000000af'
+ WHERE id = 'db000000-0000-7000-8000-0000000000a1';
+-- Parents the tests invited to apply, with their sign-in links. Their
+-- Keycloak users stay; the tests give each run its own address.
+CREATE TEMP TABLE invited_person ON COMMIT DROP AS
+  SELECT applicant_person_id AS id FROM admissions.inquiry WHERE applicant_person_id IS NOT NULL;
+DELETE FROM people.login_identity WHERE person_id IN (SELECT id FROM invited_person);
+DELETE FROM people.person WHERE id IN (SELECT id FROM invited_person);
+UPDATE admissions.inquiry SET applicant_person_id = NULL, invited_at = NULL WHERE applicant_person_id IS NOT NULL;
+-- Inquiries the tests sent, and the seeded one back as the family sent it.
+DELETE FROM admissions.inquiry_note
+ WHERE inquiry_id IN (SELECT id FROM admissions.inquiry
+                       WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)'
+                          OR erased_at IS NOT NULL)
+    OR inquiry_id = 'da000000-0000-7000-8000-0000000000a1';
+-- Erased ones too: their names are gone, and the seed erases none.
+DELETE FROM admissions.inquiry
+ WHERE parent_name LIKE '%(integration test)' OR parent_name LIKE '%(e2e test)' OR erased_at IS NOT NULL;
+UPDATE admissions.inquiry SET status = 'new', outcome = NULL, closed_at = NULL, last_activity_at = received_at
+ WHERE id = 'da000000-0000-7000-8000-0000000000a1';
+-- Uniform stock: no orders hold anything any more; the store is what the
+-- ledger says once test deliveries, corrections and hand-overs are gone.
+DELETE FROM catalog.stock_movement
+ WHERE kind = 'handover' OR reason LIKE '%(integration test)' OR reason LIKE '%(e2e test)'
+    OR variant_id IN (SELECT id FROM catalog.product_variant WHERE sku LIKE 'TEST-%');
+DELETE FROM commerce.stock_reservation;
+DELETE FROM catalog.price_version WHERE variant_id IN (SELECT id FROM catalog.product_variant WHERE sku LIKE 'TEST-%');
+DELETE FROM catalog.product_variant WHERE sku LIKE 'TEST-%';
+UPDATE catalog.product_variant v
+   SET reserved = 0, allocated = 0,
+       on_hand = coalesce((SELECT sum(m.delta) FROM catalog.stock_movement m WHERE m.variant_id = v.id), 0);
+DELETE FROM scheduling.package_entry;
+DELETE FROM scheduling.lesson_package;
+DELETE FROM scheduling.booking;
+DELETE FROM commerce.payment;
+DELETE FROM commerce.order_line;
+DELETE FROM commerce.customer_order;
+DELETE FROM integration.inbound_event WHERE provider IN ('development', 'stripe');
+DELETE FROM integration.outbox_event WHERE aggregate_type LIKE 'commerce.%';
+UPDATE scheduling.session SET reserved_count = 0, confirmed_count = 0 WHERE reserved_count <> 0 OR confirmed_count <> 0;
+
+CREATE TEMP TABLE test_school ON COMMIT DROP AS SELECT id FROM org.school WHERE code LIKE 'test-%';
+CREATE TEMP TABLE test_person ON COMMIT DROP AS
+  SELECT id FROM people.person WHERE registered_school_id IN (SELECT id FROM test_school);
+DELETE FROM access.role_assignment
+ WHERE school_id IN (SELECT id FROM test_school) OR person_id IN (SELECT id FROM test_person);
+DELETE FROM people.guardian_relationship WHERE student_person_id IN (SELECT id FROM test_person);
+DELETE FROM people.enrolment WHERE school_id IN (SELECT id FROM test_school) OR student_person_id IN (SELECT id FROM test_person);
+DELETE FROM sensitive.dietary_requirement WHERE student_person_id IN (SELECT id FROM test_person);
+-- Needs the integration and end-to-end tests record for seeded children.
+DELETE FROM sensitive.dietary_requirement WHERE description LIKE '%(integration test)' OR description LIKE '%(e2e test)';
+DELETE FROM people.login_identity WHERE person_id IN (SELECT id FROM test_person);
+DELETE FROM people.person WHERE id IN (SELECT id FROM test_person);
+-- Teachers and rooms the tests added, with their slots. Cascades do not run
+-- here (triggers are off), so dependent rows go explicitly.
+CREATE TEMP TABLE test_resource ON COMMIT DROP AS
+  SELECT id FROM scheduling.resource
+   WHERE school_id IN (SELECT id FROM test_school)
+      OR display_name LIKE '%(integration test)' OR display_name LIKE '%(e2e test)';
+CREATE TEMP TABLE test_slot ON COMMIT DROP AS
+  SELECT DISTINCT session_id AS id FROM scheduling.session_resource WHERE resource_id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.session_resource
+ WHERE session_id IN (SELECT id FROM test_slot) OR school_id IN (SELECT id FROM test_school);
+DELETE FROM scheduling.resource_availability WHERE resource_id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.resource WHERE id IN (SELECT id FROM test_resource);
+DELETE FROM scheduling.transport_stop WHERE name LIKE '%(integration test)' OR name LIKE '%(e2e test)';
+DELETE FROM scheduling.menu_dish WHERE school_id IN (SELECT id FROM test_school) OR session_id IN (SELECT id FROM test_slot);
+DELETE FROM scheduling.session WHERE school_id IN (SELECT id FROM test_school) OR id IN (SELECT id FROM test_slot);
+DELETE FROM catalog.price_version
+ WHERE offering_id IN (SELECT id FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school));
+DELETE FROM catalog.policy_version
+ WHERE offering_id IN (SELECT id FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school));
+DELETE FROM catalog.school_offering WHERE school_id IN (SELECT id FROM test_school);
+DELETE FROM org.website_domain WHERE website_id IN (SELECT id FROM org.website WHERE code LIKE 'test-%');
+DELETE FROM org.website_school
+ WHERE school_id IN (SELECT id FROM test_school) OR website_id IN (SELECT id FROM org.website WHERE code LIKE 'test-%');
+DELETE FROM org.website WHERE code LIKE 'test-%';
+DELETE FROM org.school WHERE id IN (SELECT id FROM test_school);
+-- What the school operations test adds.
+DELETE FROM academic.attendance WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM academic.grade WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM scheduling.timetable_entry WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+UPDATE people.enrolment SET class_id = NULL WHERE class_id IN (SELECT id FROM scheduling.school_class WHERE label = '3A' AND capacity = 1);
+DELETE FROM scheduling.school_class WHERE label = '3A' AND capacity = 1;
+DELETE FROM scheduling.timetable_period WHERE position = 9 AND starts = '16:00';
+DELETE FROM inventory.movement WHERE item_id IN (SELECT id FROM inventory.item WHERE name LIKE 'E2E %');
+DELETE FROM inventory.item WHERE name LIKE 'E2E %';
+DELETE FROM inventory.supplier WHERE name LIKE 'E2E %';
+DELETE FROM finance.expense WHERE description LIKE 'E2E %';
+DELETE FROM finance.budget WHERE category = 'other' AND amount_minor = 123400;
+DELETE FROM org.legal_entity e
+ WHERE e.legal_name LIKE 'Test company %' AND NOT EXISTS (SELECT 1 FROM org.school s WHERE s.default_billing_entity_id = e.id);
+COMMIT;

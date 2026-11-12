@@ -4,14 +4,18 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Backups contain personal data and never belong in the repository
 /backups/
 *.dump
 
-# Tooling
+# Tooling (dependencies and build output live in Docker volumes, ADR 0012)
 node_modules/
 dist/
 coverage/
+.next/
+next-env.d.ts
+*.tsbuildinfo
 .DS_Store
 Thumbs.db

@@ -2,7 +2,9 @@
 
 Central management platform for the Pythagoras school group: one system for every school, website, family and payment.
 
-**Current state:** the PostgreSQL and Redis foundation is built and tested (milestone M0). Application services come next. See [docs/implementation-plan.md](docs/implementation-plan.md).
+**Current state:** the PostgreSQL and Redis foundation (M0), the Keycloak identity service with development data (M1.1), and the code workspace (M1.2), API sign-in with per-person database access (M1.3), web sign-in with a role-aware home page (M1.4), the background worker (M1.5), and the gateway, production images and CI (M1.6) are built and tested locally. Open `http://portal.pythagoras.localhost:53000` after starting the stack.
+
+Layout: `apps/api` (NestJS), `apps/web` (Next.js), `packages/shared` (shared types and money helpers), `db/` (migrations, seed, tests), `infra/` (service configuration), `docs/`. See [docs/implementation-plan.md](docs/implementation-plan.md).
 
 ## Start
 
@@ -20,7 +22,23 @@ docker compose up -d
 bash scripts/db-migrate.sh up
 ```
 
+```bash
+bash scripts/db-seed.sh
+```
+
+To fill the three schools with demo classes, timetables, grades, stock and money, name them Pythagoras Sofia, Varna and Academy, and write their websites (`http://sofia.pythagoras.localhost:53000` and so on):
+
+```bash
+bash scripts/db-seed-demo.sh
+```
+
+Development accounts and where their password lives: [docs/operations.md](docs/operations.md#development-data-and-accounts).
+
 ## Test
+
+```bash
+bash scripts/check.sh
+```
 
 ```bash
 bash scripts/db-test.sh
@@ -30,12 +48,29 @@ bash scripts/db-test.sh
 bash scripts/redis-test.sh
 ```
 
+```bash
+bash scripts/identity-test.sh
+```
+
+```bash
+bash scripts/api-integration-test.sh
+```
+
+```bash
+bash scripts/web-e2e-test.sh
+```
+
+```bash
+bash scripts/gateway-test.sh
+```
+
 ## Documentation
 
 - [Architecture](docs/architecture.md), including changes to the proposed design
 - [Data model](docs/data-model.md)
 - [Decisions](docs/decisions/README.md)
 - [Operations](docs/operations.md): backups, restore, upgrades, production differences
+- [Handoff](docs/handoff.md): what exists, what is still to decide, the first week on a real server
 - [Integration register](docs/integration-register.md)
 
 All data in development and tests is synthetic. Payment processing stays in test mode during development.

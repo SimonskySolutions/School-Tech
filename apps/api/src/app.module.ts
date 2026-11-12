@@ -1,0 +1,137 @@
+import { Module } from '@nestjs/common';
+import { AdmissionsController } from './admissions/applications.controller';
+import { InquiriesController, PublicInquiriesController } from './admissions/inquiries.controller';
+import { AuthModule } from './auth/auth.module';
+import { SchoolStaffController, StaffController } from './staff/staff.controller';
+import { DocumentsController, SchoolDocumentsController } from './documents/documents.controller';
+import { OBJECT_STORE, S3ObjectStore } from './documents/object-store';
+import {
+  ConsentPurposesController,
+  SchoolConsentsController,
+  StudentConsentsController,
+} from './privacy/consents.controller';
+import { ProjectsController, TasksController } from './work/tasks.controller';
+import { NotificationsController } from './notifications/notifications.controller';
+import { AccountingController } from './accounting/accounting.controller';
+import { CatalogController } from './catalog/catalog.controller';
+import { DietaryController, DietaryReviewController } from './dietary/dietary.controller';
+import { SchoolLessonsController, StudentLessonsController } from './lessons/lessons.controller';
+import { ClassRegisterController, StudentProgressController } from './academic/academic.controller';
+import {
+  GroupOverviewController,
+  MyInvoicesController,
+  SchoolFinanceController,
+} from './finance/finance.controller';
+import { InventoryController } from './inventory/inventory.controller';
+import { SchoolWaitingController, StudentWaitingController } from './waiting/waiting.controller';
+import { SchoolTimetableController, StudentTimetableController } from './timetable/timetable.controller';
+import { SchoolRequestsController, StudentRequestsController } from './requests/requests.controller';
+import { SchoolTransportController, TransportRunsController } from './transport/transport.controller';
+import { SchoolUniformsController } from './uniforms/uniforms.controller';
+import {
+  StudentTripsController,
+  TripConsentController,
+  TripParticipantsController,
+} from './trips/trips.controller';
+import { CheckoutController } from './commerce/checkout.controller';
+import { CheckoutService } from './commerce/checkout.service';
+import { ConfigModule } from './config/config.module';
+import { DatabaseModule } from './database/database.module';
+import { HealthController } from './health/health.controller';
+import { SchoolsController } from './org/schools.controller';
+import { TlsController } from './org/tls.controller';
+import { DevCheckoutController } from './payments/dev-checkout.controller';
+import { PaymentsModule } from './payments/payments.module';
+import { WebhookController } from './payments/webhook.controller';
+import { MeController } from './people/me.controller';
+import { SchoolLifeController, StudentActivitiesController } from './school-life/school-life.controller';
+import { ReportsController } from './reporting/reports.controller';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { AccountsModule } from './accounts/accounts.module';
+import { FamiliesController } from './families/families.controller';
+import { SitesController } from './org/sites.controller';
+import { CMS_WEBSITES, CmsWebsitesClient } from './onboarding/cms-websites';
+import { ENV } from './config/config.module';
+import { type Env } from './config/env';
+
+@Module({
+  imports: [ConfigModule, DatabaseModule, AuthModule, PaymentsModule, AccountsModule],
+  controllers: [
+    HealthController,
+    MeController,
+    SchoolsController,
+    TlsController,
+    SitesController,
+    PublicInquiriesController,
+    InquiriesController,
+    AdmissionsController,
+    SchoolStaffController,
+    StaffController,
+    SchoolDocumentsController,
+    DocumentsController,
+    StudentConsentsController,
+    SchoolConsentsController,
+    ConsentPurposesController,
+    TasksController,
+    ProjectsController,
+    NotificationsController,
+    AccountingController,
+    CatalogController,
+    DietaryController,
+    DietaryReviewController,
+    SchoolLessonsController,
+    SchoolTimetableController,
+    InventoryController,
+    SchoolFinanceController,
+    MyInvoicesController,
+    GroupOverviewController,
+    StudentWaitingController,
+    SchoolWaitingController,
+    ClassRegisterController,
+    StudentProgressController,
+    SchoolRequestsController,
+    StudentRequestsController,
+    StudentLessonsController,
+    StudentTimetableController,
+    StudentTripsController,
+    SchoolTransportController,
+    SchoolUniformsController,
+    TransportRunsController,
+    TripConsentController,
+    TripParticipantsController,
+    CheckoutController,
+    WebhookController,
+    DevCheckoutController,
+    SchoolLifeController,
+    StudentActivitiesController,
+    ReportsController,
+    OnboardingController,
+    FamiliesController,
+  ],
+  providers: [
+    CheckoutService,
+    {
+      provide: CMS_WEBSITES,
+      inject: [ENV],
+      useFactory: (env: Env) =>
+        env.CMS_PLATFORM_API_KEY
+          ? new CmsWebsitesClient(env.CMS_INTERNAL_URL, env.CMS_PLATFORM_API_KEY)
+          : null,
+    },
+    {
+      provide: OBJECT_STORE,
+      inject: [ENV],
+      useFactory: (env: Env) =>
+        env.STORAGE_ACCESS_KEY_ID && env.STORAGE_SECRET_ACCESS_KEY
+          ? new S3ObjectStore({
+              endpoint: env.STORAGE_ENDPOINT,
+              region: env.STORAGE_REGION,
+              bucket: env.STORAGE_BUCKET,
+              accessKeyId: env.STORAGE_ACCESS_KEY_ID,
+              secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
+            })
+          : null,
+    },
+  ],
+})
+export class AppModule {}

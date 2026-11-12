@@ -1,0 +1,20 @@
+# Probes for the production stack (M8.6, ADR 0036). run.sh fills in the __NAMES__.
+modules:
+  http_ready:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      follow_redirects: false
+  # TLS to the gateway with the portal's name, as a browser would; the probe
+  # fails when the certificate is invalid and reports when it expires.
+  gateway_tls:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      tls: true
+      tls_config:
+        server_name: __PORTAL_HOST__
+        insecure_skip_verify: __TLS_INSECURE__

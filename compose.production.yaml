@@ -1,0 +1,838 @@
+# Production stack (ADR 0033). One Linux host with Docker; every service from
+# a pinned image built by CI; secrets as files in a directory only root may
+# enter. Settings come from an env file (see .env.production.example):
+#
+#   docker compose -f compose.production.yaml --env-file .env.production up -d --wait
+#
+# Start-up order is enforced by health checks: the data services, then the
+# migration job (a failed migration stops everything after it), then the
+# applications, then the gateway. The backup service is healthy once the
+# write-ahead log reaches the off-site storage and a backup exists (M8.5).
+# Prometheus, Alertmanager and the exporters watch everything and send alerts
+# by e-mail (M8.6). docs/operations.md has the full procedure.
+
+name: ${STACK_NAME:-pythagoras}
+
+# Every container: restart on failure, no privilege escalation, bounded logs.
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: "10"
+
+# The application containers additionally drop every capability and cannot
+# write to their own filesystem; /tmp is memory only.
+x-application: &application
+  <<: *hardening
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+
+# Database connections (M8.4): always TLS, verified against the platform's own
+# certificate authority. The API and the worker go through PgBouncer; the
+# migration job connects to PostgreSQL itself.
+x-database: &database
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: pythagoras
+x-pooled-database: &pooled-database
+  DB_HOST: pgbouncer
+  DB_PORT: "6432"
+  DB_NAME: pythagoras
+  DB_SSL_ROOT_CERT_FILE: /run/secrets/tls_ca_crt
+
+services:
+  postgres:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG:?set IMAGE_TAG to the release being deployed}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --data-checksums --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --auth-local=peer --auth-host=scram-sha-256
+      TZ: UTC
+    secrets:
+      - pg_superuser_password
+      - pg_migrator_password
+      - pg_api_password
+      - pg_worker_password
+      - pg_reporting_password
+      - pg_backup_password
+      - pg_keycloak_password
+      - pg_cms_password
+      - pg_monitor_password
+      - tls_postgres_crt
+      - tls_postgres_key
+      - tls_ca_crt
+    networks: [data]
+    volumes:
+      - pg_data:/var/lib/postgresql
+      # The local socket, shared with the backup service (M8.5).
+      - pg_socket:/var/run/postgresql
+    shm_size: 512mb
+    stop_grace_period: 120s
+    deploy:
+      resources:
+        limits: { cpus: "4", memory: 4g }
+    healthcheck:
+      test: ["CMD-SHELL", "gosu postgres psql -XtAq -d pythagoras -c \"SELECT 1 WHERE current_setting('listen_addresses') <> ''\" | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Pools the API's and the worker's connections (transaction mode) and
+  # speaks TLS on both sides.
+  pgbouncer:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-pgbouncer:${IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    secrets:
+      - pg_api_password
+      - pg_worker_password
+      - pg_monitor_password
+      - tls_ca_crt
+      - tls_pgbouncer_crt
+      - tls_pgbouncer_key
+    networks: [data]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /run/pgbouncer:size=1m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 256m }
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-p", "6432", "-U", "pyth_api", "-d", "dbname=pythagoras sslmode=require"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Continuous backups (M8.5, ADR 0035): pgBackRest's repository host. It
+  # receives the write-ahead log from PostgreSQL over TLS, takes the scheduled
+  # backups from the data directory (read-only) and copies the documents, all
+  # encrypted, to the off-site storage. The only service that can reach it.
+  backup:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup"]
+    command: ["run"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?set the off-site backup storage (docs/operations.md)}
+      BACKUP_S3_PORT: ${BACKUP_S3_PORT:-443}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:?}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?}
+      BACKUP_S3_KEY_ID: ${BACKUP_S3_KEY_ID:?}
+      BACKUP_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+      BACKUP_S3_CA_FILE: ${BACKUP_S3_CA_FILE:-}
+      BACKUP_HOUR: ${BACKUP_HOUR:-1}
+      BACKUP_FULL_DAY: ${BACKUP_FULL_DAY:-7}
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${BACKUP_STORAGE_ACCESS_KEY_ID:?}
+      STORAGE_ENDPOINT: http://garage:3900
+      TZ: UTC
+    secrets:
+      - tls_ca_crt
+      - tls_backup_crt
+      - tls_backup_key
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+      - storage_backup_secret_access_key
+    # The data network for the database and the documents; offsite for the storage.
+    networks: [data, offsite]
+    volumes:
+      - pg_data:/var/lib/postgresql:ro
+      - pg_socket:/var/run/postgresql
+      # Its state across restarts and its measures for monitoring (M8.6).
+      - backup_state:/var/lib/pythagoras-backup
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    # Healthy once the log is archived and a backup exists.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/pythagoras-backup", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
+
+  # Restores (M8.7, ADR 0037), never started by "up": run when needed.
+  # The restore drill, monthly (infra/systemd): restores the backups to a
+  # scratch volume, checks every table and document and measures the time.
+  #   docker compose -f compose.production.yaml --env-file … run --rm restore-drill
+  restore-drill:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    profiles: [recovery]
+    restart: "no"
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup", "drill"]
+    environment: &restore-environment
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:?}
+      BACKUP_S3_PORT: ${BACKUP_S3_PORT:-443}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:?}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:?}
+      BACKUP_S3_KEY_ID: ${BACKUP_S3_KEY_ID:?}
+      BACKUP_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+      BACKUP_S3_CA_FILE: ${BACKUP_S3_CA_FILE:-}
+      TZ: UTC
+    secrets: &restore-secrets
+      - tls_ca_crt
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+    # The off-site storage only; the live database through its local socket,
+    # to mark the moment the drill restores.
+    networks: [offsite]
+    volumes:
+      - drill_data:/var/lib/postgresql
+      - pg_socket:/var/run/postgresql
+      - backup_state:/var/lib/pythagoras-backup
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+
+  # A lost server's restore (docs/operations.md), into the stack's own volumes
+  # with every other service stopped: the documents first, then the database.
+  #   … run --rm restore documents [time]
+  #   … run --rm restore database [time]
+  restore:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-postgres:${IMAGE_TAG}
+    profiles: [recovery]
+    restart: "no"
+    user: postgres
+    entrypoint: ["/usr/local/bin/pythagoras-backup", "restore"]
+    environment:
+      <<: *restore-environment
+      # The API's key: the only one that may write the documents back.
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+      DOCUMENTS_SECRET_FILE: /run/secrets/storage_secret_access_key
+      STORAGE_ENDPOINT: http://garage:3900
+    secrets:
+      - tls_ca_crt
+      - backup_s3_secret_key
+      - backup_cipher_pass
+      - backup_documents_pass
+      - backup_documents_salt
+      - storage_secret_access_key
+    networks: [data, offsite]
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - backup_state:/var/lib/pythagoras-backup
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+
+  redis:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-redis:${IMAGE_TAG}
+    # TLS only (M8.4): the plain port is closed.
+    command: ["--port", "0", "--tls-port", "6379", "--tls-protocols", "TLSv1.3", "--tls-auth-clients", "no",
+              "--tls-cert-file", "/run/secrets/tls_redis_crt", "--tls-key-file", "/run/secrets/tls_redis_key",
+              "--tls-ca-cert-file", "/run/secrets/tls_ca_crt"]
+    secrets:
+      - redis_queue_password
+      - redis_health_password
+      - redis_admin_password
+      - redis_monitor_password
+      - tls_ca_crt
+      - tls_redis_crt
+      - tls_redis_key
+    networks: [data]
+    volumes:
+      - redis_data:/data
+    tmpfs:
+      - /run/redis-acl:size=1m
+      # Hide the bundled modules: the queue needs none of them.
+      - /usr/local/lib/redis/modules:size=1m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g }
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_health_password)\" redis-cli --tls --cacert /run/secrets/tls_ca_crt --no-auth-warning --user pyth_health ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  garage:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-garage:${IMAGE_TAG}
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+      - garage_metrics_token
+    networks: [data]
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    read_only: true
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g }
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Gives the node its role, imports the API's key and creates the bucket; once,
+  # and harmless again on every release.
+  storage-init:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    restart: "no"
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+      STORAGE_CAPACITY_GB: ${STORAGE_CAPACITY_GB:-100}
+      STORAGE_NODE_TAG: production
+      BACKUP_STORAGE_ACCESS_KEY_ID: ${BACKUP_STORAGE_ACCESS_KEY_ID:?}
+      BACKUP_STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_backup_secret_access_key
+    secrets:
+      - garage_admin_token
+      - storage_secret_access_key
+      - storage_backup_secret_access_key
+    networks: [data]
+    command: ["node", "ops/storage-init.mjs"]
+
+  # The one-off migration job. If a migration fails its transaction rolls back,
+  # the job exits non-zero and nothing that depends on it starts.
+  migrate:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-migrate:${IMAGE_TAG}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *database
+      DB_PASSWORD_FILE: /run/secrets/pg_migrator_password
+      DB_SSLMODE: verify-full
+      DB_SSLROOTCERT: /run/secrets/tls_ca_crt
+    secrets:
+      - pg_migrator_password
+      - tls_ca_crt
+    networks: [data]
+
+  keycloak:
+    <<: *hardening
+    image: ${IMAGE_REGISTRY:-}pythagoras-keycloak:${IMAGE_TAG}
+    cap_drop: [ALL]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak?sslmode=verify-full&sslrootcert=/run/secrets/tls_ca_crt
+      KC_DB_USERNAME: pyth_keycloak
+      KC_HOSTNAME: https://${AUTH_HOST:?}${PUBLIC_PORT:-}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_CACHE: local
+      KC_LOG_LEVEL: info
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      # Filled into the realm when it is first imported (ADR 0034).
+      KC_PORTAL_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+      KC_CMS_URL: https://${CMS_HOST}${PUBLIC_PORT:-}
+      KC_SMTP_HOST: ${SMTP_HOST}
+      KC_SMTP_PORT: ${SMTP_PORT:-587}
+      KC_SMTP_STARTTLS: ${SMTP_REQUIRE_TLS:-true}
+      KC_SMTP_SSL: ${SMTP_SECURE:-false}
+      KC_SMTP_USER: ${SMTP_USER}
+      MAIL_FROM: ${MAIL_FROM}
+    secrets:
+      - pg_keycloak_password
+      - keycloak_admin_password
+      - keycloak_web_client_secret
+      - keycloak_provisioning_client_secret
+      - keycloak_cms_client_secret
+      - smtp_password
+      - tls_ca_crt
+    networks: [edge, data]
+    tmpfs:
+      - /tmp:size=64m
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+
+  api:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      <<: *pooled-database
+      NODE_ENV: production
+      DB_PASSWORD_FILE: /run/secrets/pg_api_password
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_JWKS_URL: http://keycloak:8080/realms/pythagoras/protocol/openid-connect/certs
+      OIDC_ALLOWED_CLIENTS: pythagoras-web
+      STAFF_SECOND_FACTOR: required
+      PORTAL_URL: https://${PORTAL_HOST:?}${PUBLIC_PORT:-}
+      PAYMENT_PROVIDER: stripe
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook_secret
+      PROVISIONING_CLIENT_SECRET_FILE: /run/secrets/keycloak_provisioning_client_secret
+      ACCOUNT_SETUP: email
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      STORAGE_ENDPOINT: http://garage:3900
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+    secrets:
+      - pg_api_password
+      - tls_ca_crt
+      - stripe_secret_key
+      - stripe_webhook_secret
+      - keycloak_provisioning_client_secret
+      - cms_platform_api_key
+      - storage_secret_access_key
+    networks: [edge, data]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # The same image as the API, running the outbox relay, event handlers,
+  # scheduled maintenance and e-mail.
+  worker:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-api:${IMAGE_TAG}
+    command: ["node", "dist/worker/main.js"]
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *pooled-database
+      NODE_ENV: production
+      DB_PASSWORD_FILE: /run/secrets/pg_worker_password
+      REDIS_HOST: redis
+      REDIS_TLS_CA_FILE: /run/secrets/tls_ca_crt
+      REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
+      SMTP_HOST: ${SMTP_HOST:?}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:?}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      MAIL_FROM: ${MAIL_FROM:?}
+      PORTAL_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+      # The platform's measures for Prometheus (M8.6), on the data network.
+      METRICS_PORT: "9464"
+    secrets:
+      - pg_worker_password
+      - redis_queue_password
+      - tls_ca_crt
+      - smtp_password
+    # The data network for its stores; egress for mail and DNS checks of school domains.
+    networks: [data, egress]
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s = require('fs').statSync('/tmp/worker-heartbeat'); process.exit(Date.now() - s.mtimeMs < 30000 ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  web:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-web:${IMAGE_TAG}
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_URL: https://${PORTAL_HOST}${PUBLIC_PORT:-}
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_INTERNAL_URL: http://keycloak:8080/realms/pythagoras
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_web_client_secret
+      SESSION_SECRET_FILE: /run/secrets/web_session_secret
+    secrets:
+      - keycloak_web_client_secret
+      - web_session_secret
+    networks: [edge]
+    tmpfs:
+      - /tmp:size=64m
+      # Next.js caches rendered output here; nothing in it must survive a restart.
+      - /app/apps/web/.next/cache:size=128m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  # Applies its own migrations when it starts (apps/cms/migrations).
+  cms:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-cms:${IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      CMS_PUBLIC_URL: https://${CMS_HOST:?}${PUBLIC_PORT:-}
+      DB_HOST: postgres
+      DB_PASSWORD_FILE: /run/secrets/pg_cms_password
+      DB_SSL_ROOT_CERT_FILE: /run/secrets/tls_ca_crt
+      PAYLOAD_SECRET_FILE: /run/secrets/cms_payload_secret
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      OIDC_ISSUER: https://${AUTH_HOST}${PUBLIC_PORT:-}/realms/pythagoras
+      OIDC_INTERNAL_URL: http://keycloak:8080/realms/pythagoras
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_cms_client_secret
+    secrets:
+      - pg_cms_password
+      - tls_ca_crt
+      - cms_payload_secret
+      - cms_platform_api_key
+      - keycloak_cms_client_secret
+    networks: [edge, data]
+    tmpfs:
+      - /tmp:size=64m
+      - /app/apps/cms/.next/cache:size=128m
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/websites?limit=1').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  # The only published service.
+  gateway:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-gateway:${IMAGE_TAG}
+    cap_add: [NET_BIND_SERVICE]
+    depends_on:
+      web:
+        condition: service_healthy
+      cms:
+        condition: service_healthy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?}
+      PORTAL_HOST: ${PORTAL_HOST}
+      AUTH_HOST: ${AUTH_HOST}
+      API_HOST: ${API_HOST:?}
+      CMS_HOST: ${CMS_HOST}
+      LOCAL_CERTS: ${LOCAL_CERTS:-}
+    networks: [edge]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      # Certificates and the ACME account: kept, or every restart asks Let's Encrypt again.
+      - gateway_data:/data
+    tmpfs:
+      - /tmp:size=16m
+      - /config:size=8m
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Monitoring (M8.6, ADR 0036): every part from the monitoring image, as
+  # "nobody", read-only, without capabilities. Nothing is published: reach
+  # Prometheus and Alertmanager through `docker compose exec` (docs/operations.md).
+  prometheus:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["prometheus"]
+    environment:
+      PORTAL_HOST: ${PORTAL_HOST}
+      MONITOR_RETENTION: ${MONITOR_RETENTION:-30d}
+    secrets:
+      - garage_metrics_token
+    # Scrapes the exporters and the worker on the data network, the rest on its own.
+    networks: [monitoring, data]
+    volumes:
+      - prometheus_data:/prometheus
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Sends the alerts by e-mail through the platform's SMTP service.
+  alertmanager:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["alertmanager"]
+    environment:
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      MAIL_FROM: ${MAIL_FROM}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:?set who receives the alerts}
+      ALERT_SMTP_CA_FILE: ${ALERT_SMTP_CA_FILE:-}
+    secrets:
+      - smtp_password
+      - tls_ca_crt
+    networks: [monitoring, egress]
+    volumes:
+      # Silences and the notification log survive a restart.
+      - alertmanager_data:/alertmanager
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # The host: disks, memory, processors; and the backup service's measures.
+  node-exporter:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["node-exporter"]
+    networks: [monitoring]
+    volumes:
+      # The disks as they are when it starts: they are mounted before Docker
+      # starts, and Docker Desktop cannot pass later mounts on (rslave).
+      - /:/host:ro
+      - backup_state:/backup-state:ro
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Whether each application answers, and the gateway's certificate.
+  blackbox:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["blackbox"]
+    environment:
+      PORTAL_HOST: ${PORTAL_HOST}
+      LOCAL_CERTS: ${LOCAL_CERTS:-}
+    networks: [monitoring, edge]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9115/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  postgres-exporter:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["postgres-exporter"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_URI: postgres:5432/pythagoras?sslmode=verify-full&sslrootcert=/run/secrets/tls_ca_crt
+      DATA_SOURCE_USER: pyth_monitor
+      DATA_SOURCE_PASS_FILE: /run/secrets/pg_monitor_password
+    secrets:
+      - pg_monitor_password
+      - tls_ca_crt
+    networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9187/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  pgbouncer-exporter:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["pgbouncer-exporter"]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    secrets:
+      - pg_monitor_password
+      - tls_ca_crt
+    networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9127/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  redis-exporter:
+    <<: *application
+    image: ${IMAGE_REGISTRY:-}pythagoras-monitoring:${IMAGE_TAG}
+    command: ["redis-exporter"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    secrets:
+      - redis_monitor_password
+      - tls_ca_crt
+    networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9121/"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+networks:
+  # The gateway and the services it routes to.
+  edge: {}
+  # Databases and the object store, with their clients only; no way out.
+  data:
+    internal: true
+  # Outbound only, for the worker's mail and DNS checks.
+  egress: {}
+  # Outbound only, for the backup service and the off-site storage (M8.5).
+  offsite: {}
+  # Prometheus, Alertmanager and the exporters that need neither the data nor
+  # the edge network (M8.6); no way out.
+  monitoring:
+    internal: true
+
+volumes:
+  pg_data:
+  pg_socket:
+  backup_state:
+  # The restore drill's scratch copy of the database, emptied after each drill.
+  drill_data:
+  prometheus_data:
+  alertmanager_data:
+  redis_data:
+  garage_meta:
+  garage_data:
+  gateway_data:
+
+# One file per secret in SECRETS_DIR (scripts/prod-secrets.sh creates them).
+secrets:
+  pg_superuser_password: { file: "${SECRETS_DIR:?}/pg_superuser_password" }
+  pg_migrator_password: { file: "${SECRETS_DIR}/pg_migrator_password" }
+  pg_api_password: { file: "${SECRETS_DIR}/pg_api_password" }
+  pg_worker_password: { file: "${SECRETS_DIR}/pg_worker_password" }
+  pg_reporting_password: { file: "${SECRETS_DIR}/pg_reporting_password" }
+  pg_backup_password: { file: "${SECRETS_DIR}/pg_backup_password" }
+  pg_keycloak_password: { file: "${SECRETS_DIR}/pg_keycloak_password" }
+  pg_cms_password: { file: "${SECRETS_DIR}/pg_cms_password" }
+  pg_monitor_password: { file: "${SECRETS_DIR}/pg_monitor_password" }
+  redis_queue_password: { file: "${SECRETS_DIR}/redis_queue_password" }
+  redis_health_password: { file: "${SECRETS_DIR}/redis_health_password" }
+  redis_admin_password: { file: "${SECRETS_DIR}/redis_admin_password" }
+  keycloak_admin_password: { file: "${SECRETS_DIR}/keycloak_admin_password" }
+  keycloak_web_client_secret: { file: "${SECRETS_DIR}/keycloak_web_client_secret" }
+  keycloak_provisioning_client_secret: { file: "${SECRETS_DIR}/keycloak_provisioning_client_secret" }
+  keycloak_cms_client_secret: { file: "${SECRETS_DIR}/keycloak_cms_client_secret" }
+  web_session_secret: { file: "${SECRETS_DIR}/web_session_secret" }
+  cms_payload_secret: { file: "${SECRETS_DIR}/cms_payload_secret" }
+  cms_platform_api_key: { file: "${SECRETS_DIR}/cms_platform_api_key" }
+  garage_rpc_secret: { file: "${SECRETS_DIR}/garage_rpc_secret" }
+  garage_admin_token: { file: "${SECRETS_DIR}/garage_admin_token" }
+  storage_secret_access_key: { file: "${SECRETS_DIR}/storage_secret_access_key" }
+  stripe_secret_key: { file: "${SECRETS_DIR}/stripe_secret_key" }
+  stripe_webhook_secret: { file: "${SECRETS_DIR}/stripe_webhook_secret" }
+  smtp_password: { file: "${SECRETS_DIR}/smtp_password" }
+  # The platform's certificate authority and each data service's certificate (M8.4).
+  tls_ca_crt: { file: "${SECRETS_DIR}/tls_ca_crt" }
+  tls_postgres_crt: { file: "${SECRETS_DIR}/tls_postgres_crt" }
+  tls_postgres_key: { file: "${SECRETS_DIR}/tls_postgres_key" }
+  tls_pgbouncer_crt: { file: "${SECRETS_DIR}/tls_pgbouncer_crt" }
+  tls_pgbouncer_key: { file: "${SECRETS_DIR}/tls_pgbouncer_key" }
+  tls_redis_crt: { file: "${SECRETS_DIR}/tls_redis_crt" }
+  tls_redis_key: { file: "${SECRETS_DIR}/tls_redis_key" }
+  tls_backup_crt: { file: "${SECRETS_DIR}/tls_backup_crt" }
+  tls_backup_key: { file: "${SECRETS_DIR}/tls_backup_key" }
+  # Backups (M8.5): the off-site storage's key, the encryption passphrases and
+  # the backup's read-only key to the documents.
+  backup_s3_secret_key: { file: "${SECRETS_DIR}/backup_s3_secret_key" }
+  backup_cipher_pass: { file: "${SECRETS_DIR}/backup_cipher_pass" }
+  backup_documents_pass: { file: "${SECRETS_DIR}/backup_documents_pass" }
+  backup_documents_salt: { file: "${SECRETS_DIR}/backup_documents_salt" }
+  storage_backup_secret_access_key: { file: "${SECRETS_DIR}/storage_backup_secret_access_key" }
+  # Monitoring (M8.6): Redis' monitoring user and Garage's metrics token.
+  redis_monitor_password: { file: "${SECRETS_DIR}/redis_monitor_password" }
+  garage_metrics_token: { file: "${SECRETS_DIR}/garage_metrics_token" }

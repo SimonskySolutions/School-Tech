@@ -1,0 +1,61 @@
+# A stand-in for Stripe (M8.8), until the platform has a Stripe account: the
+# official stripe-mock behind TLS on the "edge" network, reachable as
+# https://stripe. It checks every request against Stripe's published API and
+# answers with Stripe's own example objects; it sends no webhooks, so the check
+# signs and sends them as Stripe would. Used by scripts/prod-stack-test.sh, on
+# top of the production stack:
+#
+#   docker compose -f compose.production.yaml -f infra/stripe-standin/compose.yaml ...
+#
+# with STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET set to test values for
+# scripts/prod-secrets.sh, and TLS_EXTRA_SERVICES=stripe so that the stand-in
+# gets a certificate. Nothing here belongs in production: there the API talks
+# to Stripe itself (docs/operations.md, "Switching to Stripe").
+
+services:
+  stripe-mock:
+    image: stripe/stripe-mock:v0.206.0@sha256:aeb96b83e87a893d2ac005e363ac01ffa6e59a5ad85b49c155dfc9129de02e78
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "12111"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # TLS in front of it, with a certificate from the platform's authority.
+  stripe:
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      stripe-mock:
+        condition: service_healthy
+    secrets:
+      - tls_stripe_crt
+      - tls_stripe_key
+    networks: [edge]
+    volumes:
+      # Relative to the project directory, the first file's (the repository root).
+      - ./infra/stripe-standin/Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "443"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    depends_on:
+      stripe:
+        condition: service_healthy
+    environment:
+      STRIPE_API_URL: https://stripe/v1
+      # The stand-in's certificate is from the platform's own authority.
+      NODE_EXTRA_CA_CERTS: /run/secrets/tls_ca_crt
+
+secrets:
+  tls_stripe_crt: { file: "${SECRETS_DIR}/tls_stripe_crt" }
+  tls_stripe_key: { file: "${SECRETS_DIR}/tls_stripe_key" }

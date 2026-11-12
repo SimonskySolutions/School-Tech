@@ -1,0 +1,27 @@
+# Production object store (ADR 0029, 0033): one Garage node on the data
+# network, with frequent off-site copies (M8.5). Three nodes with
+# replication_factor = 3 is the growth path (docs/operations.md).
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+metadata_auto_snapshot_interval = "6h"
+
+replication_factor = 1
+consistency_mode = "consistent"
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret_file = "/run/secrets/garage_rpc_secret"
+# Compose mounts secret files with Docker's usual mode 0444 inside the
+# container; on the host they live in a directory only root may enter
+# (scripts/prod-secrets.sh), which is what keeps them private.
+allow_world_readable_secrets = true
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token_file = "/run/secrets/garage_admin_token"
+metrics_token_file = "/run/secrets/garage_metrics_token"

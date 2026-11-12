@@ -1,0 +1,173 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { Logger } from '@nestjs/common';
+import { Queue, Worker } from 'bullmq';
+import { Redis } from 'ioredis';
+import { databaseTls } from '../database/database';
+import { SystemDatabase } from '../database/system-database';
+import { cancellationCreditHandler } from './cancellation-credit';
+import { EventDispatcher } from './event-dispatcher';
+import { MAINTENANCE_SCHEDULES, runMaintenance } from './maintenance';
+import { type OutboxJobData, OutboxRelay } from './outbox-relay';
+import { PaymentEventProcessor } from './payment-confirmation';
+import { smtpTransport } from './mail-transport';
+import { NotificationSender } from './notification-sender';
+import { orderPaidNotice } from './order-paid-notice';
+import { MESSAGE_EVENTS, messageEventHandler } from './message-events';
+import { serveMetrics, WorkerMetrics } from './metrics';
+import { loadWorkerEnv } from './worker-env';
+
+// Background worker (ADR 0002, 0004). Same package and image as the API, its
+// own database role (pyth_worker) and Redis user (pyth_queue). Its only HTTP
+// endpoint is /metrics for Prometheus, on the data network (M8.6).
+
+const logger = new Logger('Worker');
+
+async function main(): Promise<void> {
+  const env = loadWorkerEnv(process.env, (path) => readFileSync(path, 'utf8'));
+
+  const database = new SystemDatabase({
+    host: env.DB_HOST,
+    port: env.DB_PORT,
+    database: env.DB_NAME,
+    user: env.DB_USER,
+    password: env.DB_PASSWORD,
+    max: env.DB_POOL_MAX,
+    ssl: databaseTls(env.DB_SSL_ROOT_CERT),
+  });
+
+  // BullMQ does not close connections it is given, so they are tracked and closed here.
+  const connections: Redis[] = [];
+  const connect = () => {
+    const client = new Redis({
+      host: env.REDIS_HOST,
+      port: env.REDIS_PORT,
+      username: env.REDIS_USERNAME,
+      password: env.REDIS_PASSWORD,
+      maxRetriesPerRequest: null,
+      connectionName: 'pythagoras-worker',
+      // M8.4: TLS, verifying that the certificate names the Redis host.
+      ...(env.REDIS_TLS_CA ? { tls: { ca: env.REDIS_TLS_CA, servername: env.REDIS_HOST } } : {}),
+    });
+    connections.push(client);
+    return client;
+  };
+  const prefix = env.QUEUE_PREFIX;
+
+  const events = new Queue<OutboxJobData>('events', {
+    connection: connect(),
+    prefix,
+    defaultJobOptions: {
+      attempts: 8,
+      backoff: { type: 'exponential', delay: 5_000 },
+      // Kept long enough for the job id to deduplicate re-relayed events, then removed.
+      removeOnComplete: { age: 7 * 86_400 },
+      removeOnFail: { age: 30 * 86_400 },
+    },
+  });
+  const maintenance = new Queue('maintenance', {
+    connection: connect(),
+    prefix,
+    defaultJobOptions: {
+      attempts: 3,
+      removeOnComplete: { age: 30 * 86_400 },
+      removeOnFail: { age: 90 * 86_400 },
+    },
+  });
+
+  for (const schedule of MAINTENANCE_SCHEDULES) {
+    await maintenance.upsertJobScheduler(
+      schedule.id,
+      { pattern: schedule.pattern, tz: 'UTC' },
+      { name: schedule.jobName },
+    );
+  }
+  // Partitions are cheap to check and must exist before the first write of a new month.
+  const { affected } = await runMaintenance(database, 'audit.ensure-partitions');
+  logger.log(`audit partitions checked (${affected} created)`);
+
+  const dispatcher = new EventDispatcher()
+    .on('commerce.order_line.cancelled', cancellationCreditHandler(database))
+    .on('commerce.order.paid', orderPaidNotice(database));
+  for (const eventType of MESSAGE_EVENTS) dispatcher.on(eventType, messageEventHandler(database, eventType));
+  const eventWorker = new Worker<OutboxJobData>('events', (job) => dispatcher.dispatch(job.data), {
+    connection: connect(),
+    prefix,
+    concurrency: env.EVENT_CONCURRENCY,
+  });
+  const maintenanceWorker = new Worker('maintenance', (job) => runMaintenance(database, job.name), {
+    connection: connect(),
+    prefix,
+    concurrency: 1,
+  });
+  for (const worker of [eventWorker, maintenanceWorker]) {
+    worker.on('failed', (job, error) =>
+      logger.warn(`job ${job?.name ?? '?'} ${job?.id ?? ''} failed: ${error.message}`),
+    );
+    worker.on('error', (error) => logger.error(`queue error: ${error.message}`));
+  }
+
+  const relay = new OutboxRelay(database, events, logger, {
+    batchSize: 100,
+    intervalMs: env.OUTBOX_INTERVAL_MS,
+  });
+  relay.start();
+
+  // Verified provider webhooks wait in PostgreSQL (they can hold personal data)
+  // and are applied from there, never through Redis.
+  const payments = new PaymentEventProcessor(database, logger);
+  payments.start();
+
+  // Messages wait in PostgreSQL and are sent from there (ADR 0031).
+  const mail = smtpTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    requireTls: env.SMTP_REQUIRE_TLS,
+    user: env.SMTP_USER,
+    password: env.SMTP_PASSWORD,
+  });
+  const notifications = new NotificationSender(database, mail, logger, {
+    intervalMs: env.NOTIFY_INTERVAL_MS,
+    batchSize: 20,
+    from: env.MAIL_FROM,
+    portalUrl: env.PORTAL_URL,
+    messageIdDomain: new URL(env.PORTAL_URL).hostname,
+  });
+  notifications.start();
+
+  // Liveness for Docker: a file touched while the event loop is healthy.
+  const metricsServer =
+    env.METRICS_PORT > 0
+      ? serveMetrics(new WorkerMetrics(database, [events, maintenance]), env.METRICS_PORT, logger)
+      : undefined;
+
+  const beat = () => writeFileSync(env.HEARTBEAT_FILE, new Date().toISOString());
+  beat();
+  const heartbeat = setInterval(beat, 10_000);
+
+  logger.log(`worker started as ${env.DB_USER} / ${env.REDIS_USERNAME}, queues "events" and "maintenance"`);
+
+  let stopping = false;
+  const shutdown = async (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    logger.log(`${signal} received, finishing current jobs`);
+    clearInterval(heartbeat);
+    metricsServer?.close();
+    await Promise.all([relay.stop(), payments.stop(), notifications.stop()]);
+    mail.close();
+    await Promise.all([eventWorker.close(), maintenanceWorker.close()]);
+    await Promise.all([events.close(), maintenance.close()]);
+    await Promise.all(connections.map((client) => client.quit().catch(() => client.disconnect())));
+    await database.close();
+    logger.log('worker stopped');
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+main().catch((error: unknown) => {
+  logger.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

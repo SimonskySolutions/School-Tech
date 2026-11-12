@@ -9,6 +9,26 @@
 
 name: pythagoras
 
+x-workspace-volumes: &workspace-volumes
+  - .:/workspace
+  - ws_node_modules:/workspace/node_modules
+  - ws_api_node_modules:/workspace/apps/api/node_modules
+  - ws_api_dist:/workspace/apps/api/dist
+  - ws_web_node_modules:/workspace/apps/web/node_modules
+  - ws_web_next:/workspace/apps/web/.next
+  - ws_cms_node_modules:/workspace/apps/cms/node_modules
+  - ws_cms_next:/workspace/apps/cms/.next
+  - ws_shared_node_modules:/workspace/packages/shared/node_modules
+  - ws_shared_dist:/workspace/packages/shared/dist
+
+x-workspace-env: &workspace-env
+  npm_config_store_dir: /workspace/node_modules/.pnpm-store
+  # File events do not cross from Windows into containers; poll instead.
+  CHOKIDAR_USEPOLLING: "true"
+  WATCHPACK_POLLING: "true"
+  TSC_WATCHFILE: PriorityPollingInterval
+  TSC_WATCHDIRECTORY: DynamicPriorityPolling
+
 x-hardening: &hardening
   restart: unless-stopped
   security_opt:
@@ -42,6 +62,9 @@ services:
       - pg_worker_password
       - pg_reporting_password
       - pg_backup_password
+      - pg_keycloak_password
+      - pg_cms_password
+      - pg_monitor_password
     volumes:
       - pg_data:/var/lib/postgresql
       - pg_backups:/backups:ro
@@ -88,6 +111,117 @@ services:
       retries: 20
       start_period: 5s
 
+  # Private document store (ADR 0029): Garage, reachable only on the Compose
+  # network (no host port, no gateway route); only the API holds a key.
+  garage:
+    <<: *hardening
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
+    secrets:
+      - garage_rpc_secret
+      - garage_admin_token
+    volumes:
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # Gives the node its role, imports the API's key and creates the bucket, once.
+  storage-init:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ADMIN_TOKEN_FILE: /run/secrets/garage_admin_token
+      STORAGE_ACCESS_KEY_ID: GKd0c500000000000000000001
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+    secrets:
+      - garage_admin_token
+      - storage_secret_access_key
+    volumes:
+      - ./infra/garage/init.mjs:/opt/pythagoras/storage-init.mjs:ro
+    command: ["node", "/opt/pythagoras/storage-init.mjs"]
+
+  # Development mailbox (ADR 0031): receives every message the worker sends and
+  # delivers nothing. Its inbox is on 127.0.0.1:${MAIL_HOST_PORT:-58025}; SMTP
+  # stays on the Compose network. Production uses a real SMTP service instead.
+  mailpit:
+    <<: *hardening
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    environment:
+      MP_MAX_MESSAGES: "2000"
+      MP_SMTP_DISABLE_RDNS: "true"
+      MP_DISABLE_VERSION_CHECK: "true"
+    ports:
+      - "127.0.0.1:${MAIL_HOST_PORT:-58025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # Identity provider (ADR 0009). Development mode imports the development realm
+  # with synthetic users on first start; production uses `start --optimized`
+  # behind the gateway with a user-free realm (see docs/operations.md).
+  keycloak:
+    <<: *hardening
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    entrypoint: ["/bin/bash", "/opt/pythagoras/keycloak-entrypoint.sh"]
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: pyth_keycloak
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_HOST_PORT:-58080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_CACHE: local
+      KC_LOG_LEVEL: info
+      # A fixed heap. Keycloak's default lets the JVM grow to 70% of the shared
+      # Docker VM, and when memory ran short the kernel killed it, signing
+      # everyone out for a minute.
+      JAVA_OPTS_KC_HEAP: -Xms128m -Xmx512m
+      # Social login brokers the platform does not use.
+      KC_FEATURES_DISABLED: twitter-broker
+    secrets:
+      - pg_keycloak_password
+      - keycloak_admin_password
+      - keycloak_web_client_secret
+      - keycloak_dev_user_password
+      - keycloak_provisioning_client_secret
+      - keycloak_cms_client_secret
+    volumes:
+      - ./infra/keycloak/entrypoint.sh:/opt/pythagoras/keycloak-entrypoint.sh:ro
+      # The Pythagoras sign-in pages and e-mails (docs/design.md).
+      - ./infra/keycloak/themes/pythagoras:/opt/keycloak/themes/pythagoras:ro
+      - ./infra/keycloak/realm:/opt/keycloak/data/import:ro
+    ports:
+      - "127.0.0.1:${KEYCLOAK_HOST_PORT:-58080}:8080"
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
   # One-off migration job (also used by releases). Run through scripts/db-migrate.sh.
   db-migrate:
     image: ghcr.io/amacneil/dbmate:2.34.1@sha256:3298bdfcb651af608e06d2e13ae12398c4056e5326d38ef31885973d83248d9c
@@ -111,6 +245,203 @@ services:
         exec dbmate --migrations-dir /db/migrations --migrations-table meta.schema_migrations --no-dump-schema --wait --wait-timeout 60s "$$@"
       - dbmate
     command: ["up"]
+
+  # Development toolchain (ADR 0012). Run through scripts/pnpm.sh and scripts/check.sh.
+  workspace:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    profiles: ["tools"]
+    security_opt:
+      - no-new-privileges:true
+    environment: *workspace-env
+    volumes: *workspace-volumes
+
+  # Installs dependencies from the lockfile and builds the shared package, once,
+  # before the application services start.
+  deps:
+    build:
+      context: ./infra/dev
+    image: pythagoras-dev:node24-pnpm12
+    security_opt:
+      - no-new-privileges:true
+    environment: *workspace-env
+    volumes: *workspace-volumes
+    command: ["sh", "-c", "pnpm install --frozen-lockfile --reporter=silent && pnpm --filter @pythagoras/shared build"]
+
+  # Business API in watch mode (ADR 0013). Production uses a built image (M1.6).
+  api:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/api", "start:dev"]
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *workspace-env
+      NODE_ENV: development
+      DB_PASSWORD_FILE: /run/secrets/pg_api_password
+      # Documents (ADR 0029): the store on the Compose network, one key, one bucket.
+      STORAGE_ENDPOINT: http://garage:3900
+      STORAGE_ACCESS_KEY_ID: GKd0c500000000000000000001
+      STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/storage_secret_access_key
+      # No Stripe keys in development: the development payment provider (ADR 0010).
+      PAYMENT_PROVIDER: development
+      DEV_PAYMENTS_SECRET_FILE: /run/secrets/dev_payments_secret
+      # Creates sign-in accounts for registered people (M3.2).
+      PROVISIONING_CLIENT_SECRET_FILE: /run/secrets/keycloak_provisioning_client_secret
+      # Adds a school's website to the CMS (M3.5).
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+    secrets:
+      - pg_api_password
+      - dev_payments_secret
+      - keycloak_provisioning_client_secret
+      - cms_platform_api_key
+      - storage_secret_access_key
+    volumes: *workspace-volumes
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-53001}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Background worker: outbox relay, event handlers, scheduled maintenance. Same
+  # package as the API; in development it runs the API service's compiled output
+  # and restarts when it changes, so the code is compiled once.
+  worker:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/api", "start:worker:dev"]
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      <<: *workspace-env
+      NODE_ENV: development
+      DB_PASSWORD_FILE: /run/secrets/pg_worker_password
+      REDIS_PASSWORD_FILE: /run/secrets/redis_queue_password
+      # Messages (ADR 0031): to the development mailbox, linking to the portal.
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: Pythagoras <no-reply@pythagoras.localhost>
+      PORTAL_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
+    secrets:
+      - pg_worker_password
+      - redis_queue_password
+    volumes: *workspace-volumes
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s = require('fs').statSync('/tmp/worker-heartbeat'); process.exit(Date.now() - s.mtimeMs < 30000 ? 0 : 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # Web app in development mode (ADR 0014): websites, family portal, staff workspaces.
+  web:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/web", "dev"]
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    environment:
+      <<: *workspace-env
+      NODE_ENV: development
+      # Reached through the gateway; the portal has one canonical address.
+      APP_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_web_client_secret
+      SESSION_SECRET_FILE: /run/secrets/web_session_secret
+      NEXT_TELEMETRY_DISABLED: "1"
+    secrets:
+      - keycloak_web_client_secret
+      - web_session_secret
+    volumes: *workspace-volumes
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+  # Website content (ADR 0017): Payload admin and REST API, own database and role.
+  cms:
+    <<: *hardening
+    image: pythagoras-dev:node24-pnpm12
+    command: ["pnpm", "--filter", "@pythagoras/cms", "dev"]
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *workspace-env
+      NODE_ENV: development
+      CMS_PUBLIC_URL: http://cms.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
+      DB_PASSWORD_FILE: /run/secrets/pg_cms_password
+      PAYLOAD_SECRET_FILE: /run/secrets/cms_payload_secret
+      # Development only: the seeded administrator editor@pythagoras.test uses the dev users' password.
+      CMS_DEV_EDITOR_PASSWORD_FILE: /run/secrets/keycloak_dev_user_password
+      # The platform's service account adds a school's website here (ADR 0017).
+      CMS_PLATFORM_API_KEY_FILE: /run/secrets/cms_platform_api_key
+      # Editors sign in with Keycloak (ADR 0019); passwords only for the seeded development editor.
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/keycloak_cms_client_secret
+      CMS_PASSWORD_LOGIN: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    secrets:
+      - pg_cms_password
+      - cms_payload_secret
+      - keycloak_dev_user_password
+      - cms_platform_api_key
+      - keycloak_cms_client_secret
+    volumes: *workspace-volumes
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/websites?limit=1').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 120s
+
+  # Front door (ADR 0015): routes each host name to its service.
+  gateway:
+    <<: *hardening
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      PORTAL_URL: http://portal.pythagoras.localhost:${GATEWAY_HOST_PORT:-53000}
+    volumes:
+      - ./infra/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+    ports:
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-53000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "--header", "Host: api.pythagoras.localhost", "http://127.0.0.1/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # One-off logical backup job. Run through scripts/db-backup.sh.
   db-backup:
@@ -150,8 +481,49 @@ secrets:
     file: ./secrets/redis_health_password
   redis_admin_password:
     file: ./secrets/redis_admin_password
+  pg_keycloak_password:
+    file: ./secrets/pg_keycloak_password
+  pg_cms_password:
+    file: ./secrets/pg_cms_password
+  pg_monitor_password:
+    file: ./secrets/pg_monitor_password
+  cms_payload_secret:
+    file: ./secrets/cms_payload_secret
+  cms_platform_api_key:
+    file: ./secrets/cms_platform_api_key
+  keycloak_admin_password:
+    file: ./secrets/keycloak_admin_password
+  keycloak_web_client_secret:
+    file: ./secrets/keycloak_web_client_secret
+  keycloak_dev_user_password:
+    file: ./secrets/keycloak_dev_user_password
+  web_session_secret:
+    file: ./secrets/web_session_secret
+  dev_payments_secret:
+    file: ./secrets/dev_payments_secret
+  keycloak_provisioning_client_secret:
+    file: ./secrets/keycloak_provisioning_client_secret
+  keycloak_cms_client_secret:
+    file: ./secrets/keycloak_cms_client_secret
+  garage_rpc_secret:
+    file: ./secrets/garage_rpc_secret
+  garage_admin_token:
+    file: ./secrets/garage_admin_token
+  storage_secret_access_key:
+    file: ./secrets/storage_secret_access_key
 
 volumes:
   pg_data:
   pg_backups:
   redis_data:
+  garage_meta:
+  garage_data:
+  ws_node_modules:
+  ws_api_node_modules:
+  ws_api_dist:
+  ws_web_node_modules:
+  ws_web_next:
+  ws_cms_node_modules:
+  ws_cms_next:
+  ws_shared_node_modules:
+  ws_shared_dist:

@@ -1,0 +1,67 @@
+# Prometheus for the production stack (M8.6, ADR 0036). run.sh fills in the
+# __NAMES__. Every target is a service name inside the stack; nothing is
+# scraped from outside the host and nothing leaves it except the alert e-mails.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    installation: __INSTALLATION__
+
+rule_files:
+  - /etc/pythagoras-monitoring/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs: [{ targets: ["localhost:9090"] }]
+  - job_name: alertmanager
+    static_configs: [{ targets: ["alertmanager:9093"] }]
+  # The host, and the backup service's measures through its textfile.
+  - job_name: node
+    static_configs: [{ targets: ["node-exporter:9100"] }]
+  - job_name: postgres
+    static_configs: [{ targets: ["postgres-exporter:9187"] }]
+  - job_name: pgbouncer
+    static_configs: [{ targets: ["pgbouncer-exporter:9127"] }]
+  - job_name: redis
+    static_configs: [{ targets: ["redis-exporter:9121"] }]
+  # The platform's own measures (apps/api/src/worker/metrics.ts).
+  - job_name: worker
+    static_configs: [{ targets: ["worker:9464"] }]
+  - job_name: keycloak
+    static_configs: [{ targets: ["keycloak:9000"] }]
+  - job_name: garage
+    authorization:
+      credentials_file: /run/secrets/garage_metrics_token
+    static_configs: [{ targets: ["garage:3903"] }]
+  - job_name: blackbox
+    static_configs: [{ targets: ["blackbox:9115"] }]
+
+  # Whether each application answers its own health check.
+  - job_name: health
+    metrics_path: /probe
+    params: { module: [http_ready] }
+    static_configs:
+      - targets:
+          - http://api:3000/health/ready
+          - http://web:3000/
+          - http://cms:3000/api/websites?limit=1
+          - http://keycloak:9000/health/ready
+    relabel_configs: &probe
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: target
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # The gateway's certificate for the portal: valid, and how long it has left.
+  - job_name: certificate
+    metrics_path: /probe
+    params: { module: [gateway_tls] }
+    static_configs: [{ targets: ["gateway:443"] }]
+    relabel_configs: *probe

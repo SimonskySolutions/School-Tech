@@ -7,7 +7,7 @@
 
 REVOKE ALL ON DATABASE :"dbname" FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE :"dbname" TO pyth_migrator, pyth_api, pyth_worker, pyth_reporting;
-GRANT CONNECT ON DATABASE :"dbname" TO pyth_backup;
+GRANT CONNECT ON DATABASE :"dbname" TO pyth_backup, pyth_monitor;
 
 -- The public schema is not used; nobody may create objects in it.
 ALTER SCHEMA public OWNER TO pyth_owner;

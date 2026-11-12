@@ -1,0 +1,37 @@
+# Build context for the production images (infra/images). Nothing secret,
+# generated or unrelated to the build goes in.
+.git
+secrets
+backups
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/next-env.d.ts
+db
+docs
+infra
+scripts
+tests
+**/test
+**/*.test.ts
+# Only what the production images copy, by name (ADR 0033); secrets/ stays out.
+!db/migrations
+!db/bootstrap
+!db/ops/row_counts.sql
+!infra/images/migrate
+!infra/postgres/postgresql.conf
+!infra/postgres/pg_hba.production.conf
+!infra/postgres/production-entrypoint.sh
+!infra/pgbouncer
+!infra/pgbackrest
+!infra/monitoring
+!infra/postgres/initdb
+!infra/redis
+!infra/gateway/Caddyfile.production
+!infra/keycloak/entrypoint.sh
+!infra/keycloak/themes
+!infra/keycloak/realm-production
+!infra/garage/init.mjs
+!infra/garage/garage.production.toml

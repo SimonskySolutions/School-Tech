@@ -23,21 +23,24 @@ INSERT INTO privacy.processing_purpose (id, group_id, code, name, description, l
 VALUES (:PUR, :G, 'website-photos', 'Photos on school websites', 'Publishing photos of students on school websites', 'consent');
 UPDATE privacy.processing_purpose SET status = 'approved', approved_by_person_id = :DPO, approved_at = now() WHERE id = :PUR;
 
+SELECT privacy.publish_wording(:PUR, 'We may publish photos of your child on the school website (synthetic).', false);
+
 RESET ROLE; SELECT test.as_person(:P);
 SELECT test.ok((SELECT count(*) FROM privacy.processing_purpose WHERE status = 'approved') = 1,
   'parents can read approved processing purposes (the privacy notice)');
+SELECT test.expect_error(format('SELECT privacy.give_consent(%L, %L, privacy.current_wording(%L))', :K1, :PUR, :PUR),
+  'P0002', 'a guardian without consent capability cannot consent for the child');
 SELECT test.expect_error(format(
   'INSERT INTO privacy.consent_record (group_id, subject_person_id, given_by_person_id, purpose_id, wording_version, channel) VALUES (%L,%L,%L,%L,%L,%L)',
-  :G, :K1, :P, :PUR, 'v1', 'family_portal'), '42501', 'a guardian without consent capability cannot consent for the child');
+  :G, :K1, :P, :PUR, 'v1', 'family_portal'), '42501', 'nor write a consent record directly (ADR 0030)');
 
 RESET ROLE; SELECT test.as_person(:PRA);
 UPDATE people.guardian_relationship SET can_consent = true WHERE guardian_person_id = :P AND student_person_id = :K1;
 
 RESET ROLE; SELECT test.as_person(:P);
-INSERT INTO privacy.consent_record (group_id, subject_person_id, given_by_person_id, purpose_id, wording_version, channel)
-VALUES (:G, :K1, :P, :PUR, 'v1', 'family_portal');
+SELECT privacy.give_consent(:K1, :PUR, privacy.current_wording(:PUR));
 SELECT test.ok(true, 'a guardian with consent capability gives consent for the child');
-UPDATE privacy.consent_record SET status = 'withdrawn', withdrawn_at = now(), withdrawn_by_person_id = :P WHERE subject_person_id = :K1;
+SELECT privacy.withdraw_consent(:K1, :PUR);
 RESET ROLE;
 SELECT test.ok((SELECT status FROM privacy.consent_record WHERE subject_person_id = :K1) = 'withdrawn',
   'the guardian can withdraw consent');

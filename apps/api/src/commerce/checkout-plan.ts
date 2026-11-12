@@ -1,0 +1,267 @@
+import { sumMoney, type TransportRoute } from '@pythagoras/shared';
+import {
+  type FeeOfferingRow,
+  isPackage,
+  type OfferingRow,
+  pickSessions,
+  type SessionRow,
+} from '../catalog/catalog.repository';
+
+// Turns a basket into orders, before anything is written. Pure, so the rules
+// are unit-tested: what may be bought for which child, how lines are formed,
+// and the split into one order per billing entity (ADR 0008).
+
+export interface BasketItem {
+  studentId: string;
+  offeringId: string;
+  sessionIds?: string[];
+  /** The child's stop, for a transport seat (ADR 0024). */
+  stopId?: string;
+  /** A uniform variant and how many (ADR 0025). */
+  variantId?: string;
+  quantity?: number;
+}
+
+export interface PlannedLine {
+  studentId: string;
+  offeringId: string;
+  schoolId: string;
+  priceVersionId: string;
+  description: string;
+  serviceDate: string | null;
+  sessionId: string | null;
+  quantity: number;
+  unitAmountMinor: number;
+  vatRateBp: number;
+  currency: string;
+  /** Sessions this line books (one for a lunch day, all of them for an activity). */
+  bookingSessionIds: string[];
+  /** The stop written on each booking of a transport seat. */
+  transportStopId: string | null;
+  /** Stock held for a uniform line. */
+  stock: { variantId: string; quantity: number } | null;
+}
+
+export interface PlannedOrder {
+  billingEntityId: string;
+  billingEntityName: string;
+  currency: string;
+  totalMinor: number;
+  lines: PlannedLine[];
+}
+
+export class CheckoutRejected extends Error {
+  constructor(
+    readonly status: 403 | 404 | 409 | 422,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export interface PlanInput {
+  items: readonly BasketItem[];
+  /** Bookable offerings per student (already limited to the student's schools). */
+  offeringsByStudent: ReadonlyMap<string, ReadonlyMap<string, OfferingRow>>;
+  openSessionsByOffering: ReadonlyMap<string, readonly SessionRow[]>;
+  /** Routes of the transport offerings in the basket. */
+  routesByOffering?: ReadonlyMap<string, TransportRoute>;
+  /** Uniform variants per student (only the child's schools), keyed by variant. */
+  uniformsByStudent?: ReadonlyMap<string, ReadonlyMap<string, UniformVariant>>;
+  /** Enrolment fees each student owes now, keyed by offering (M5.8). */
+  feesByStudent?: ReadonlyMap<string, ReadonlyMap<string, FeeOfferingRow>>;
+}
+
+/** A uniform variant as the planner needs it. */
+export interface UniformVariant {
+  offeringId: string;
+  offeringName: string;
+  schoolId: string;
+  billingEntityId: string;
+  billingEntityName: string;
+  label: string;
+  priceVersionId: string;
+  unitAmountMinor: number;
+  currency: string;
+  vatRateBp: number;
+  free: number;
+}
+
+/** Most items of one variant in one line. */
+export const MAX_UNIFORM_QUANTITY = 5;
+
+export function planCheckout({
+  items,
+  offeringsByStudent,
+  openSessionsByOffering,
+  routesByOffering = new Map(),
+  uniformsByStudent = new Map(),
+  feesByStudent = new Map(),
+}: PlanInput): PlannedOrder[] {
+  if (items.length === 0) throw new CheckoutRejected(422, 'the basket is empty');
+  const lines: (PlannedLine & { billingEntityId: string; billingEntityName: string })[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (item.variantId !== undefined) {
+      const variant = uniformsByStudent.get(item.studentId)?.get(item.variantId);
+      if (!variant || variant.offeringId !== item.offeringId) {
+        throw new CheckoutRejected(422, 'an item is not available for this child');
+      }
+      const quantity = item.quantity ?? 1;
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_UNIFORM_QUANTITY) {
+        throw new CheckoutRejected(422, `choose 1 to ${MAX_UNIFORM_QUANTITY} of ${variant.offeringName}`);
+      }
+      if (quantity > variant.free) {
+        throw new CheckoutRejected(
+          409,
+          `only ${Math.max(0, variant.free)} of ${variant.offeringName}, ${variant.label} left`,
+        );
+      }
+      claim(seen, item.studentId, `variant:${item.variantId}`);
+      lines.push({
+        studentId: item.studentId,
+        offeringId: variant.offeringId,
+        schoolId: variant.schoolId,
+        priceVersionId: variant.priceVersionId,
+        quantity,
+        unitAmountMinor: variant.unitAmountMinor,
+        vatRateBp: variant.vatRateBp,
+        currency: variant.currency,
+        billingEntityId: variant.billingEntityId,
+        billingEntityName: variant.billingEntityName,
+        description: `${variant.offeringName}, ${variant.label}`.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+        transportStopId: null,
+        stock: { variantId: item.variantId, quantity },
+      });
+      continue;
+    }
+    const fee = feesByStudent.get(item.studentId)?.get(item.offeringId);
+    if (fee) {
+      // An enrolment fee: one line, nothing to book (M5.8). The database refuses a second one.
+      claim(seen, item.studentId, `fee:${fee.id}`);
+      lines.push({
+        studentId: item.studentId,
+        offeringId: fee.id,
+        schoolId: fee.school_id,
+        priceVersionId: fee.price_version_id,
+        quantity: 1,
+        unitAmountMinor: Number(fee.unit_amount_minor),
+        vatRateBp: fee.vat_rate_bp,
+        currency: fee.currency,
+        billingEntityId: fee.billing_entity_id,
+        billingEntityName: fee.billing_entity_name,
+        description: fee.name.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+        transportStopId: null,
+        stock: null,
+      });
+      continue;
+    }
+    const offering = offeringsByStudent.get(item.studentId)?.get(item.offeringId);
+    if (!offering) throw new CheckoutRejected(422, 'an item is not available for this child');
+    const open = openSessionsByOffering.get(offering.id) ?? [];
+    const base = {
+      studentId: item.studentId,
+      offeringId: offering.id,
+      schoolId: offering.school_id,
+      priceVersionId: offering.price_version_id,
+      quantity: 1 as const,
+      unitAmountMinor: Number(offering.unit_amount_minor),
+      vatRateBp: offering.vat_rate_bp,
+      currency: offering.currency,
+      billingEntityId: offering.billing_entity_id,
+      billingEntityName: offering.billing_entity_name,
+      transportStopId: null,
+      stock: null,
+    };
+
+    if (offering.kind === 'transport') {
+      // A seat for the term, boarding at the stop the family chose.
+      const stop = routesByOffering
+        .get(offering.id)
+        ?.stops.find((candidate) => candidate.id === item.stopId && candidate.active);
+      if (!stop) throw new CheckoutRejected(422, `choose a stop for ${offering.name}`);
+      if (open.length === 0)
+        throw new CheckoutRejected(409, `${offering.name} is no longer open for booking`);
+      for (const session of open) claim(seen, item.studentId, session.id);
+      lines.push({
+        ...base,
+        description: `${offering.name}, from ${stop.name}`.slice(0, 300),
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: open.map((session) => session.id),
+        transportStopId: stop.id,
+      });
+    } else if (isPackage(offering.price_unit)) {
+      // A package of lessons: one line, no booking; slots are booked from the package once it is paid.
+      const key = `package:${offering.id}`;
+      claim(seen, item.studentId, key);
+      lines.push({
+        ...base,
+        description: `${offering.name} (${offering.package_size ?? 1} lessons)`,
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: [],
+      });
+    } else if (pickSessions(offering.kind, offering.price_unit)) {
+      const ids = [...new Set(item.sessionIds ?? [])];
+      if (ids.length === 0) throw new CheckoutRejected(422, `choose at least one day for ${offering.name}`);
+      for (const id of ids) {
+        const session = open.find((candidate) => candidate.id === id);
+        if (!session)
+          throw new CheckoutRejected(409, `a chosen day for ${offering.name} is no longer open for booking`);
+        claim(seen, item.studentId, id);
+        lines.push({
+          ...base,
+          description: `${offering.name}, ${session.service_date ?? session.starts_at?.toISOString().slice(0, 10)}`,
+          serviceDate: session.service_date,
+          sessionId: session.id,
+          bookingSessionIds: [session.id],
+        });
+      }
+    } else {
+      if (open.length === 0)
+        throw new CheckoutRejected(409, `${offering.name} has no sessions open for booking`);
+      for (const session of open) claim(seen, item.studentId, session.id);
+      lines.push({
+        ...base,
+        description: `${offering.name} (${open.length} ${open.length === 1 ? 'session' : 'sessions'})`,
+        serviceDate: null,
+        sessionId: null,
+        bookingSessionIds: open.map((session) => session.id),
+      });
+    }
+  }
+
+  const orders = new Map<string, PlannedOrder>();
+  for (const { billingEntityId, billingEntityName, ...line } of lines) {
+    const order = orders.get(billingEntityId) ?? {
+      billingEntityId,
+      billingEntityName,
+      currency: line.currency,
+      totalMinor: 0,
+      lines: [],
+    };
+    if (order.currency !== line.currency) {
+      throw new CheckoutRejected(422, 'items billed by one company must share a currency');
+    }
+    order.lines.push(line);
+    orders.set(billingEntityId, order);
+  }
+  for (const order of orders.values()) {
+    order.totalMinor = sumMoney(order.lines.map((line) => line.unitAmountMinor * line.quantity));
+  }
+  return [...orders.values()];
+}
+
+function claim(seen: Set<string>, studentId: string, sessionId: string) {
+  const key = `${studentId}:${sessionId}`;
+  if (seen.has(key)) throw new CheckoutRejected(422, 'the same session is in the basket twice for one child');
+  seen.add(key);
+}

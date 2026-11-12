@@ -12,3 +12,35 @@ Each record states one decision, why it was made, and what it costs. A record is
 | [0006](0006-personal-data-in-the-database.md) | Personal data protection in the data layer | Accepted |
 | [0007](0007-money-time-identifiers.md) | Money, time and identifiers | Accepted |
 | [0008](0008-one-order-per-billing-entity.md) | One order and one checkout per billing entity | Accepted |
+| [0009](0009-keycloak-identity.md) | Keycloak as the identity provider | Accepted |
+| [0010](0010-payments-before-stripe.md) | Payments built for Stripe, run on a development provider until it is set up | Accepted |
+| [0011](0011-development-domains.md) | Development domains under .localhost | Accepted |
+| [0012](0012-toolchain.md) | Toolchain and workspace | Accepted |
+| [0013](0013-api-data-access-and-auth.md) | API data access and authentication | Accepted |
+| [0014](0014-web-sessions.md) | Web sign-in and sessions | Accepted |
+| [0015](0015-gateway-images-ci.md) | Gateway, production images and continuous integration | Accepted |
+| [0016](0016-accounts-for-new-people.md) | Sign-in accounts for people an administrator registers | Accepted |
+| [0017](0017-websites-with-payload.md) | School websites with Payload CMS | Accepted |
+| [0018](0018-real-domains.md) | Real domains for school websites | Accepted |
+| [0019](0019-cms-sign-in-with-keycloak.md) | CMS editors sign in with Keycloak | Accepted |
+| [0020](0020-menus-allergens-dietary-verification.md) | Lunch menus, allergens and verified dietary needs | Accepted |
+| [0021](0021-activity-eligibility-and-attendance.md) | Activity eligibility and attendance | Accepted |
+| [0022](0022-individual-lessons.md) | Individual lessons: teachers, rooms, slots and packages | Accepted |
+| [0023](0023-trips-and-consent.md) | Trips and guardian consent | Accepted |
+| [0024](0024-transport-routes-and-seats.md) | Transport: routes, stops and seats for a term | Accepted |
+| [0025](0025-uniforms-and-stock.md) | Uniforms: variants, prices and stock | Accepted |
+| [0026](0026-admissions-and-prospective-families.md) | Admissions: prospective families' data | Accepted |
+| [0027](0027-intakes-applications-invitations.md) | Intakes, applications and invitations to apply | Accepted |
+| [0028](0028-staff-records.md) | Staff records separate from access | Accepted |
+| [0029](0029-private-document-store.md) | Private document store: Garage, links for one person | Accepted |
+| [0030](0030-consent-from-families.md) | Consent from families: wording versions, asking again | Accepted |
+| [0031](0031-notifications-by-email.md) | Notifications by e-mail over SMTP, queued in the database | Accepted |
+| [0032](0032-integrations-awaiting-contracts.md) | Integrations awaiting contracts: none built, not even a stand-in | Accepted |
+| [0033](0033-production-topology.md) | Production topology: one host, provider-neutral | Accepted |
+| [0034](0034-production-identity.md) | Production identity: a generated realm and a second factor for staff | Accepted |
+| [0035](0035-continuous-backups.md) | Continuous backups: pgBackRest on a repository host, documents with rclone | Accepted |
+| [0036](0036-monitoring-and-alerts.md) | Monitoring and alerts: Prometheus on the host, alerts by e-mail | Accepted |
+| [0037](0037-restore-drills-and-recovery.md) | Restore drills and recovery: a monthly drill, and a runbook proven in CI | Accepted |
+| [0038](0038-production-end-to-end.md) | Production end to end: a Stripe stand-in, and rolling back proven in CI | Accepted |
+| [0039](0039-languages.md) | Languages: Bulgarian and English, each person's own choice | Accepted |
+| [0040](0040-running-the-schools.md) | Running the schools from one place: classes, timetables, register, stock, spending and queues | Accepted |

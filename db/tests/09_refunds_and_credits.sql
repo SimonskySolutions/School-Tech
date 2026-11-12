@@ -53,6 +53,9 @@ INSERT INTO commerce.account_credit (id, group_id, billing_entity_id, holder_per
 VALUES (:CR1, :G, :E1, :P, 450, 450, 'Lunch cancelled for 2 Nov', :LL);
 INSERT INTO commerce.payment_allocation (group_id, order_line_id, billing_entity_id, school_id, kind, credit_id, currency, amount_minor)
 VALUES (:G, :LL, :E1, :A, 'credit_issued', :CR1, 'EUR', -450);
+SELECT test.expect_error(format(
+  'INSERT INTO commerce.account_credit (group_id, billing_entity_id, holder_person_id, original_amount_minor, remaining_amount_minor, reason, source_order_line_id) VALUES (%L,%L,%L,450,450,%L,%L)',
+  :G, :E1, :P, 'Again', :LL), '23505', 'a cancelled line is credited at most once');
 SELECT test.expect_error(format('UPDATE commerce.payment_allocation SET amount_minor = 1 WHERE credit_id = %L', :CR1),
   '42501', 'the worker cannot rewrite the financial ledger');
 RESET ROLE;

@@ -24,6 +24,11 @@ user pyth_queue on #$queue_hash resetkeys ~pyth:* resetchannels &pyth:* -@all +@
 user pyth_health on #$health_hash resetkeys resetchannels -@all +ping
 user pyth_admin on #$admin_hash ~* &* +@all
 EOF
+# Monitoring (M8.6), where the secret exists: statistics only, no key or channel.
+if [ -f /run/secrets/redis_monitor_password ]; then
+  monitor_hash=$(hash_secret /run/secrets/redis_monitor_password)
+  echo "user pyth_monitor on #$monitor_hash resetkeys resetchannels -@all +ping +info +config|get +slowlog|get +slowlog|len +latency|latest +client|setname +select" >> "$acl_file"
+fi
 chown -R redis:redis "$acl_dir"
 chmod 600 "$acl_file"
 
